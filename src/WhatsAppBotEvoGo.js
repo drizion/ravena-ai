@@ -738,6 +738,17 @@ class WhatsAppBotEvoGo {
     }
   }
 
+  async getFileSizeByURL(url) {
+    try {
+      const headResponse = await axios.head(url);
+      const contentLength = headResponse.headers['content-length'];
+      return contentLength ? parseInt(contentLength, 10) : 0;
+    } catch (error) {
+      this.logger.warn(`[getFileSizeByURL] Could not get file size for ${url}: ${error.message}`);
+      return 0;
+    }
+  }
+
 
 
   async _downloadMediaFromEvo(messageContent) {
@@ -808,14 +819,15 @@ class WhatsAppBotEvoGo {
     try {
       const extension = mime.extension(mimetype) || 'bin';
       const buffer = Buffer.from(base64Data, 'base64');
+      const size = buffer.length;
       const url = this._storeMediaFile(buffer, `.${extension}`);
 
       // Fixes
-      if(mimetype === "application/mp4"){
+      if (mimetype === "application/mp4") {
         mimetype = "video/mp4";
       }
 
-      const media = { mimetype, data: base64Data, filename: filename || `file.${extension}`, source: 'base64', url, isMessageMedia: true };
+      const media = { mimetype, data: base64Data, filename: filename || `file.${extension}`, source: 'base64', url, isMessageMedia: true, size };
       //this.logger.info(`[createMediaFromBase64] `, media );
       return media;
     } catch (error) {
@@ -825,25 +837,37 @@ class WhatsAppBotEvoGo {
   }
 
   async createMedia(filePath, customMime = false) {
+
     try {
+
       if (!fs.existsSync(filePath)) {
         throw new Error(`File not found: ${filePath}`);
+
       }
 
+      const stats = fs.statSync(filePath);
+      const size = stats.size;
       const extension = path.extname(filePath);
       const fileUrl = this._storeMediaFile(filePath, extension);
 
-      const data = fs.readFileSync(filePath, { encoding: 'base64' });
+
+      let data = null;
+      const sizeLimit = 200 * 1024 * 1024; // 200MB
+      if (size < sizeLimit) {
+        data = fs.readFileSync(filePath, { encoding: 'base64' });
+      } else {
+        this.logger.info(`[createMedia] File size (${size} bytes) exceeds limit, not reading to base64.`);
+      }
+
       const filename = path.basename(filePath);
       let mimetype = customMime ? customMime : (mime.lookup(filePath) || 'application/octet-stream');
 
-
       // Fixes
-      if(mimetype === "application/mp4"){
+      if (mimetype === "application/mp4") {
         mimetype = "video/mp4";
       }
 
-      const media = { mimetype, data, filename, source: 'file', url: fileUrl, isMessageMedia: true };
+      const media = { mimetype, data, filename, source: 'file', url: fileUrl, isMessageMedia: true, size };
       //this.logger.info(`[createMedia] `, media );
       return media;
     } catch (error) {
@@ -857,6 +881,7 @@ class WhatsAppBotEvoGo {
     try {
       const filename = path.basename(new URL(url).pathname) || 'media_from_url';
       let mimetype = mime.lookup(url.split("?")[0]) || (options.unsafeMime ? 'application/octet-stream' : null);
+      const size = await this.getFileSizeByURL(url);
 
       if (!mimetype && options.unsafeMime) {
         try {
@@ -867,11 +892,11 @@ class WhatsAppBotEvoGo {
       }
 
       // Fixes
-      if(mimetype === "application/mp4"){
+      if (mimetype === "application/mp4") {
         mimetype = "video/mp4";
       }
 
-      const media = { url, mimetype, filename, source: 'url', url, isMessageMedia: true };
+      const media = { url, mimetype, filename, source: 'url', url, isMessageMedia: true, size };
 
       //this.logger.info(`[createMediaFromURL] `, media);
       return media;
@@ -1688,9 +1713,19 @@ class WhatsAppBotEvoGo {
             payload.url = media.url;
             if (options.sendMediaAsSticker) payload.sticker = media.url;
           }
-          payload.type = content.mimetype ? content.mimetype.split('/')[0] : 'image';
-          if (options.sendMediaAsDocument) payload.type = 'document';
+          
           payload.caption = options.caption;
+
+          let mediaType = content.mimetype ? content.mimetype.split('/')[0] : 'image';
+          const cttSize = content.size ?? await getFileSizeByURL(content.url) ?? 0;
+          const urlPublica = process.env.BOT_DOMAIN_LOCAL ? payload.url.replace(process.env.BOT_DOMAIN_LOCAL,process.env.BOT_DOMAIN) : payload.url;
+          if (options.sendMediaAsDocument || (cttSize > 60 * 1024 * 1024)) {
+            mediaType = 'document';
+            // Se enviar como doc, manda a nossa URL publica junto também
+            payload.caption += `\n\n> Link temporário: ${urlPublica}`;
+          }
+
+          payload.type = mediaType;
           payload.filename = content.filename;
         }
       } else if (content.isLocation) {

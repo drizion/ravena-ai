@@ -1544,7 +1544,8 @@ class WhatsAppBotEvo {
         }
 
 
-        if (options.sendMediaAsDocument) {
+        const cttSize = content.size ?? await getFileSizeByURL(content.url) ?? 0;
+        if (options.sendMediaAsDocument || (cttSize > 60 * 1024 * 1024)) {
           mediaType = 'document';
           evoPayload.fileName = content.filename || `media.${mime.extension(content.mimetype) || 'bin'}`;
         }
@@ -1672,6 +1673,17 @@ class WhatsAppBotEvo {
     return 0;
   }
 
+  async getFileSizeByURL(url) {
+    try {
+      const headResponse = await axios.head(url);
+      const contentLength = headResponse.headers['content-length'];
+      return contentLength ? parseInt(contentLength, 10) : 0;
+    } catch (error) {
+      this.logger.warn(`[getFileSizeByURL] Could not get file size for ${url}: ${error.message}`);
+      return 0;
+    }
+  }
+
   async sendReturnMessages(returnMessages) {
     if (!Array.isArray(returnMessages)) {
       returnMessages = [returnMessages];
@@ -1744,7 +1756,8 @@ class WhatsAppBotEvo {
       if (!fs.existsSync(filePath)) {
         throw new Error(`File not found: ${filePath}`);
       }
-
+      const stats = fs.statSync(filePath);
+      const size = stats.size;
 
       const outputDir = path.join(__dirname, '..', 'public', 'attachments');
       await fs.mkdirSync(outputDir, { recursive: true });
@@ -1766,9 +1779,38 @@ class WhatsAppBotEvo {
       const fileUrl = `${process.env.BOT_DOMAIN_LOCAL ?? process.env.BOT_DOMAIN}/attachments/${outputFileName}`;
 
       this.logger.info(`[createMedia] ${fileUrl}`);
-      return { mimetype, data, filename, source: 'file', url: fileUrl, isMessageMedia: true };
+      return { mimetype, data, filename, source: 'file', url: fileUrl, isMessageMedia: true, size };
     } catch (error) {
       console.error(`Error creating media from ${filePath}:`, error);
+      throw error;
+    }
+  }
+
+  async createMediaFromBase64(base64, mimetype, filename) {
+    try {
+      const data = base64.includes(',') ? base64.split(',')[1] : base64;
+      const buffer = Buffer.from(data, 'base64');
+      const size = buffer.length;
+
+      const outputDir = path.join(__dirname, '..', 'public', 'attachments');
+      await fs.mkdirSync(outputDir, { recursive: true });
+      const extension = mime.extension(mimetype) || 'bin';
+      const tempId = randomBytes(8).toString('hex');
+      const outputFileName = filename ? `${path.basename(filename, path.extname(filename))}-${tempId}.${extension}` : `${tempId}.${extension}`;
+      const outputFilePath = path.join(outputDir, outputFileName);
+
+      await writeFileAsync(outputFilePath, buffer);
+
+      setTimeout(() => {
+        fs.unlink(outputFilePath, () => { });
+      }, 10 * 60 * 1000); // 10 minutes
+
+      const fileUrl = `${process.env.BOT_DOMAIN_LOCAL ?? process.env.BOT_DOMAIN}/attachments/${outputFileName}`;
+
+      this.logger.info(`[createMediaFromBase64] ${fileUrl}`);
+      return { mimetype, data, filename: outputFileName, source: 'base64', url: fileUrl, isMessageMedia: true, size };
+    } catch (error) {
+      console.error(`Error creating media from base64:`, error);
       throw error;
     }
   }
@@ -1778,6 +1820,7 @@ class WhatsAppBotEvo {
     try {
       const filename = path.basename(new URL(url).pathname) || 'media_from_url';
       let mimetype = mime.lookup(url.split("?")[0]) || (options.unsafeMime ? 'application/octet-stream' : null);
+      const size = await this.getFileSizeByURL(url);
 
       if (!mimetype && options.unsafeMime) {
         try {
@@ -1786,7 +1829,7 @@ class WhatsAppBotEvo {
           mimetype = options.customMime ? options.customMime : (headResponse.headers['content-type']?.split(';')[0] || 'application/octet-stream');
         } catch (e) { /* ignore */ }
       }
-      return { url, mimetype, filename, source: 'url', url, isMessageMedia: true }; // MessageMedia compatible for URL sending
+      return { url, mimetype, filename, source: 'url', url, isMessageMedia: true, size }; // MessageMedia compatible for URL sending
     } catch (error) {
       this.logger.error(`[${this.id}] Evo: Error creating media from URL ${url}:`, error);
       throw error;

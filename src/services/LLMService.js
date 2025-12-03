@@ -28,7 +28,20 @@ class LLMService {
 			{
 				name: 'ollama',
 				method: async (options) => {
-					const response = await this.ollamaCompletion(options);
+					const response = await this.ollamaCompletion({customEndpoint: "http://192.168.195.211:11434", ...options});
+					if (response && response.message && response.message.content) {
+						return response.message.content;
+					}
+					if (response && response.choices && response.choices[0] && response.choices[0].message) {
+						return response.choices[0].message.content;
+					}
+					throw new Error('Resposta inválida ou vazia do Ollama');
+				}
+			},
+			{
+				name: 'ollama',
+				method: async (options) => {
+					const response = await this.ollamaCompletion({customEndpoint: "http://192.168.3.200:12345", ...options});
 					if (response && response.message && response.message.content) {
 						return response.message.content;
 					}
