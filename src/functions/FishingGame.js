@@ -140,11 +140,11 @@ const UPGRADES = [
   { name: "Carretel", chance: 0.02, emoji: "🧵", effect: "weight_boost", value: 0.75, duration: 3, description: "Aumenta o peso dos próximos 3 peixes em 75%." },
   { name: "Pacote de Iscas", chance: 0.1, emoji: "🎁", effect: "extra_baits", minValue: 1, maxValue: 3, description: "Ganha de 1 a 3 iscas extras." },
   { name: "Amuleto do Pescador", chance: 0.01, emoji: "🧿", effect: "rare_chance_boost", value: 0.0005, duration: 10, description: "Aumenta a chance de encontrar peixes raros nas próximas 10 pescarias." },
-  { name: "Licença de Pesca Premium", chance: 0.03, emoji: "📜", effect: "cooldown_reduction", value: 0.5, duration: 5, description: "Reduz o tempo de espera para pescar em 50% nas próximas 5 pescarias." },
+  //{ name: "Licença de Pesca Premium", chance: 0.03, emoji: "📜", effect: "cooldown_reduction", value: 0.5, duration: 5, description: "Reduz o tempo de espera para pescar em 50% nas próximas 5 pescarias." },
   { name: "Sonar Portátil", chance: 0.02, emoji: "📡", effect: "guaranteed_weight", minValue: 40, maxValue: 100, description: "Garante que o próximo peixe tenha entre 40kg e 70kg." },
   { name: "Balança Adulterada", chance: 0.01, emoji: "⚖️", effect: "weight_boost", value: 1.5, duration: 1, description: "Aumenta o peso do próximo peixe em 150%!" },
   { name: "Isca de Diamante", chance: 0.005, emoji: "💎", effect: "rare_chance_boost", value: 0.002, duration: 5, description: "Aumenta drasticamente a chance de raros por 5 pescarias." },
-  { name: "Energético de Pescador", chance: 0.02, emoji: "⚡", effect: "cooldown_reduction", value: 0.9, duration: 2, description: "Reduz o tempo de espera em 90% nas próximas 2 pescarias." },
+  //{ name: "Energético de Pescador", chance: 0.02, emoji: "⚡", effect: "cooldown_reduction", value: 0.9, duration: 2, description: "Reduz o tempo de espera em 90% nas próximas 2 pescarias." },
   { name: "Anzol de Titânio", chance: 0.025, emoji: "🔩", effect: "bait_on_trash", duration: 10, description: "Evita a perda de isca ao pescar lixo pelas próximas 10 vezes. Mais durável que o enferrujado!" }
 ];
 

@@ -37,34 +37,34 @@ class LLMService {
 					}
 					throw new Error('Resposta inválida ou vazia do Ollama');
 				}
-			},
-			{
-				name: 'ollama',
-				method: async (options) => {
-					const response = await this.ollamaCompletion({customEndpoint: "http://192.168.3.200:12345", ...options});
-					if (response && response.message && response.message.content) {
-						return response.message.content;
-					}
-					if (response && response.choices && response.choices[0] && response.choices[0].message) {
-						return response.choices[0].message.content;
-					}
-					throw new Error('Resposta inválida ou vazia do Ollama');
-				}
-			},
-			{
-				name: 'lmstudio',
-				method: async (options) => {
-					const response = await this.lmstudioCompletion(options);
-					return response.choices[0].message.content;
-				}
-			},
-			{
-				name: 'gemini',
-				method: async (options) => {
-					const response = await this.geminiCompletion(options);
-					return response.candidates[0].content.parts[0].text;
-				}
 			}
+			// {
+			// 	name: 'ollama',
+			// 	method: async (options) => {
+			// 		const response = await this.ollamaCompletion({customEndpoint: "http://192.168.3.200:12345", ...options});
+			// 		if (response && response.message && response.message.content) {
+			// 			return response.message.content;
+			// 		}
+			// 		if (response && response.choices && response.choices[0] && response.choices[0].message) {
+			// 			return response.choices[0].message.content;
+			// 		}
+			// 		throw new Error('Resposta inválida ou vazia do Ollama');
+			// 	}
+			// },
+			// {
+			// 	name: 'lmstudio',
+			// 	method: async (options) => {
+			// 		const response = await this.lmstudioCompletion(options);
+			// 		return response.choices[0].message.content;
+			// 	}
+			// },
+			// {
+			// 	name: 'gemini',
+			// 	method: async (options) => {
+			// 		const response = await this.geminiCompletion(options);
+			// 		return response.candidates[0].content.parts[0].text;
+			// 	}
+			// }
 		];
 
 		this.providerQueue = [...this.providerDefinitions];
@@ -427,36 +427,29 @@ class LLMService {
 	 */
 	async ollamaCompletion(options) {
 		try {
+			
 			const endpoint = (options.customEndpoint ?? this.ollamaEndpoint) + '/api/chat';
 
-			// 1. Set up the messages array, starting with the system context if provided.
 			const messages = [];
-			const systemContext = options.systemContext	?? "Você é ravena, um bot de whatsapp criado por moothz";
+			const systemContext = options.systemContext ?? "Você é ravena, um bot de whatsapp criado por moothz";
 			messages.push({ role: 'system', content: systemContext });
 
-			// 2. Create the main user message object.
 			const userMessage = {
 				role: 'user',
 				content: options.prompt,
 			};
 
-			// 3. Handle image input if provided.
 			if (options.image) {
 				let base64Image;
 
-				// Case A: Image is a data URI string.
 				if (options.image.startsWith('data:image')) {
 					base64Image = options.image.split(',')[1];
-				// Case B: Image is a valid file path.
 				} else if (fs.existsSync(options.image)) {
 					base64Image = fs.readFileSync(options.image, 'base64');
-				// Case C: Assume it's already a raw base64 string.
 				} else {
 					base64Image = options.image;
 				}
 
-				// If we successfully got a base64 string, add it to the message.
-				// Ollama expects an 'images' array with raw base64 strings.
 				if (base64Image) {
 					userMessage.images = [base64Image];
 				}
@@ -464,14 +457,23 @@ class LLMService {
 
 			messages.push(userMessage);
 
-			// 4. Construct the final payload for the Ollama API.
+			let ollamaFormat = null;
+			if (options.response_format) {
+				if (options.response_format.type === 'json_schema' && options.response_format.json_schema?.schema) {
+					ollamaFormat = options.response_format.json_schema.schema;
+				} else {
+					ollamaFormat = options.response_format;
+				}
+			}
+
 			const payload = {
 				model: options.model || this.ollamaModel,
 				messages: messages,
-				stream: false, // Set to false for a single response
+				format: ollamaFormat,
+				stream: false,
 				options: {
 					temperature: options.temperature || 0.7,
-					num_predict: options.maxTokens || 8096, // Ollama's equivalent for max_tokens
+					num_predict: options.maxTokens || 8096,
 				},
 			};
 
@@ -481,10 +483,10 @@ class LLMService {
 					model: payload.model,
 					promptLength: options.prompt.length,
 					hasImage: !!options.image,
-					timeout: toTime	
+					hasSchema: !!ollamaFormat, // Log if we are using a schema
+					timeout: toTime	  
 			});
 
-			// 5. Make the POST request using axios.
 			const response = await axios.post(endpoint, payload, {
 				headers: {
 					'Content-Type': 'application/json',
@@ -492,9 +494,7 @@ class LLMService {
 				timeout: toTime,
 			});
 
-			// The structure of the successful response from Ollama is different from OpenAI's.
-			// It contains the response message directly. We return the whole data object
-			// for consistency with the other methods in your class.
+
 			return response.data;
 
 		} catch (error) {
@@ -643,8 +643,14 @@ class LLMService {
 			this.lastQueueChangeTimestamp = 0;
 		}
 
-		for (let i = 0; i < this.providerQueue.length; i++) {
-			const provider = this.providerQueue[i];
+		const totalProviders = this.providerQueue.length;
+		if (totalProviders === 0) {
+			 this.logger.error('Nenhum provedor definido.');
+			 return "Erro: Nenhum provedor de IA configurado.";
+		}
+
+		for (let i = 0; i < totalProviders; i++) {
+			const provider = this.providerQueue[0]; // Sempre tenta o provedor no início da fila
 			try {
 				this.logger.debug(`[LLMService] Tentando provedor: ${provider.name}`);
 				const result = await provider.method(options);
@@ -655,30 +661,19 @@ class LLMService {
 
 				this.logger.debug(`[LLMService] Provedor ${provider.name} retornou resposta com sucesso`);
 
-				// Se o provedor bem-sucedido não for o primeiro, mova-o para o início.
-				if (i > 0) {
-					this.logger.info(`[LLMService] Promovendo provedor ${provider.name} para o início da fila.`);
-					const [successfulProvider] = this.providerQueue.splice(i, 1);
-					this.providerQueue.unshift(successfulProvider);
-					this.lastQueueChangeTimestamp = Date.now();
-				}
-
+				// O provedor bem-sucedido já está no início da fila, bom para a próxima vez.
 				return result;
 			} catch (error) {
 				this.logger.error(`Erro ao usar provedor ${provider.name}:`, error.message);
 
-				// Move o provedor que falhou para o final da fila.
+				// Rebaixa o provedor que falhou, movendo-o para o final da fila.
 				this.logger.warn(`[LLMService] Rebaixando provedor ${provider.name} para o final da fila.`);
-				const [failedProvider] = this.providerQueue.splice(i, 1);
-				this.providerQueue.push(failedProvider);
+				this.providerQueue.push(this.providerQueue.shift());
 				this.lastQueueChangeTimestamp = Date.now();
-
-				// Decrementa i para tentar o novo provedor no índice atual.
-				i--;
 			}
 		}
 
-		// Se todos os provedores falharem, retorna mensagem de erro
+		// Se o loop terminar, todos os provedores foram tentados e falharam.
 		this.logger.error('Todos os provedores falharam');
 		return "Erro: Não foi possível gerar uma resposta de nenhum provedor disponível. Por favor, tente novamente mais tarde.";
 	}

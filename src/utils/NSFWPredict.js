@@ -54,7 +54,7 @@ class NSFWPredict {
 
       const response = await this.llmService.getCompletion(completionOptions);
       //this.logger.info(`Detecção NSFW RAW: ${response}`);
-      const parsedResponse = JSON.parse(response);
+      const parsedResponse = JSON.parse(response ?? "{}");
 
       //this.logger.info(`Detecção NSFW: ${parsedResponse.classification}`);
       //this.logger.debug('Resposta do LLM:', parsedResponse);
@@ -64,7 +64,7 @@ class NSFWPredict {
 
       return { isNSFW, reason };
     } catch (error) {
-      this.logger.error('Erro ao executar detecção NSFW com LLM:', error);
+      this.logger.error('Erro ao executar detecção NSFW com LLM:', { response });
       return { isNSFW: false, reason: "", error: error.message };
     }
   }
