@@ -233,8 +233,8 @@ async function storeMessage(message, chatId) {
         const completionOptions = {
           prompt: "Analise a foto e retorne apenas uma sucinta descrição (em pt-BR) do que vê na imagem no formato, máximo 200 caracteres: Imagem[xxxx xxxx xxx]",
           systemContext: `Você é um bot especialista em interpretação de imagens.`,
-          //provider: 'lmstudio',
-          image: message.content.data
+          image: message.content.data,
+          debugPrompt: false
         };
 
         //logger.info(`[storeMessage] Prompt: `, completionOptions);

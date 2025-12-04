@@ -8,6 +8,9 @@ const fs = require('fs');
 const logger = new Logger('anonymous-message');
 const database = Database.getInstance();
 
+const LLMService = require('../services/LLMService');
+const llmService = new LLMService({});
+
 // Constantes
 const COOLDOWN_HOURS = 2;
 const COOLDOWN_MS = COOLDOWN_HOURS * 60 * 60 * 1000; // Cooldown em milissegundos
@@ -124,7 +127,7 @@ function cleanId(id){
  */
 async function anonymousMessage(bot, message, args, group) {
   try {
-    //logger.debug(`[anonymousMessage] `, {message});
+    logger.debug(`[anonymousMessage] `, {message, group});
     // Verifica o ID do remetente
     const senderIds = [cleanId(message.author), cleanId(message?.origin?.key?.remoteJidAlt ?? "-"), cleanId(message?.origin?.key?.remoteJid ?? "-"), cleanId(message?.origin?.Info?.SenderAlt ?? "-"), cleanId(message?.origin?.Info?.Sender ?? "-")];
     
@@ -132,7 +135,7 @@ async function anonymousMessage(bot, message, args, group) {
     if (args.length < 2) {
       return new ReturnMessage({
         chatId: senderIds[0],
-        content: `⚠️ Formato incorreto. Use: !anonimo ${group.name} mensagem\n\nExemplo: !anonimo ${group.name} Olá, esta é uma mensagem anônima!`
+        content: `⚠️ Formato incorreto. Use: !anonimo ${group?.name ?? "nomegrupo"} mensagem\n\nExemplo: !anonimo ${group?.name ?? "nomegrupo"} Olá, esta é uma mensagem anônima!`
       });
     }
     
@@ -204,12 +207,20 @@ async function anonymousMessage(bot, message, args, group) {
     const now = Date.now();
     const anonMessages = getAnonMessages();
     
+    let anonimizedMessage = null;
+    try {
+      anonimizedMessage = await llmService.getCompletion({ prompt: `Reescreva esta frase em portugues adequado, removendo vícios de linguagens, gírias e idiomas. A mensagem deve ser anonimizada, não sendo possível identificar a pessoa que enviou a mesma. ((Retorne APENAS a frase solicitada)). Texto para processar:\n"${anonymousText}"` });
+    } catch(e){
+      logger.error(`[anonymousMessage] Não consegui deixar a mensagem anonima, usando a original.`);
+    }
+
     // Adiciona nova mensagem ao registro
     anonMessages.push({
       senderId: senderIds[0],
       targetGroupId: targetGroup.id,
       targetGroupName: targetGroup.name,
       message: anonymousText,
+      anonimizedMessage: anonimizedMessage,
       timestamp: now
     });
     
@@ -219,7 +230,7 @@ async function anonymousMessage(bot, message, args, group) {
     // Envia a mensagem para o grupo alvo
     try {
       // Formata a mensagem anônima
-      const formattedMessage = `👻 *Um membro anônimo enviou:*\n\n> ${anonymousText}`;
+      const formattedMessage = `👻 *Um membro anônimo enviou:*\n\n> ${anonimizedMessage ?? anonymousText}`;
       
       // Envia para o grupo alvo
       await bot.sendMessage(targetGroup.id, formattedMessage);

@@ -46,15 +46,23 @@ class NSFWPredict {
     try {
       const completionOptions = {
         prompt: prompt,
-        //provider: 'lmstudio',
         image: imageBase64,
         response_format: nsfwSchema,
         temperature: 0.2,
+        systemContext: `Você é um bot especialista em interpretação de imagens`,
+        debugPrompt: false
       };
 
-      const response = await this.llmService.getCompletion(completionOptions);
+
+      let response = null;
+      try{
+        response = await this.llmService.getCompletion(completionOptions);
+      }
+      catch(e){
+        response = "{}";
+      }
       //this.logger.info(`Detecção NSFW RAW: ${response}`);
-      const parsedResponse = JSON.parse(response ?? "{}");
+      const parsedResponse = JSON.parse(response);
 
       //this.logger.info(`Detecção NSFW: ${parsedResponse.classification}`);
       //this.logger.debug('Resposta do LLM:', parsedResponse);
@@ -64,7 +72,7 @@ class NSFWPredict {
 
       return { isNSFW, reason };
     } catch (error) {
-      this.logger.error('Erro ao executar detecção NSFW com LLM:', { response });
+      this.logger.error('Erro ao executar detecção NSFW com LLM.', { response });
       return { isNSFW: false, reason: "", error: error.message };
     }
   }

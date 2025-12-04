@@ -75,7 +75,8 @@ async function mentionAllMembers(bot, message, args, group) {
           content: attachmentData,
           options: {
             caption: messageText,
-            mentions: mentions
+            mentions: mentions,
+            mentionAll: true
           }
         });
       } else {
@@ -88,7 +89,8 @@ async function mentionAllMembers(bot, message, args, group) {
           chatId: message.group,
           content: messageText,
           options: {
-            mentions: mentions
+            mentions: mentions,
+            mentionAll: true
           }
         });
       }
@@ -99,7 +101,8 @@ async function mentionAllMembers(bot, message, args, group) {
           chatId: message.group,
           content: messageText,
           options: {
-            mentions: mentions
+            mentions: mentions,
+            mentionAll: true
           }
       });
     }

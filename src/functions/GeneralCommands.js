@@ -34,7 +34,8 @@ async function grupaoCommand(bot, message, args, group){
   const grupao = await bot.client.getChatById(bot.grupoInteracao);
 
   try{
-    await grupao.addParticipants([message.author]);
+    const pessoaAdd = message.authorAlt ?? message.author;
+    await grupao.addParticipants([pessoaAdd]);
   } catch(e){
     logger.error(`[grupaoCommand] Não consegui add '${message.author}' no grupão (${bot.grupoInteracao})`);
   }

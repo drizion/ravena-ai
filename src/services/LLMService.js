@@ -180,7 +180,7 @@ class LLMService {
 					{
 						parts: [
 							{
-								text: options.systemContext ?? "Você é ravena, um bot de whatsapp criado por moothz"
+								text: options.systemContext ?? "Você é ravena, um bot de whatsapp criado por moothz. Não se apresente, a menos que solicitado pelo usuário."
 							}
 						]
 					},
@@ -298,7 +298,7 @@ class LLMService {
 				maxTokens: options.maxTokens || 5000 
 			});
 
-			const ctxInclude = options.systemContext ?? "Você é ravena, um bot de whatsapp criado por moothz";
+			const ctxInclude = options.systemContext ?? "Você é ravena, um bot de whatsapp criado por moothz. Não se apresente, a menos que solicitado pelo usuário.";
 			
 			const response = await axios.post(
 				endpoint,
@@ -349,7 +349,7 @@ class LLMService {
 			const endpoint = (options.customEndpoint ?? this.localEndpoint) + '/api/v0/chat/completions';
 			
 			const messages = [];
-			const systemContext = options.systemContext ?? "Você é ravena, um bot de whatsapp criado por moothz";
+			const systemContext = options.systemContext ?? "Você é ravena, um bot de whatsapp criado por moothz. Não se apresente, a menos que solicitado pelo usuário.";
 			messages.push({ role: 'system', content: systemContext });
 
 			const userMessage = { role: 'user' };
@@ -412,6 +412,19 @@ class LLMService {
 		}
 	}
 
+	summarizeString(text) {
+		if (typeof text !== 'string') return '';
+
+		if (text.length <= 200) {
+			return text;
+		}
+
+		const firstPart = text.slice(0, 100);
+		const lastPart = text.slice(-100);
+
+		return `${firstPart}[...]${lastPart}`;
+	}
+
 	/**
 	 * Sends a completion request to the Ollama API.
 	 * This method handles text, system context, and image inputs.
@@ -427,11 +440,12 @@ class LLMService {
 	 */
 	async ollamaCompletion(options) {
 		try {
-			
+			const debugPrompt = options.debugPrompt ?? true;
+
 			const endpoint = (options.customEndpoint ?? this.ollamaEndpoint) + '/api/chat';
 
 			const messages = [];
-			const systemContext = options.systemContext ?? "Você é ravena, um bot de whatsapp criado por moothz";
+			const systemContext = options.systemContext ?? "Você é ravena, um bot de whatsapp criado por moothz. Não se apresente, a menos que solicitado pelo usuário.";
 			messages.push({ role: 'system', content: systemContext });
 
 			const userMessage = {
@@ -478,14 +492,20 @@ class LLMService {
 			};
 
 			const toTime = options.timeout || this.apiTimeout || 60000;
-			this.logger.debug('[LLMService][ollamaCompletion] Sending request to Ollama API', {
+			const debugData = {
 					endpoint: endpoint,
 					model: payload.model,
 					promptLength: options.prompt.length,
 					hasImage: !!options.image,
 					hasSchema: !!ollamaFormat, // Log if we are using a schema
 					timeout: toTime	  
-			});
+			};
+
+			if(debugPrompt){
+				this.logger.debug('[LLMService][ollamaCompletion] Sending request to Ollama API', { prompt: this.summarizeString(options.prompt)}); // , debugData
+			} else {
+				this.logger.debug('[LLMService][ollamaCompletion] Sending request to Ollama API');
+			}
 
 			const response = await axios.post(endpoint, payload, {
 				headers: {
@@ -659,7 +679,9 @@ class LLMService {
 					throw new Error('Resposta vazia ou inválida do provedor');
 				}
 
-				this.logger.debug(`[LLMService] Provedor ${provider.name} retornou resposta com sucesso`);
+				if(!result.includes("Imagem[")){
+					this.logger.debug(`[LLMService] Provedor ${provider.name} retornou resposta com sucesso`, { result: this.summarizeString(result) });
+				}
 
 				// O provedor bem-sucedido já está no início da fila, bom para a próxima vez.
 				return result;

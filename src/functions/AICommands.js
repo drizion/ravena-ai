@@ -56,6 +56,8 @@ async function aiCommand(bot, message, args, group) {
     logger.info(`[aiCommand][${group.name}] Personalidade custom: ${group.customAIPrompt}`);
     ctxContent += customPersonalidade;
   }
+
+  ctxContent += "\n((Não se apresente, a não ser que o usuário solicite informações sobre você))";
   
   let question = (args.length > 0) ? args.join(" ") : (message.caption ?? message.content);
   const quotedMsg = await message.origin.getQuotedMessage();
