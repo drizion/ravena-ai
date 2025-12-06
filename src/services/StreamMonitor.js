@@ -471,7 +471,13 @@ class StreamMonitor extends EventEmitter {
               if(gpChannel.channel == channelCheck){
                 channelHasGroup = true;
 
-                // Ok, canal está num grupo, mas esse canal existe?
+                if(channelCheck.includes("http://") || channelCheck.includes("https://")){
+                  this.logger.info(`[cleanupChannelList] Canal Twitch formato de link: ${channelCheck} - Removendo do grupo ${group.id} (${group.name || 'sem nome'})`);
+                  channelsToRemove.push(channelCheck.toLowerCase());
+                  continue;
+                }
+
+                // Ok, canal está num grupo e não é link, mas esse canal existe?
                 const channelExists = await this.twitchChannelExists(channelCheck);
               
                 if (!channelExists) {
@@ -498,7 +504,7 @@ class StreamMonitor extends EventEmitter {
       for (const group of groups) {
         if (channelsToRemove.length > 0) {
           group.twitch = group.twitch.filter(c => !channelsToRemove.includes(c.channel.toLowerCase()));
-          await this.bot.database.saveGroup(group);
+          await this.database.saveGroup(group);
           this.logger.info(`[cleanupChannelList] Removidos ${channelsToRemove.length} canais inexistentes do grupo ${group.id}`, channelsToRemove);
         }
       }
@@ -545,7 +551,7 @@ class StreamMonitor extends EventEmitter {
               'Authorization': `Bearer ${this.twitchToken}`
             },
             params: {
-              login: batch.map(c => c.name.toLowerCase())
+              login: batch.map(c => this.sanitizePlatformChannelName(c.name.toLowerCase(), "twitch"))
             }
           }
         );
@@ -675,7 +681,10 @@ class StreamMonitor extends EventEmitter {
 
     for (const batch of channelBatches) {
         try {
-            const slugs = batch.map(c => `slug=${encodeURIComponent(c.name ?? "").substring(0,25)}`).join("&");
+            const slugs = [...new Set(batch.map(c => this.sanitizePlatformChannelName(c.name || "", "kick")))]
+            .filter(Boolean) // remove strings avazias
+            .map(name => `slug=${encodeURIComponent(name.substring(0, 25))}`)
+            .join("&");
 
             const kickRequestParameters = {
                 headers: {
@@ -747,7 +756,7 @@ class StreamMonitor extends EventEmitter {
                 this.kickToken = null; 
                 await this._refreshKickToken();
             } else {
-                this.logger.error(`[_pollKickChannels] Error polling Kick channels: ${error.message}`);
+                this.logger.error(`[_pollKickChannels] Error polling Kick channels: ${error.message}`, { channels: batch });
             }
         }
         // Add a small delay between batches to avoid rate limiting
@@ -825,7 +834,7 @@ class StreamMonitor extends EventEmitter {
         }
 
       } catch (error) {
-        this.logger.error(`[getYtChannelID] Error tentando buscar YouTube channel ID para '${chUrl}':`, error.message);
+        this.logger.error(`[getYtChannelID] Erro tentando buscar YouTube channel ID para '${chUrl}':`, error.message);
       }
     }
 
@@ -839,7 +848,7 @@ class StreamMonitor extends EventEmitter {
     for (const channel of youtubeChannels) {
       try {
         // First, resolve channel name to channel ID if needed
-        let channelId = channel.name;
+        let channelId = this.sanitizePlatformChannelName(channel.name, "youtube");
         
         // If it's not a channel ID format, try to resolve it
         if (!channelId.startsWith('UC')) {
@@ -1353,6 +1362,53 @@ class StreamMonitor extends EventEmitter {
       this.logger.error('Erro ao obter streams populares:', error.message);
       return results;
     }
+  }
+
+  /**
+   * Sanitizes a URL or username into a clean channel handle.
+   * @param {string} inputString - The URL or username to sanitize.
+   * @param {string} platform - 'twitch', 'kick', or 'youtube' (default: 'twitch').
+   */
+  sanitizePlatformChannelName(inputString, platform = 'twitch') {
+    if (typeof inputString !== 'string') {
+      return "";
+    }
+
+    // Configuration for each platform's URL patterns and allowed characters
+    const platformRules = {
+      twitch: {
+        // Removes twitch.tv/
+        urlPattern: /^(https?:\/\/)?(www\.)?twitch\.tv\//i, 
+        // Twitch only allows alphanumeric and underscores
+        illegalChars: /[^a-z0-9_]/g 
+      },
+      kick: {
+        // Removes kick.com/
+        urlPattern: /^(https?:\/\/)?(www\.)?kick\.com\//i,
+        // Kick follows same rules as Twitch (alphanumeric + underscore)
+        illegalChars: /[^a-z0-9_]/g 
+      },
+      youtube: {
+        // Removes youtube.com, youtu.be, and handle prefixes like /@, /c/, /user/
+        urlPattern: /^(https?:\/\/)?(www\.)?(youtube\.com\/(c\/|user\/|@|channel\/)?|youtu\.be\/)/i,
+        // YouTube handles allow hyphens (-) and dots (.)
+        illegalChars: /[^a-z0-9_\-\.]/g 
+      }
+    };
+
+    // Get rules for the requested platform (fallback to twitch if invalid platform passed)
+    const rules = platformRules[platform.toLowerCase()] || platformRules.twitch;
+
+    // 1. Remove the URL domain/protocol
+    let cleaned = inputString.replace(rules.urlPattern, "");
+
+    // 2. Lowercase everything (Standardizes input)
+    cleaned = cleaned.toLowerCase();
+
+    // 3. Remove any characters that are not allowed on that specific platform
+    const sanitized = cleaned.replace(rules.illegalChars, "");
+
+    return sanitized ?? "";
   }
 }
 

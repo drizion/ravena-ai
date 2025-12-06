@@ -380,7 +380,7 @@ class CommandHandler {
   delayedReaction(msg, emoji, delay){
     setTimeout((m,e) => {
       m.react(e);
-    }, delay, msg, emoji);
+    }, delay + 1000, msg, emoji);
   }
 
   isComuAdmin(bot, userId) {
@@ -600,7 +600,7 @@ class CommandHandler {
     const fixedCommand = this.fixedCommands.getCommand(command);
     if (fixedCommand) {
       this.logger.debug(`[${gidDebug}][${message.author}/${message.authorName}] Comando fixo '${command}' '${args.join(" ")}'`);
-      await this.executeFixedCommand(bot, message, fixedCommand, args, group);
+      this.executeFixedCommand(bot, message, fixedCommand, args, group);
       return;
     }
     
@@ -609,7 +609,7 @@ class CommandHandler {
       const customCommand = this.findCustomCommand(command, this.customCommands[group.id]);
       if (customCommand) {
         this.logger.debug(`[${gidDebug}][${message.author}/${message.authorName}] Comando custom (${customCommand.startsWith}) '${command}' '${args.join(" ")}'`);
-        await this.executeCustomCommand(bot, message, customCommand, args, group);
+        this.executeCustomCommand(bot, message, customCommand, args, group);
         return;
       } else {
         if (group.prefix && group.prefix !== '') {
@@ -830,7 +830,7 @@ class CommandHandler {
         
         // Reage com emoji de relógio
         try {
-          await message.origin.react("🕒");
+          message.origin.react("🕒");
         } catch (reactError) {
           this.logger.error('Erro ao aplicar reação "indisponível":', reactError.message ?? "xxx");;
         }
@@ -841,7 +841,7 @@ class CommandHandler {
           content: `O comando ${command.name} só está disponível ${this.formatAllowedTimes(command)}.`
         });
         
-        await bot.sendReturnMessages(returnMessage);
+        bot.sendReturnMessages(returnMessage);
         return;
       }
 
@@ -851,14 +851,14 @@ class CommandHandler {
 
       if (cooldownInfo.inCooldown) {
         this.logger.debug(`Comando ${command.name} em cooldown por mais ${cooldownInfo.timeLeft}s`);
-        await this.handleCooldownMessage(bot, message, command, groupId, cooldownInfo);
+        this.handleCooldownMessage(bot, message, command, groupId, cooldownInfo);
         return;
       }
       
       // Reage com emoji "antes" (específico do comando ou padrão)
       if(command.reactions?.before){
         try {
-          await message.origin.react(command.reactions?.before);
+          message.origin.react(command.reactions?.before);
         } catch (reactError) {
           this.logger.error('Erro ao aplicar reação "antes":', reactError.message ?? "xxx");;
         }
@@ -885,11 +885,11 @@ class CommandHandler {
             });
             
             // Envia as ReturnMessages
-            await bot.sendReturnMessages(result);
+            bot.sendReturnMessages(result);
           }
         }
         
-        //this.logger.debug(`Comando ${command.name} executado com sucesso, enviando after reaction`);
+        this.logger.debug(`Comando ${command.name} executado com sucesso, enviando after reaction`);
 
         // Reage com emoji "depois" (específico do comando ou padrão)
         if(command.reactions?.after){
@@ -901,7 +901,7 @@ class CommandHandler {
         // Reage com emoji "depois" mesmo para erro
         const afterEmoji = command.reactions?.after || this.defaultReactions.after;
         try {
-          await message.origin.react(afterEmoji);
+          message.origin.react(afterEmoji);
         } catch (reactError) {
           this.logger.error('Erro ao aplicar reação "depois":', reactError.message ?? "xxx");;
         }
@@ -919,7 +919,7 @@ class CommandHandler {
           before: errorEmoji
         }
       });
-      await bot.sendReturnMessages(returnMessage);
+      bot.sendReturnMessages(returnMessage);
     }
   }
 
@@ -979,7 +979,7 @@ class CommandHandler {
           this.logger.debug(`Comando ${command.name} requer administrador, mas o usuário não é`);
 
           try {
-            await message.origin.react("⛔️");
+            message.origin.react("⛔️");
           } catch (reactError) {
             this.logger.error('Erro ao aplicar reação "indisponível":', reactError.message ?? "xxx");;
           }
@@ -998,7 +998,7 @@ class CommandHandler {
         
         // Reage com emoji de relógio
         try {
-          await message.origin.react("🕒");
+          message.origin.react("🕒");
         } catch (reactError) {
           this.logger.error('Erro ao aplicar reação "indisponível":', reactError.message ?? "xxx");;
         }
@@ -1008,7 +1008,7 @@ class CommandHandler {
           content: `o comando *${command.startsWith}* só está disponível ${this.formatAllowedTimes(command)}.`
         });
         
-        await bot.sendReturnMessages(returnMessage);
+        bot.sendReturnMessages(returnMessage);
         return;
       }
 
@@ -1017,7 +1017,7 @@ class CommandHandler {
 
       if (cooldownInfo.inCooldown) {
         this.logger.debug(`Comando ${command.startsWith} em cooldown por mais ${cooldownInfo.timeLeft}s`);
-        await this.handleCooldownMessage(bot, message, command.startsWith, message.group, cooldownInfo);
+        this.handleCooldownMessage(bot, message, command.startsWith, message.group, cooldownInfo);
         return;
       }
 
@@ -1034,7 +1034,7 @@ class CommandHandler {
       command.count = (command.count || 0) + 1;
       command.lastUsed = Date.now();
       await this.database.updateCustomCommand(group.id, command);
-      //this.logger.debug(`Atualizadas estatísticas de uso para o comando *${command.startsWith}*, contagem: ${command.count}`);
+      this.logger.debug(`Atualizadas estatísticas de uso para o comando *${command.startsWith}*, contagem: ${command.count}`);
       
       // Reage à mensagem se especificado (esta é a reação específica do comando)
       if (command.react) {
@@ -1079,7 +1079,7 @@ class CommandHandler {
       const afterEmoji = command.reactions?.after || null;
       try {
         if (afterEmoji && command.react !== false) {
-          await message.origin.react(afterEmoji);
+          message.origin.react(afterEmoji);
         }
       } catch (reactError) {
         this.logger.error('Erro ao aplicar reação "depois":', reactError.message ?? "xxx");;
@@ -1096,7 +1096,7 @@ class CommandHandler {
           before: command.react !== false ? errorEmoji : null
         }
       });
-      await bot.sendReturnMessages(returnMessage);
+      bot.sendReturnMessages(returnMessage);
     }
   }
 
@@ -1347,14 +1347,14 @@ class CommandHandler {
               const interactCommand = this.fixedCommands.getCommand("interagir");
               this.logger.info(`[interagir] Acionando LLM-Interagir`);
 
-              await this.executeFixedCommand(bot, message, interactCommand, [false], group);
+              this.executeFixedCommand(bot, message, interactCommand, [false], group);
               return;
             } else {             
               const randomCommand = autoCommands[Math.floor(Math.random() * autoCommands.length)];
               this.logger.info(`[interagir] Acionando comando automaticamente: ${randomCommand.startsWith}`);
               
               // Executa o comando
-              await this.executeCustomCommand(bot, message, randomCommand, [], group);
+              this.executeCustomCommand(bot, message, randomCommand, [], group);
               return;
             }
 

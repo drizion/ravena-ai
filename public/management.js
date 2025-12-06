@@ -49,6 +49,53 @@ document.addEventListener('DOMContentLoaded', () => {
             showError('Ocorreu um erro ao inicializar a página. Por favor, tente novamente.');  
         }  
     }  
+
+    /**
+     * Sanitizes a URL or username into a clean channel handle.
+     * @param {string} inputString - The URL or username to sanitize.
+     * @param {string} platform - 'twitch', 'kick', or 'youtube' (default: 'twitch').
+     */
+    function sanitizePlatformChannelName(inputString, platform = 'twitch') {
+      if (typeof inputString !== 'string') {
+        return "";
+      }
+
+      // Configuration for each platform's URL patterns and allowed characters
+      const platformRules = {
+        twitch: {
+          // Removes twitch.tv/
+          urlPattern: /^(https?:\/\/)?(www\.)?twitch\.tv\//i, 
+          // Twitch only allows alphanumeric and underscores
+          illegalChars: /[^a-z0-9_]/g 
+        },
+        kick: {
+          // Removes kick.com/
+          urlPattern: /^(https?:\/\/)?(www\.)?kick\.com\//i,
+          // Kick follows same rules as Twitch (alphanumeric + underscore)
+          illegalChars: /[^a-z0-9_]/g 
+        },
+        youtube: {
+          // Removes youtube.com, youtu.be, and handle prefixes like /@, /c/, /user/
+          urlPattern: /^(https?:\/\/)?(www\.)?(youtube\.com\/(c\/|user\/|@|channel\/)?|youtu\.be\/)/i,
+          // YouTube handles allow hyphens (-) and dots (.)
+          illegalChars: /[^a-z0-9_\-\.]/g 
+        }
+      };
+
+      // Get rules for the requested platform (fallback to twitch if invalid platform passed)
+      const rules = platformRules[platform.toLowerCase()] || platformRules.twitch;
+
+      // 1. Remove the URL domain/protocol
+      let cleaned = inputString.replace(rules.urlPattern, "");
+
+      // 2. Lowercase everything (Standardizes input)
+      cleaned = cleaned.toLowerCase();
+
+      // 3. Remove any characters that are not allowed on that specific platform
+      const sanitized = cleaned.replace(rules.illegalChars, "");
+
+      return sanitized ?? "";
+    }
     
     async function validateToken(token) {  
         const response = await fetch(`/api/validate-token?token=${token}`);  
@@ -452,7 +499,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function showAddChannelModal(platform) {
         // Create a simple prompt for the channel name
-        const channelName = prompt(`Digite o nome do canal de ${getPlatformDisplayName(platform)}:`);
+        const channelInput = prompt(`Digite o nome do canal de ${getPlatformDisplayName(platform)}:`);
+        const channelName = sanitizePlatformChannelName(channelInput, platform);
         
         if (!channelName || channelName.trim() === '') {
             return;

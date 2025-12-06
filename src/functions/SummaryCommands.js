@@ -177,14 +177,15 @@ ${formattedMessages}`;
 
     // Envia a mensagem de interação
     if(interaction.includes("Não foi poss") && !retornarErro){
-      logger.info(`[${group.id}]Mensagem de interação ignorada pois ocorreu um erro na hora de gerar (${message.group}/'${interaction}')`);
+      logger.info(`[${group.id}] Mensagem de interação ignorada pois ocorreu um erro na hora de gerar (${message.group}/'${interaction}')`);
       return [];
     } else {
-      logger.info(`[${group.id}]Mensagem de interação enviada com sucesso para ${message.group}`);
+      logger.info(`[${group.id}] Mensagem de interação enviada com sucesso para '${message.group}'`);
 
       // Já que deu certo, limpa o historico
       clearRecentMessages(message.group);
-      
+        
+      logger.info(`[${group.id}] Limpas mensagens recentes de  '${message.group}'`);
       return new ReturnMessage({
         chatId: message.group,
         content: interaction,
@@ -302,13 +303,13 @@ async function getRecentMessages(chatId) {
  * @param {string} chatId - O ID do grupo
  * @returns {Promise<Bool>} - Se deu certo ou não
  */
-async function clearRecentMessages(chatId) {
+function clearRecentMessages(chatId) {
   try {
     const conversationFile = path.join(dataDir, `latest-messages-${chatId}.json`);
     
     // Carrega mensagens existentes
     try {
-      await fs.writeFile(conversationFile, "[]", 'utf8');
+      fs.writeFile(conversationFile, "[]", 'utf8');
       return true;
     } catch (error) {
       logger.debug(`Nenhum arquivo de conversa existente para ${chatId}`);

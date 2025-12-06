@@ -1686,6 +1686,8 @@ class WhatsAppBotEvoGo {
       }
 
       let endpoint = '';
+      if (typeof content === 'MessageMedia' || (typeof content === "object" && content.data && content.mimetype)) content.isMessageMedia = true;
+
       if (typeof content === 'string') {
         if(this.validURL(content)){
           // Facilidade pra enviar mídia
@@ -1717,7 +1719,7 @@ class WhatsAppBotEvoGo {
           payload.caption = options.caption;
 
           let mediaType = content.mimetype ? content.mimetype.split('/')[0] : 'image';
-          const cttSize = content.size ?? await getFileSizeByURL(content.url) ?? 0;
+          const cttSize = content.size ?? await this.getFileSizeByURL(content.url) ?? 0;
           const urlPublica = process.env.BOT_DOMAIN_LOCAL ? payload.url.replace(process.env.BOT_DOMAIN_LOCAL,process.env.BOT_DOMAIN) : payload.url;
           if (options.sendMediaAsDocument || (cttSize > 60 * 1024 * 1024)) {
             mediaType = 'document';
@@ -1754,7 +1756,7 @@ class WhatsAppBotEvoGo {
         payload.mentionedJid = options.mentions.join(",");
       }
 
-      //this.logger.debug(`[sendMessage] '${endpoint}'`, { content, payload });
+      ///this.logger.debug(`[sendMessage] '${endpoint}'`, { contentType: typeof content, content, payload });
 
       const response = await this.apiClient.post(endpoint, payload);
       this.loadReport.trackSentMessage(isGroup);

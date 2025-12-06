@@ -25,7 +25,8 @@ class SuperAdmin {
 
     // Mapeamento de comando para método
     this.commandMap = {
-      //'testeMsg': {'method': 'testeMsg', 'description': 'Testar Retorno msg'},
+      'testeMsg': {'method': 'testeMsg', 'description': 'Testar Retorno msg'},
+      'sendMsg': { 'method': 'sendMsg', 'description': 'Envia mensagem para chatId' },
       'joinGrupo': { 'method': 'joinGroup', 'description': 'Entra em um grupo via link de convite' },
       'addDonate': { 'method': 'addNewDonate', 'description': 'Adiciona novo donate' },
       'addDonateNumero': { 'method': 'addDonorNumber', 'description': 'Adiciona número de um doador' },
@@ -38,6 +39,7 @@ class SuperAdmin {
       'foto': { 'method': 'changeProfilePicture', 'description': 'Altera foto de perfil do bot' },
       'simular': { 'method': 'simulateStreamEvent', 'description': 'Simula evento de stream' },
       'restart': { 'method': 'restartBot', 'description': 'Reinicia o bot' },
+
       'getGroupInfo': { 'method': 'getGroupInfo', 'description': 'Dump de dados de grupo por nome cadastro' },
       'getMembros': { 'method': 'getMembros', 'description': 'Lista todos os membros do grupo separados por admin e membros normais' },
       'blockInvites': { 'method': 'blockInvites', 'description': 'Bloqueia os invites dessa pessoa' },
@@ -132,6 +134,80 @@ class SuperAdmin {
       });
     }
   }
+
+  async sendMsg(bot, message, args) {
+    try {
+      const chatId = message.group || message.author;
+
+      // Verifica se o usuário é um super admin
+      if (!this.isSuperAdmin(message.author) && !this.isComuAdmin(bot, message.author)) {
+        return new ReturnMessage({
+          chatId: chatId,
+          content: '⛔ Apenas super administradores podem usar este comando.'
+        });
+      }
+
+      if (args.length === 0) {
+        return new ReturnMessage({
+          chatId: chatId,
+          content: 'Por favor, forneça um numero e a mensagem. Exemplo: !sa-sendMsg 123456@g.us Mensagem de texto'
+        });
+      }
+
+      const chatToSend = args[0];
+      let msg = "Teste";
+      let caption = undefined;
+
+      if (args.length > 1) {
+          msg = args.slice(1).join(' ');
+      }
+
+      if(msg === "IMAGEM"){
+        msg = await bot.createMedia(path.join(this.dataPath, "ravenavip.png"));
+        caption = "Legenda para IMAGEM";
+      }
+
+      if(msg === "AUDIO"){
+        msg = await bot.createMedia(path.join(this.dataPath, "ravena_sample.mp3"));
+        caption = "Legenda para AUDIO";
+      }
+
+      if(msg === "VIDEO"){
+        msg = await bot.createMedia(path.join(this.dataPath, "example-video.mp4"));
+        caption = "Legenda para VIDEO";
+      }
+
+
+      try {
+
+        const resMsgValida = await bot.sendReturnMessages(new ReturnMessage({
+          chatId: chatToSend,
+          content: msg,
+          caption
+        }));
+
+        return new ReturnMessage({
+          chatId: chatId,
+          content: `✅ Enviada msg '${msg}' com sucesso para ${chatToSend};\n${JSON.stringify(resMsgValida, null, "\t")}`
+        });
+      } catch (error) {
+        this.logger.error('Erro ao enviar msg para chat:', error);
+
+        return new ReturnMessage({
+          chatId: chatId,
+          content: `❌ Erro ao enviar msg para chat: ${error.message}`
+        });
+      }
+    } catch (error) {
+      this.logger.error('Erro no comando sendMsg:', error);
+
+      return new ReturnMessage({
+        chatId: message.group || message.author,
+        content: '❌ Erro ao processar comando.'
+      });
+    }
+  }
+
   /**
    * Entra em um grupo via link de convite
    * @param {WhatsAppBot} bot - Instância do bot
