@@ -180,17 +180,18 @@ ${formattedMessages}`;
       logger.info(`[${group.id}] Mensagem de interação ignorada pois ocorreu um erro na hora de gerar (${message.group}/'${interaction}')`);
       return [];
     } else {
-      logger.info(`[${group.id}] Mensagem de interação enviada com sucesso para '${message.group}'`);
+      const resultado = new ReturnMessage({
+        chatId: message.group,
+        content: interaction,
+        mentions: llmMentions
+      });
+      logger.info(`[${group.id}] Mensagem de interação gerada com sucesso para '${message.group}'`, { resultado });
 
       // Já que deu certo, limpa o historico
       clearRecentMessages(message.group);
         
       logger.info(`[${group.id}] Limpas mensagens recentes de  '${message.group}'`);
-      return new ReturnMessage({
-        chatId: message.group,
-        content: interaction,
-        mentions: llmMentions
-      });
+      return resultado;
     }
     
   } catch (error) {

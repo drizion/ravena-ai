@@ -64,6 +64,10 @@ class Management {
         method: 'disableCustomCommand',
         description: 'Desabilita comando (comandos personalizados)'
       },
+      'cmd-setPV': {
+        method: 'setCustomCommandInPv',
+        description: 'A resposta do comando será enviada no PV (comandos personalizados)'
+      },
       'cmd-react': {
         method: 'setReaction',
         description: 'Reaçao quando usar o comando'
@@ -767,6 +771,60 @@ class Management {
     return new ReturnMessage({
       chatId: group.id,
       content: `Comando personalizado '${commandTrigger}' habilitado.`
+    });
+  }
+
+  /**
+   * Faz com que a resposta do comando personalizado seja enviada no PV da pessoa
+   * @param {WhatsAppBot} bot - Instância do bot
+   * @param {Object} message - Dados da mensagem
+   * @param {Array} args - Argumentos do comando
+   * @param {Object} group - Dados do grupo
+   * @returns {Promise<ReturnMessage>} Mensagem de retorno
+   */
+  async setCustomCommandInPv(bot, message, args, group) {
+    if (!group) {
+      return new ReturnMessage({
+        chatId: message.author,
+        content: 'Este comando só pode ser usado em grupos.'
+      });
+    }
+    
+    if (args.length === 0) {
+      return new ReturnMessage({
+        chatId: group.id,
+        content: 'Por favor, forneça o comando personalizado a ser modificado. Exemplo: !g-cmd-setPV saudação'
+      });
+    }
+    
+    const commandTrigger = args.join(' ');
+    
+    // Obtém comandos personalizados para este grupo
+    const commands = await this.database.getCustomCommands(group.id);
+    const command = commands.find(cmd => cmd.startsWith === commandTrigger && !cmd.deleted);
+    
+    if (!command) {
+      return new ReturnMessage({
+        chatId: group.id,
+        content: `Comando personalizado '${commandTrigger}' não encontrado.`
+      });
+    }
+    
+    // Toggle entre ser no PV ou não
+    command.replyInPvivate = !(command.replyInPvivate ?? false);
+    
+    // Atualiza o comando
+    await this.database.updateCustomCommand(group.id, command);
+    
+    // Limpa cache de comandos para garantir que o comando atualizado seja carregado
+    this.database.clearCache(`commands:${group.id}`);
+
+    // Recarrega comandos
+    await bot.eventHandler.commandHandler.loadCustomCommandsForGroup(group.id);
+    
+    return new ReturnMessage({
+      chatId: group.id,
+      content: `Comando personalizado '${commandTrigger}' ${command.replyInPvivate ? " agora é respondido no PV da pessoa que solicitou" : " agora é respondido dentro do grupo (padrão)"}.`
     });
   }
   

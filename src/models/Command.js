@@ -41,6 +41,7 @@ class Command {
     
     // Comportamento de resposta
     this.deleteOnComplete = data.deleteOnComplete || false;    // Se deve excluir a mensagem original após concluir
+    this.replyInPvivate = data.replyInPvivate || false;        // Responde no PV ao invés de grupo
     
     // Processamento e execução
     this.method = data.method || null;              // Função que implementa o comando (obrigatória)

@@ -1757,6 +1757,10 @@ class WhatsAppBotEvoGo {
       }
 
       ///this.logger.debug(`[sendMessage] '${endpoint}'`, { contentType: typeof content, content, payload });
+      
+      if(payload.number.includes("newsletter")){
+        this.logger.debug(`[sendMessage][NEWSLETTER] '${endpoint}'`, { contentType: typeof content, content, payload });
+      }
 
       const response = await this.apiClient.post(endpoint, payload);
       this.loadReport.trackSentMessage(isGroup);

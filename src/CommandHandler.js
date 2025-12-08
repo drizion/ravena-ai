@@ -867,7 +867,9 @@ class CommandHandler {
       // Executa método do comando
       if (typeof command.method === 'function') {
         this.updateCooldown(command, groupId, bot.id);
+        this.logger.debug(`Comando ${command.name} tem method, executando`);
         const result = await command.method(bot, message, args, group);
+        this.logger.debug(`Comando ${command.name} resposta do method: `, { ReMsg: (result instanceof ReturnMessage), result });
         
         // Verifica se o resultado é um ReturnMessage ou array de ReturnMessages
         if (result) {
@@ -885,6 +887,7 @@ class CommandHandler {
             });
             
             // Envia as ReturnMessages
+            this.logger.debug(`Comando ${command.name} bora sendReturnMessages`);
             bot.sendReturnMessages(result);
           }
         }
@@ -1056,12 +1059,16 @@ class CommandHandler {
         for (const response of responses) {
           const processedMessage = await this.processCustomCommandResponse(bot, message, response, command, group, args);
           if (processedMessage) {
+            if(command.replyInPvivate){
+              processedMessage.chatId = message.author; // ou authorAlt?
+            }
             returnMessages.push(processedMessage);
           }
         }
         
         // Envia todas as mensagens de retorno
         if (returnMessages.length > 0) {
+          // Enviar mensagem no grupo ou pv?
           await bot.sendReturnMessages(returnMessages);
         }
       } else {
@@ -1070,6 +1077,9 @@ class CommandHandler {
         
         const returnMessage = await this.processCustomCommandResponse(bot, message, responses[randomIndex], command, group, args);
         if (returnMessage) {
+          if(command.replyInPvivate){
+            returnMessage.chatId = message.author; // ou authorAlt?
+          }
           await bot.sendReturnMessages(returnMessage);
         }
       }
