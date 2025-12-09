@@ -190,7 +190,7 @@ ${formattedMessages}`;
       // Já que deu certo, limpa o historico
       clearRecentMessages(message.group);
         
-      logger.info(`[${group.id}] Limpas mensagens recentes de  '${message.group}'`);
+      //logger.info(`[${group.id}] Limpas mensagens recentes de  '${message.group}'`);
       return resultado;
     }
     

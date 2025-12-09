@@ -1662,6 +1662,7 @@ class WhatsAppBotEvoGo {
         delay: options.delay || 0
       };
 
+      //this.logger.debug(`[sendMessage] `, { chatId, content, tipo: typeof content, options });
       if (options.quotedMessageId) {
         const msgIdToQuote = this.getActualMsgId(options.quotedMessageId);
 
@@ -1689,11 +1690,14 @@ class WhatsAppBotEvoGo {
       if (typeof content === 'MessageMedia' || (typeof content === "object" && content.data && content.mimetype)) content.isMessageMedia = true;
 
       if (typeof content === 'string') {
+
         if(this.validURL(content)){
           // Facilidade pra enviar mídia
           endpoint = '/send/media';
           payload.url = content;
-          payload.type = content.endsWith(".gif") ? "video" : (mime.lookup(content.split("?")[0]) ?? "document");
+          payload.type = content.endsWith(".gif") ? "video" : ((mime.lookup(content.split("?")[0])).split("/")[0] ?? "document");
+
+          this.logger.debug(`[sendMessage] Content is URL! `, { endpoint, payload });
         } else {
           endpoint = '/send/text';
           payload.text = content;
@@ -1715,7 +1719,7 @@ class WhatsAppBotEvoGo {
             payload.url = media.url;
             if (options.sendMediaAsSticker) payload.sticker = media.url;
           }
-          
+
           payload.caption = options.caption;
 
           let mediaType = content.mimetype ? content.mimetype.split('/')[0] : 'image';
@@ -1727,7 +1731,7 @@ class WhatsAppBotEvoGo {
             payload.caption += `\n\n> Link temporário: ${urlPublica}`;
           }
 
-          payload.type = mediaType;
+          payload.type = mediaType.split("/")[0];
           payload.filename = content.filename;
         }
       } else if (content.isLocation) {
@@ -1756,7 +1760,7 @@ class WhatsAppBotEvoGo {
         payload.mentionedJid = options.mentions.join(",");
       }
 
-      ///this.logger.debug(`[sendMessage] '${endpoint}'`, { contentType: typeof content, content, payload });
+      this.logger.debug(`[sendMessage] '${endpoint}'`, { contentType: typeof content, content, payload });
       
       if(payload.number.includes("newsletter")){
         this.logger.debug(`[sendMessage][NEWSLETTER] '${endpoint}'`, { contentType: typeof content, content, payload });
@@ -2113,14 +2117,13 @@ class WhatsAppBotEvoGo {
 
   validURL(str) {
     var pattern = new RegExp('^(https?:\\/\\/)?'+ // protocol
-      '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|'+ // domain name
+      '((([a-z\\d]([a-z\\d-]*[a-z\\d])?)\\.)+[a-z]{2,}|'+ // domain name
       '((\\d{1,3}\\.){3}\\d{1,3}))'+ // OR ip (v4) address
       '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*'+ // port and path
       '(\\?[;&a-z\\d%_.~+=-]*)?'+ // query string
       '(\\#[-a-z\\d_]*)?$','i'); // fragment locator
     return !!pattern.test(str);
   }
-
 
   _loadDonationsToWhitelist() { }
   _sendStartupNotifications() { }

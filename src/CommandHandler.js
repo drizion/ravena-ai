@@ -867,9 +867,9 @@ class CommandHandler {
       // Executa método do comando
       if (typeof command.method === 'function') {
         this.updateCooldown(command, groupId, bot.id);
-        this.logger.debug(`Comando ${command.name} tem method, executando`);
+        //this.logger.debug(`Comando ${command.name} tem method, executando`);
         const result = await command.method(bot, message, args, group);
-        this.logger.debug(`Comando ${command.name} resposta do method: `, { ReMsg: (result instanceof ReturnMessage), result });
+        //this.logger.debug(`Comando ${command.name} resposta do method: `, { ReMsg: (result instanceof ReturnMessage), result });
         
         // Verifica se o resultado é um ReturnMessage ou array de ReturnMessages
         if (result) {
@@ -887,7 +887,6 @@ class CommandHandler {
             });
             
             // Envia as ReturnMessages
-            this.logger.debug(`Comando ${command.name} bora sendReturnMessages`);
             bot.sendReturnMessages(result);
           }
         }
