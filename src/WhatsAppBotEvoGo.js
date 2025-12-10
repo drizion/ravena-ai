@@ -1836,6 +1836,26 @@ class WhatsAppBotEvoGo {
     await processAction(groupData, groupData.Demote, 'demote');
   }
 
+  async listGroups(){
+    try {
+      const grupos = await this.apiClient.get(`/group/list`);
+      //this.logger.debug(`[listGroups][${this.instanceName}]`, { grupos: JSON.stringify(grupos, null, "\t").substring(0,300) });
+
+      return grupos.data;
+    } catch (e) {
+      this.logger.warn(`[listGroups] Erro listando grupos`, e);
+    }
+  }
+
+  leaveGroup(groupJid) {
+    try {
+      this.logger.debug(`[leaveGroup][${this.instanceName}] '${groupJid}'`);
+      this.apiClient.post(`/group/leave`, { groupJid });
+    } catch (e) {
+      this.logger.warn(`[leaveGroup] Erro saindo do grupo '${groupJid}'`, e);
+    }
+  }
+
   acceptInviteCode(inviteCode) {
     return new Promise(async (resolve, reject) => {
       try {
@@ -2141,7 +2161,9 @@ class WhatsAppBotEvoGo {
   }
 
   async getCurrentGroups() {
-    return await this.apiClient.get(`/group/myall`);
+    const grupos = await this.apiClient.get(`/group/myall`);
+    this.logger.debug(`[getCurrentGroups] `, grupos);
+    return grupos;
   }
 
   async destroy() {

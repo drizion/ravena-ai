@@ -40,6 +40,8 @@ class SuperAdmin {
       'simular': { 'method': 'simulateStreamEvent', 'description': 'Simula evento de stream' },
       'restart': { 'method': 'restartBot', 'description': 'Reinicia o bot' },
 
+      'stats': { 'method': 'botStats', 'description': 'Status, grupos'},
+
       'getGroupInfo': { 'method': 'getGroupInfo', 'description': 'Dump de dados de grupo por nome cadastro' },
       'getMembros': { 'method': 'getMembros', 'description': 'Lista todos os membros do grupo separados por admin e membros normais' },
       'blockInvites': { 'method': 'blockInvites', 'description': 'Bloqueia os invites dessa pessoa' },
@@ -107,6 +109,42 @@ class SuperAdmin {
 
     } catch (error) {
       this.logger.error('Erro no comando wakeOnLan:', error);
+
+      return new ReturnMessage({
+        chatId: message.group || message.author,
+        content: '❌ Erro ao processar comando.'
+      });
+    }
+  }
+
+  async botStats(bot, message, args) {
+    const chatId = message.group || message.author;
+    try {
+      if (!this.isSuperAdmin(message.author)) return;
+
+      const gruposBot = await bot.listGroups() ?? "";
+
+      const groups = await this.database.getGroups();
+
+      const listGroups = gruposBot.map(grupo => {
+        const group = groups.find(g => g.id === grupo.JID);
+        return `- [${grupo.JID}] ${grupo.Name} (${group?.name}): _${grupo.Participants.length} membros_`
+      }).join("\n");
+      //const currentGroups = await bot.getCurrentGroups() ?? "";
+
+      const dadosBot = `🤖 *${bot.id}* - dados
+
+- *${gruposBot.length} grupos:*
+${listGroups}`;
+
+
+      return new ReturnMessage({
+        chatId: message.group || message.author,
+        content: dadosBot
+      });
+
+    } catch (error) {
+      this.logger.error('Erro no comando botStats:', error);
 
       return new ReturnMessage({
         chatId: message.group || message.author,
