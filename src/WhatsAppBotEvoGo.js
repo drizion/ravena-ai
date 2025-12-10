@@ -2180,15 +2180,22 @@ class WhatsAppBotEvoGo {
     });
   }
 
-  getLidFromPn(pn, chat) {
-    // A princípio não vem o pn no chat
-    //this.logger.debug(`[getLidFromPn] `, {pn, chat});
-    return (chat?.participants?.find(p => p.phoneNumber?.startsWith(pn))?.id?._serialized) ?? pn;
+  getLidFromPn(PN, chat) {
+    //this.logger.debug(`[getLidFromPn] `, {PN, chat});
+    if(chat.Participants){
+      return (chat?.Participants?.find(p => p.PhoneNumber.startsWith(PN))?.LID) ?? PN;
+    } else {
+      return (chat?.participants?.find(p => p.id?._serialized.startsWith(PN))?.phoneNumber) ?? PN;
+    }
   }
 
   getPnFromLid(lid, chat) {
     //this.logger.debug(`[getPnFromLid] `, {lid, chat});
-    return (chat?.participants?.find(p => p.id?._serialized.startsWith(lid))?.phoneNumber) ?? lid;
+    if(chat.Participants){
+      return (chat?.Participants?.find(p => p.LID.startsWith(lid) || p.JID.startsWith(lid))?.PhoneNumber) ?? lid;
+    } else {
+      return (chat?.participants?.find(p => p.id?._serialized.startsWith(lid))?.phoneNumber) ?? lid;
+    }
   }
 
   notInWhitelist(author) { // author is expected to be a JID string

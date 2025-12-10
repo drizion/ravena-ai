@@ -5119,11 +5119,11 @@ async setWelcomeMessage(bot, message, args, group) {
         });
       }
       
-      // Adiciona @c.us ao número se não estiver completo
-      if (!userNumber.includes('@')) {
-        userNumber = `${userNumber}@c.us`;
+      if(bot.getPnFromLid){
+        userNumber = bot.getPnFromLid(userNumber, message.origin.groupData);
+        userNumber = userNumber.split("@")[0];
       }
-      
+
       // Obtém o apelido a partir do resto dos argumentos
       const nickname = args.slice(1).join(' ');
       
@@ -5155,15 +5155,16 @@ async setWelcomeMessage(bot, message, args, group) {
       // Tenta obter o nome do contato
       let contactName = "usuário";
       try {
-        const contact = await bot.client.getContactById(userNumber);
-        contactName = contact.pushname || contact.name || userNumber.replace('@c.us', '');
+        const contact = await bot.client.getContactById(message.authorAlt ?? message.author);
+        this.logger.debug(`[setNickAdmin] `, { contact });
+        contactName = contact.name?.pushName ?? contact.pushname ?? contact.name ?? userNumber.replace('@c.us', '');
       } catch (contactError) {
         this.logger.debug(`Não foi possível obter informações do contato ${userNumber}:`, contactError);
       }
       
       return new ReturnMessage({
         chatId: group.id,
-        content: `✅ Apelido definido para ${contactName}: "${trimmedNickname}"`
+        content: `✅ Apelido definido para ${contactName} (${userNumber}): "${trimmedNickname}"`
       });
     } catch (error) {
       this.logger.error('Erro ao definir apelido para usuário:', error);
