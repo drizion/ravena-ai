@@ -65,6 +65,11 @@ class WhatsAppBotEvoGo {
     this.managementUser = options.managementUser ?? process.env.BOTAPI_USER ?? "admin";
     this.managementPW = options.managementPW ?? process.env.BOTAPI_PASSWORD ?? "batata123";
 
+    // Invite Queue
+    this.joinQueue = [];
+    this.lastJoinTime = 0;
+    this.joinQueueTimer = null;
+
     this.redisURL = options.redisURL;
     this.redisDB = options.redisDB || 0;
     this.redisTTL = options.redisTTL || 604800;
@@ -1462,7 +1467,7 @@ class WhatsAppBotEvoGo {
         const responseTime = Math.max(0, this.getCurrentTimestamp() - timestamp);
 
         if (!fromMe) {
-          this.loadReport.trackReceivedMessage(isGroup, responseTime, sender);
+          this.loadReport.trackReceivedMessage(isGroup, responseTime, chatId);
         }
 
         let type = 'unknown';
@@ -1580,7 +1585,7 @@ class WhatsAppBotEvoGo {
             return await this.getChatDetails(chatId);
           },
           delete: async () => {
-            return this.deleteMessageByKey({ remoteJid: chatId, id: id, fromMe: fromMe });
+            return this.deleteMessageByKey({ remoteJid: chatId, id: id, fromMe: fromMe, participant: senderAlt });
           },
           downloadMedia: async () => {
             if (mediaInfo) {
@@ -1620,7 +1625,7 @@ class WhatsAppBotEvoGo {
             return null;
           },
           delete: async () => {
-            return this.deleteMessageByKey({ remoteJid: chatId, id: id, fromMe: fromMe });
+            return this.deleteMessageByKey({ remoteJid: chatId, id: id, fromMe: fromMe, participant: senderAlt });
           },
           body: content,
           ...evoMessageData
@@ -1859,16 +1864,70 @@ class WhatsAppBotEvoGo {
   acceptInviteCode(inviteCode) {
     return new Promise(async (resolve, reject) => {
       try {
-        this.logger.debug(`[acceptInviteCode][${this.instanceName}] '${inviteCode}'`);
-        const resp = await this.apiClient.post(`/group/join`, { code: inviteCode });
+        this.logger.debug(`[acceptInviteCode][${this.instanceName}] Adicionando à fila: '${inviteCode}'`);
+        
+        this.joinQueue.push({ code: inviteCode, resolve, reject, timestamp: Date.now() });
+        this._processJoinQueue();
 
-        resolve({ accepted: true });
       } catch (e) {
-        this.logger.warn(`[acceptInviteCode][${this.instanceName}] Erro aceitando invite para '${inviteCode}'`, { e });
+        this.logger.warn(`[acceptInviteCode][${this.instanceName}] Erro ao adicionar invite para '${inviteCode}'`, { e });
         resolve({ accepted: false, error: e.data?.error ?? "Erro aceitando invite" });
       }
-
     });
+  }
+
+  async _processJoinQueue() {
+    if (this.joinQueue.length === 0) return;
+    if (this.joinQueueTimer) return;
+
+    const now = Date.now();
+    const fifteenMinutes = 15 * 60 * 1000;
+    const timeSinceLastJoin = now - this.lastJoinTime;
+
+    if (timeSinceLastJoin >= fifteenMinutes) {
+      const item = this.joinQueue.shift();
+      try {
+        this.logger.info(`[acceptInviteCode][${this.instanceName}] Processando invite: '${item.code}'`);
+        const resp = await this.apiClient.post(`/group/join`, { code: item.code });
+        
+        this.lastJoinTime = Date.now();
+        item.resolve({ accepted: true });
+      } catch (e) {
+        this.logger.warn(`[acceptInviteCode][${this.instanceName}] Erro na API para '${item.code}'`, { e });
+        this.lastJoinTime = Date.now(); // Reset timer to respect rate limits
+        item.resolve({ accepted: false, error: e.data?.error ?? "Erro aceitando invite" });
+      }
+
+      if (this.joinQueue.length > 0) {
+        this._scheduleNextJoin();
+      }
+    } else {
+      this._scheduleNextJoin(fifteenMinutes - timeSinceLastJoin);
+    }
+  }
+
+  _scheduleNextJoin(minDelay = 0) {
+    if (this.joinQueueTimer) clearTimeout(this.joinQueueTimer);
+
+    let waitTime = Math.max(minDelay, 15 * 60 * 1000);
+    const jitter = Math.floor(Math.random() * 5 * 60 * 1000); 
+    const totalDelay = waitTime + jitter;
+
+    const eta = new Date(Date.now() + totalDelay);
+    this.logger.info(`[InviteQueue] Próximo processamento agendado para: ${eta.toLocaleString()}`);
+
+    // Notify queued items
+    this.joinQueue.forEach(item => {
+        if (!item.notified) {
+            item.resolve({ accepted: true, queued: true, eta: eta.getTime() });
+            item.notified = true;
+        }
+    });
+
+    this.joinQueueTimer = setTimeout(() => {
+        this.joinQueueTimer = null;
+        this._processJoinQueue();
+    }, totalDelay);
   }
 
   // NÃO TEM NA EVOGO
@@ -2115,7 +2174,9 @@ class WhatsAppBotEvoGo {
     this.logger.debug(`[deleteMessageByKey] `, { key });
     return await this.apiClient.post('/message/delete', {
       chat: key.remoteJid,
-      messageId: key.id
+      messageId: key.id,
+      fromMe: key.fromMe ?? true,
+      participant: key.participant
     });
   }
 

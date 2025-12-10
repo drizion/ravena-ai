@@ -41,6 +41,13 @@ class BotAPI {
       yearly: {}             // Dados anuais por bot
     };
 
+    // Cache para estatísticas gerais dos bots (tabela)
+    this.botStatsCache = {
+      lastUpdate: 0,
+      cacheTime: 30 * 60000, // 30 minutos
+      data: []
+    };
+
     // Configura middlewares
     this.app.use(bodyParser.json());
     this.app.use(bodyParser.urlencoded({ extended: true }));
@@ -425,6 +432,23 @@ class BotAPI {
           status: 'error',
           message: 'Erro interno do servidor'
         });
+      }
+    });
+
+    // Endpoint para estatísticas detalhadas dos bots (tabela)
+    this.app.get('/api/bot-stats', async (req, res) => {
+      try {
+        const now = Date.now();
+        // Verifica se o cache é válido
+        if (this.botStatsCache.data.length > 0 && (now - this.botStatsCache.lastUpdate < this.botStatsCache.cacheTime)) {
+          return res.json(this.botStatsCache.data);
+        }
+
+        await this.updateBotStatsCache();
+        res.json(this.botStatsCache.data);
+      } catch (error) {
+        this.logger.error('Erro ao buscar estatísticas dos bots:', error);
+        res.status(500).json({ error: 'Erro ao buscar estatísticas' });
       }
     });
 
@@ -1045,6 +1069,90 @@ class BotAPI {
         logStream.kill();
       });
     });
+  }
+
+  /**
+   * Atualiza o cache de estatísticas detalhadas dos bots
+   */
+  async updateBotStatsCache() {
+    this.logger.info('Atualizando cache de estatísticas detalhadas dos bots...');
+    const now = Date.now();
+    const periods = {
+      year: now - 365 * 24 * 60 * 60 * 1000,
+      month: now - 30 * 24 * 60 * 60 * 1000,
+      week: now - 7 * 24 * 60 * 60 * 1000,
+      day: now - 24 * 60 * 60 * 1000,
+      hour: now - 60 * 60 * 1000
+    };
+
+    const statsData = [];
+    const botsAtivos = this.bots.filter(b => !b.privado && !b.useTelegram && !b.useDiscord);
+
+    // Totais gerais
+    const totalStats = {
+      id: 'TOTAL',
+      groupsCount: 0,
+      year: 0,
+      month: 0,
+      week: 0,
+      day: 0,
+      hour: 0
+    };
+
+    for (const bot of botsAtivos) {
+      try {
+        const groups = await bot.listGroups(); // Assume que retorna array de grupos
+        const groupsCount = groups ? groups.length : 0;
+
+        // Busca stats para cada período
+        const periodPromises = Object.entries(periods).map(async ([key, startDate]) => {
+          const stats = await bot.loadReport.getStatistics({
+            startDate,
+            endDate: now,
+            botId: bot.id
+          });
+          return { key, total: stats.totalMessages };
+        });
+
+        const results = await Promise.all(periodPromises);
+        const botStats = {
+          id: bot.id,
+          groupsCount,
+          year: 0,
+          month: 0,
+          week: 0,
+          day: 0,
+          hour: 0
+        };
+
+        results.forEach(({ key, total }) => {
+          botStats[key] = total;
+          totalStats[key] += total;
+        });
+
+        totalStats.groupsCount += groupsCount;
+        statsData.push(botStats);
+
+      } catch (error) {
+        this.logger.error(`Erro ao processar stats para bot ${bot.id}:`, error);
+        statsData.push({
+          id: bot.id,
+          groupsCount: 0,
+          year: 0, month: 0, week: 0, day: 0, hour: 0
+        });
+      }
+    }
+
+    // Adiciona o total ao final
+    statsData.push(totalStats);
+
+    this.botStatsCache = {
+      lastUpdate: now,
+      cacheTime: 30 * 60000,
+      data: statsData
+    };
+    
+    this.logger.info('Cache de estatísticas detalhadas atualizado.');
   }
 
   /**

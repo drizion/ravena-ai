@@ -322,7 +322,7 @@ class WhatsAppBotTelegram {
         const authorId = `${message.from.id}`;
         const authorName = message.from.first_name || message.from.username || 'Unknown User';
 
-        this.loadReport.trackReceivedMessage(isGroup, 0, authorId);
+        this.loadReport.trackReceivedMessage(isGroup, 0, chatId);
 
         let type = 'unknown';
         let content = null;

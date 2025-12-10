@@ -122,21 +122,75 @@ class SuperAdmin {
     try {
       if (!this.isSuperAdmin(message.author)) return;
 
-      const gruposBot = await bot.listGroups() ?? "";
-
+      const gruposBot = await bot.listGroups() ?? [];
       const groups = await this.database.getGroups();
+      
+      const now = Date.now();
+      const periods = {
+        year: now - 365 * 24 * 60 * 60 * 1000,
+        month: now - 30 * 24 * 60 * 60 * 1000,
+        week: now - 7 * 24 * 60 * 60 * 1000,
+        day: now - 24 * 60 * 60 * 1000,
+        hour: now - 60 * 60 * 1000
+      };
 
-      const listGroups = gruposBot.map(grupo => {
+      // Carrega estatísticas para todos os períodos em paralelo
+      const statsPromises = Object.entries(periods).map(async ([key, startDate]) => {
+        const stats = await bot.loadReport.getStatistics({
+          startDate,
+          endDate: now,
+          botId: bot.id
+        });
+        return { key, stats };
+      });
+
+      const results = await Promise.all(statsPromises);
+      const periodStats = results.reduce((acc, { key, stats }) => {
+        acc[key] = stats;
+        return acc;
+      }, {});
+
+      const formatNum = (num) => (num || 0).toLocaleString('pt-BR');
+
+      const header = `🤖 *${bot.id}* - Estatísticas\n\n` +
+        `📊 *Total Mensagens:*\n` +
+        `- 1 Hora: ${formatNum(periodStats.hour.totalMessages)}\n` +
+        `- 24 Horas: ${formatNum(periodStats.day.totalMessages)}\n` +
+        `- 7 Dias: ${formatNum(periodStats.week.totalMessages)}\n` +
+        `- 30 Dias: ${formatNum(periodStats.month.totalMessages)}\n` +
+        `- 365 Dias: ${formatNum(periodStats.year.totalMessages)}\n`;
+
+      const groupStats = gruposBot.map(grupo => {
         const group = groups.find(g => g.id === grupo.JID);
-        return `- [${grupo.JID}] ${grupo.Name} (${group?.name}): _${grupo.Participants.length} membros_`
+        const name = group?.name || 'Sem registro';
+        const memberCount = grupo.Participants ? grupo.Participants.length : '?';
+        
+        // Coleta stats do grupo para cada período
+        const sYear = periodStats.year.byGroup[grupo.JID] || 0;
+        const sMonth = periodStats.month.byGroup[grupo.JID] || 0;
+        const sWeek = periodStats.week.byGroup[grupo.JID] || 0;
+        const sDay = periodStats.day.byGroup[grupo.JID] || 0;
+        const sHour = periodStats.hour.byGroup[grupo.JID] || 0;
+
+        return { grupo, name, memberCount, sYear, sMonth, sWeek, sDay, sHour };
+      });
+
+      // Ordena por mensagens: Hoje > Hora > Semana > Mês > Ano
+      groupStats.sort((a, b) => {
+        if (b.sDay !== a.sDay) return b.sDay - a.sDay;
+        if (b.sHour !== a.sHour) return b.sHour - a.sHour;
+        if (b.sWeek !== a.sWeek) return b.sWeek - a.sWeek;
+        if (b.sMonth !== a.sMonth) return b.sMonth - a.sMonth;
+        return b.sYear - a.sYear;
+      });
+
+      const listGroups = groupStats.map(item => {
+        const { grupo, name, memberCount, sYear, sMonth, sWeek, sDay, sHour } = item;
+        return `- [${grupo.JID}] ${grupo.Name} (${name}): _${memberCount} membros_ (${sDay}/hj, ${sHour}/hr, ${sWeek}/s, ${sMonth}/m, ${sYear}/a)`;
       }).join("\n");
-      //const currentGroups = await bot.getCurrentGroups() ?? "";
 
-      const dadosBot = `🤖 *${bot.id}* - dados
-
-- *${gruposBot.length} grupos:*
+      const dadosBot = `${header}\n- *${gruposBot.length} grupos:*
 ${listGroups}`;
-
 
       return new ReturnMessage({
         chatId: message.group || message.author,
@@ -299,6 +353,14 @@ ${listGroups}`;
 
           // Remove dos convites pendentes se existir
           await this.database.removePendingJoin(inviteCode);
+
+          if (joinResult.queued) {
+             const etaDate = new Date(joinResult.eta).toLocaleString('pt-BR');
+             return new ReturnMessage({
+                chatId: chatId,
+                content: `⏳ O convite foi aceito e colocado na fila de segurança.\nPrevisão de entrada: ${etaDate}\n\nO bot entrará automaticamente.`
+             });
+          }
 
           return new ReturnMessage({
             chatId: chatId,

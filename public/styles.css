@@ -957,3 +957,56 @@ nav a.active {
     white-space: pre-wrap;
     word-wrap: break-word;
 }
+
+/* Styles for Stats Table */
+.stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    background-color: var(--medium-dark-purple);
+    font-size: 0.95rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    overflow: hidden; /* For border-radius to work on table */
+}
+
+.stats-table th, .stats-table td {
+    padding: 12px 15px;
+    text-align: center;
+    border-bottom: 1px solid var(--medium-gray);
+}
+
+.stats-table th {
+    background-color: var(--dark-purple);
+    color: var(--bright-blue);
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+    border-bottom: 2px solid var(--medium-purple);
+}
+
+.stats-table tbody tr:nth-child(even) {
+    background-color: rgba(62, 14, 167, 0.1); /* light medium-purple */
+}
+
+.stats-table tbody tr:hover {
+    background-color: rgba(4, 169, 240, 0.1); /* light bright-blue */
+    transition: background-color 0.2s ease;
+}
+
+.stats-table td:first-child {
+    text-align: left;
+    font-weight: 600;
+    color: white;
+}
+
+.stats-table tr.total-row {
+    background-color: rgba(4, 169, 240, 0.15);
+    border-top: 2px solid var(--bright-blue);
+}
+
+.stats-table tr.total-row td {
+    color: var(--gold-color);
+    font-size: 1rem;
+}

@@ -176,6 +176,56 @@ class LoadReport {
   }
 
   /**
+   * Busca estatísticas agregadas dos relatórios
+   * @param {Object} options - Opções de filtro
+   * @param {number} options.startDate - Timestamp inicial
+   * @param {number} options.endDate - Timestamp final
+   * @param {string} [options.botId] - ID do bot (opcional)
+   * @param {Array<string>} [options.chatIds] - IDs dos grupos (opcional)
+   * @returns {Promise<Object>} - Estatísticas agregadas
+   */
+  async getStatistics(options) {
+    const { startDate, endDate, botId, chatIds } = options;
+    // Pega relatórios que podem conter dados dentro do intervalo (start do relatório > startDate ou end > startDate)
+    // Para simplificar, pegamos tudo a partir de startDate
+    const reports = await this.database.getLoadReports(startDate);
+    
+    const stats = {
+        totalMessages: 0,
+        totalPrivate: 0,
+        totalGroup: 0,
+        byGroup: {}
+    };
+
+    if(!reports || !Array.isArray(reports)) return stats;
+
+    const targetBotId = botId || this.bot.id;
+
+    reports.forEach(report => {
+        // Filtra por bot se especificado
+        if (botId && report.botId !== targetBotId) return;
+        
+        // Verifica se o relatório está dentro do intervalo
+        // Consideramos se o fim do período do relatório está dentro do range solicitado
+        if (report.period.end < startDate || report.period.start > endDate) return;
+
+        stats.totalMessages += (report.messages.totalReceived + report.messages.totalSent);
+        stats.totalPrivate += (report.messages.receivedPrivate + report.messages.sentPrivate);
+        stats.totalGroup += (report.messages.receivedGroup + report.messages.sentGroup);
+
+        if (report.groups) {
+            Object.entries(report.groups).forEach(([groupId, count]) => {
+                if (!chatIds || chatIds.includes(groupId)) {
+                    stats.byGroup[groupId] = (stats.byGroup[groupId] || 0) + count;
+                }
+            });
+        }
+    });
+
+    return stats;
+  }
+
+  /**
    * Formata relatório como uma mensagem legível
    * @param {Object} report - O objeto do relatório
    * @returns {string} - Mensagem formatada

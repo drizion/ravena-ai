@@ -64,6 +64,11 @@ class WhatsAppBotEvo {
     this.managementUser = options.managementUser ?? process.env.BOTAPI_USER ?? "admin";
     this.managementPW = options.managementPW ?? process.env.BOTAPI_PASSWORD ?? "batata123";
 
+    // Invite Queue
+    this.joinQueue = [];
+    this.lastJoinTime = 0;
+    this.joinQueueTimer = null;
+
     this.redisURL = options.redisURL;
     this.redisDB = options.redisDB || 0;
     this.redisTTL = options.redisTTL || 604800;
@@ -1178,7 +1183,7 @@ class WhatsAppBotEvo {
             isSentMessage = true;
           } else {
             // send.message é evento de enviadas, então se não for, recebeu uma
-            this.loadReport.trackReceivedMessage(isGroup, responseTime, author);
+            this.loadReport.trackReceivedMessage(isGroup, responseTime, chatId);
           }
 
           let type = 'unknown';
@@ -1909,16 +1914,115 @@ class WhatsAppBotEvo {
   acceptInviteCode(inviteCode) {
     return new Promise(async (resolve, reject) => {
       try {
-        this.logger.debug(`[acceptInviteCode][${this.instanceName}] '${inviteCode}'`);
-        const resp = await this.apiClient.get(`/group/acceptInviteCode`, { inviteCode });
+        this.logger.debug(`[acceptInviteCode][${this.instanceName}] Adicionando à fila: '${inviteCode}'`);
+        
+        // Add to queue
+        this.joinQueue.push({ code: inviteCode, resolve, reject, timestamp: Date.now() });
+        
+        // Process queue
+        this._processJoinQueue();
 
-        resolve({ accepted: resp.accepted });
       } catch (e) {
-        this.logger.warn(`[acceptInviteCode][${this.instanceName}] Erro aceitando invite para '${inviteCode}'`, { e });
-        resolve({ accepted: false, error: "Não foi possível aceitar" });
+        this.logger.warn(`[acceptInviteCode][${this.instanceName}] Erro ao adicionar invite para '${inviteCode}'`, { e });
+        resolve({ accepted: false, error: "Erro interno ao processar invite" });
+      }
+    });
+  }
+
+  async _processJoinQueue() {
+    if (this.joinQueue.length === 0) return;
+    if (this.joinQueueTimer) return; // Already scheduled
+
+    const now = Date.now();
+    const fifteenMinutes = 15 * 60 * 1000;
+    const timeSinceLastJoin = now - this.lastJoinTime;
+
+    if (timeSinceLastJoin >= fifteenMinutes) {
+      // Can join now
+      const item = this.joinQueue.shift();
+      try {
+        this.logger.info(`[acceptInviteCode][${this.instanceName}] Processando invite: '${item.code}'`);
+        const resp = await this.apiClient.get(`/group/acceptInviteCode`, { inviteCode: item.code });
+        
+        this.lastJoinTime = Date.now(); // Update last join time
+        item.resolve({ accepted: resp.accepted });
+      
+      } catch (e) {
+        this.logger.warn(`[acceptInviteCode][${this.instanceName}] Erro na API para '${item.code}'`, { e });
+        // Even on error, we might want to respect rate limits or retry?
+        // For now, treat as 'attempted join' to avoid ban, or maybe shorter cooldown?
+        // Let's stick to strict 15min to be safe
+        this.lastJoinTime = Date.now(); 
+        item.resolve({ accepted: false, error: "Não foi possível aceitar (Erro API)" });
       }
 
+      // Schedule next check if queue not empty
+      if (this.joinQueue.length > 0) {
+        this._scheduleNextJoin();
+      }
+
+    } else {
+      // Must wait
+      this._scheduleNextJoin(fifteenMinutes - timeSinceLastJoin);
+    }
+  }
+
+  _scheduleNextJoin(minDelay = 0) {
+    if (this.joinQueueTimer) clearTimeout(this.joinQueueTimer);
+
+    // Random delay between 10 and 20 minutes (plus minimum required wait)
+    const randomDelay = Math.floor(Math.random() * (20 - 10 + 1) + 10) * 60 * 1000;
+    // We need to wait at least minDelay, but we add the random factor to it/or instead of it?
+    // "O tempo até o próximo join deve ser randomizado de 10 a 20 minutos"
+    // So after a join, we wait 10-20 mins.
+    
+    // If we just joined, minDelay is 0 (relative to 15min check), but we want 10-20 from NOW.
+    // If we are waiting for the 15min cooldown, minDelay is the remaining time.
+    // The requirement says "impedindo que o bot aceite mais de 1 convite em menos 15 minutos" AND "O tempo até o próximo join deve ser randomizado de 10 a 20 minutos".
+    // This effectively means interval = max(15min, random(10,20)min)? Or just random(10,20) min where 10 < 15 is issue?
+    // Let's assume minimum is 15 minutes for safety, so randomized 15-25 mins?
+    // Or maybe the randomization is the *interval* check.
+    
+    // Let's interpret: "Randomized 10 to 20 minutes" implies 10 is acceptable? But "impedindo... em menos de 15 minutos".
+    // So if random is 10, we violate the 15min rule.
+    // I will use 15 mins as hard floor, and add random(0, 10) mins to it. Total 15-25 mins.
+    
+    // Calculate wait time
+    let waitTime = Math.max(minDelay, 15 * 60 * 1000); // Wait at least 15 mins from last join
+    
+    // Add randomization (e.g. 0 to 10 mins extra) to make it look natural?
+    // "randomizado de 10 a 20 minutos" -> I'll stick to 15-25 to satisfy the "15 min constraint" safely.
+    // Or if the requirement "10 to 20" overrides "15 min", then 10 is fine?
+    // "impedindo que o bot aceite mais de 1 convite em menos 15 minutos" is a constraint.
+    // So 10 is invalid.
+    // Maybe "verificar se existem joins pendentes a cada x minutos" refers to polling?
+    
+    // Implementation: Always wait at least 15 mins. Add random jitter.
+    const jitter = Math.floor(Math.random() * 5 * 60 * 1000); // 0-5 mins
+    const totalDelay = waitTime + jitter;
+
+    const eta = new Date(Date.now() + totalDelay);
+    this.logger.info(`[InviteQueue] Próximo processamento agendado para: ${eta.toLocaleString()}`);
+
+    // If there are pending items, notify the next one about the delay?
+    // The command handling in InviteSystem expects a response.
+    // We can't really notify asynchronously easily here without changing InviteSystem architecture.
+    // But we can resolve the current promise with a "Queued" status if it's going to take long.
+    
+    // Currently `acceptInviteCode` awaits this promise. If we delay resolution for 15 mins, the HTTP request (if applicable) or user interaction might timeout.
+    // Strategy: If queue has items, resolve them immediately with "Queued" status, but keep them in queue for processing.
+    
+    this.joinQueue.forEach(item => {
+        if (!item.notified) {
+            item.resolve({ accepted: true, queued: true, eta: eta.getTime() });
+            item.notified = true;
+        }
     });
+
+    this.joinQueueTimer = setTimeout(() => {
+        this.joinQueueTimer = null;
+        this._processJoinQueue();
+    }, totalDelay);
   }
 
   inviteInfo(inviteCode) {

@@ -228,7 +228,7 @@ class WhatsAppBotDiscord {
       const timestamp = Math.floor(message.createdTimestamp / 1000);
       const responseTime = Math.max(0, this.getCurrentTimestamp() - timestamp);
 
-      this.loadReport.trackReceivedMessage(isGroup, responseTime, authorId);
+      this.loadReport.trackReceivedMessage(isGroup, responseTime, channelId);
 
       let type = 'text';
       let content = message.content;

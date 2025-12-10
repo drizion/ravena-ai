@@ -24,7 +24,7 @@
                     <img src="tipaai.jpg" class="social-icon">
                 </a>
 
-                <a href="https://chat.whatsapp.com/IRMI3QI3f7E3Po9CkMmYXK" target="_blank" title="Grupo Avisos - Fique por dentro das novidades!">
+                <a href="https://whatsapp.com/channel/0029VbBwXS7K5cDI4P8okp2f" target="_blank" title="Canal de Avisos - Fique por dentro das novidades!">
                     <img src="grupo-avisos-small.jpg" class="social-icon">
                 </a>
                 <a href="https://chat.whatsapp.com/GMtTi1V6XIBChCBgkQC9g0" target="_blank" title="Grupão da ravena - Interaja com outros usuários ou tire dúvidas">
@@ -84,6 +84,31 @@
         
         <!-- Nova Seção de Análise de Dados -->
         <div class="analytics-section">
+            
+            <!-- Tabela de Estatísticas Detalhadas -->
+            <div class="stats-table-container full-width-chart" style="margin-top: 20px; margin-bottom: 30px;">
+                <div style="overflow-x: auto;">
+                    <table id="botStatsTable" class="stats-table">
+                        <thead>
+                            <tr>
+                                <th>Bot</th>
+                                <th>Grupos</th>
+                                <th>Hora (1h)</th>
+                                <th>Hoje (24h)</th>
+                                <th>Semana (7d)</th>
+                                <th>Mês (30d)</th>
+                                <th>Ano (365d)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Dados serão inseridos via JS -->
+                            <tr><td colspan="7" style="text-align: center;">Carregando dados...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <hr />
+            <p></p>
             <div class="analytics-header">
                 <h2 class="analytics-title">Análise de Dados</h2>
                 <div class="time-filters">
@@ -100,7 +125,7 @@
                     <p>Carregando filtros de bots...</p>
                 </div>
             </div>
-            
+
             <div class="charts-grid">
                 <div class="chart-container" id="dailyMessageChart">
                     <h3 class="chart-title">Média de Mensagens do Dia</h3>

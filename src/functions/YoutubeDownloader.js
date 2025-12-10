@@ -16,6 +16,38 @@ const videoCacheManager = new VideoCacheManager(youtubedl, database.databasePath
 
 //logger.info('Módulo YoutubeDownloader carregado');
 
+
+/**
+ * Extracts the first URL found in a provided string.
+ *
+ * @param {string} text - The string to search for a URL.
+ * @returns {string|null} - The first URL found, or null if no URL is present or input is invalid.
+ */
+function extractURLFromString(text) {
+  // Failsafe 1: Input validation
+  if (typeof text !== 'string' || !text) {
+    return null;
+  }
+
+  // Regex breakdown:
+  // (https?:\/\/[^\s]+) -> Matches http or https followed by non-whitespace characters
+  // (www\.[^\s]+)       -> Matches www. followed by non-whitespace characters
+  // Flags: 'i' for case-insensitive
+  const urlRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)/i;
+
+  const match = text.match(urlRegex);
+
+  // Failsafe 2: Check if a match exists
+  if (match && match[0]) {
+    // Optional: clean trailing punctuation often captured by simple regex (like periods or commas at end of sentence)
+    return match[0].replace(/[.,;!?)]+$/, '');
+  }
+
+  return null;
+}
+
+
+
 /**
  * Extrai o ID do vídeo de uma URL do YouTube
  * @param {string} url - URL do YouTube
@@ -342,9 +374,19 @@ async function ytCommand(bot, message, args, group) {
 
   const chatId = message.group || message.author;
   const returnMessages = [];
-  
+
+  let input = undefined;
   if (args.length === 0) {
-    logger.debug('Comando yt chamado sem argumentos');
+    const quotedMsg = await message.origin.getQuotedMessage();
+    if(quotedMsg){
+      input = quotedMsg.caption ?? quotedMsg.content ?? quotedMsg.body ?? undefined;
+    } 
+  } else {
+    input = args.join(' ');
+  }
+
+  if(!input){
+    logger.debug('Comando yt chamado sem argumentos e sem quotedMsg');
     return new ReturnMessage({
       chatId: chatId,
       content: 'Por favor, forneça um link do YouTube ou termo de busca. Exemplo: !yt https://youtu.be/dQw4w9WgXcQ ou !yt despacito',
@@ -355,8 +397,8 @@ async function ytCommand(bot, message, args, group) {
     });
   }
   
+ 
   let videoId = null;
-  const input = args.join(' ');
   
   // Verifica se é um link do YouTube
   videoId = extractYoutubeVideoId(input);
@@ -469,8 +511,18 @@ async function srCommand(bot, message, args, group) {
   const chatId = message.group || message.author;
   const returnMessages = [];
   
+  let input = undefined;
   if (args.length === 0) {
-    logger.debug('Comando sr chamado sem argumentos');
+    const quotedMsg = await message.origin.getQuotedMessage();
+    if(quotedMsg){
+      input = quotedMsg.caption ?? quotedMsg.content ?? quotedMsg.body ?? undefined;
+    } 
+  } else {
+    input = args.join(' ');
+  }
+
+  if(!input){
+    logger.debug('Comando sr chamado sem argumentos e sem quotedMsg');
     return new ReturnMessage({
       chatId: chatId,
       content: 'Por favor, forneça um link do YouTube ou termo de busca. Exemplo: !sr https://youtu.be/dQw4w9WgXcQ ou !sr despacito',
@@ -482,7 +534,6 @@ async function srCommand(bot, message, args, group) {
   }
   
   let videoId = null;
-  const input = args.join(' ');
   
   // Verifica se é um link do YouTube
   videoId = extractYoutubeVideoId(input);

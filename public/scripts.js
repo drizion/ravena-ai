@@ -669,10 +669,65 @@ function renderYearlyChart(data, commonOptions) {
     Highcharts.chart(container, { ...commonOptions, chart: { ...commonOptions.chart, type: 'areaspline', zoomType: 'x' }, xAxis: { ...commonOptions.xAxis, categories: data.dates, labels: { ...commonOptions.xAxis.labels, rotation: -45, step: Math.ceil(data.dates.length / 30) }, title: { text: 'Data', style: { color: '#b7b7c5' } } }, tooltip: { formatter: function() { return `<b>${this.x}</b><br/>${this.series.name}: <b>${this.y}</b> msgs`; }, backgroundColor: 'rgba(35, 6, 109, 0.9)', style: { color: '#fff' }, borderWidth: 0 }, series: data.series });
 }
 
+async function fetchBotDetailedStats() {
+    try {
+        const response = await fetch('/api/bot-stats');
+        if (!response.ok) throw new Error('Erro ao buscar estatísticas');
+        const data = await response.json();
+        renderBotStatsTable(data);
+    } catch (error) {
+        console.error('Erro:', error);
+        document.querySelector('#botStatsTable tbody').innerHTML = `<tr><td colspan="7" style="text-align: center; color: #ff5555;">Erro ao carregar dados</td></tr>`;
+    }
+}
+
+function renderBotStatsTable(data) {
+    const tbody = document.querySelector('#botStatsTable tbody');
+    tbody.innerHTML = '';
+
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Nenhum dado disponível</td></tr>';
+        return;
+    }
+
+    const formatNum = (num) => new Intl.NumberFormat('pt-BR').format(num);
+
+    // Separar o total
+    let totalRow = data.find(row => row.id === 'TOTAL');
+    let botRows = data.filter(row => row.id !== 'TOTAL');
+
+    // Ordenar bots por mensagens de hoje (day) decrescente
+    botRows.sort((a, b) => (b.day || 0) - (a.day || 0));
+
+    // Reintegrar total no final (ou inicio se preferir, mas geralmente total fica embaixo)
+    const rowsToRender = [...botRows];
+    if (totalRow) rowsToRender.push(totalRow);
+
+    rowsToRender.forEach(row => {
+        const tr = document.createElement('tr');
+        if (row.id === 'TOTAL') {
+            tr.style.fontWeight = 'bold';
+            tr.classList.add('total-row');
+        }
+        
+        tr.innerHTML = `
+            <td>${row.id}</td>
+            <td>${formatNum(row.groupsCount)}</td>
+            <td>${formatNum(row.hour)}</td>
+            <td>${formatNum(row.day)}</td>
+            <td>${formatNum(row.week)}</td>
+            <td>${formatNum(row.month)}</td>
+            <td>${formatNum(row.year)}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     checkAdminMode();
     fetchTopDonates();
     fetchHealthData();
+    fetchBotDetailedStats();
     
     const timeFilters = document.querySelectorAll('.time-filter');
     timeFilters.forEach(filter => {
