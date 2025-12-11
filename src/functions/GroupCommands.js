@@ -42,11 +42,27 @@ async function mentionAllMembers(bot, message, args, group) {
     // Obtém usuários ignorados para este grupo
     const ignoredUsers = group.ignoredUsers || [];
     
-    // Filtra usuários ignorados
-    const participants = chat.participants.filter(
-      participant => !ignoredUsers.includes(participant.id._serialized)
-    );
-    
+    // Filtra usuários ignorados (mds, é mto fallback)
+    const participants = chat.participants.filter(participant => {
+        // Cria um array temporário com os IDs desse participante
+        const userIdentifiers = [
+            participant.id?._serialized,
+            participant.lid,
+            participant.phoneNumber
+        ];
+
+        // Verifica se ALGUM (some) dos identificadores está na lista de ignorados
+        const isIgnored = userIdentifiers.some(id => 
+            id && ignoredUsers.some(iU => id.startsWith(iU))
+        );
+
+        // Retorna true apenas se NÃO for ignorado
+        return !isIgnored;
+    });
+
+    //logger.debug(`[mentionAllMembers] `, { todos: chat.participants, ignorados: group.ignoredUsers, filtrados: participants});
+
+
     if (participants.length === 0) {
       return new ReturnMessage({
         chatId: message.group,
@@ -76,7 +92,7 @@ async function mentionAllMembers(bot, message, args, group) {
           options: {
             caption: messageText,
             mentions: mentions,
-            mentionAll: true
+            //mentionAll: true
           }
         });
       } else {
@@ -90,7 +106,7 @@ async function mentionAllMembers(bot, message, args, group) {
           content: messageText,
           options: {
             mentions: mentions,
-            mentionAll: true
+            //mentionAll: true
           }
         });
       }
@@ -102,7 +118,7 @@ async function mentionAllMembers(bot, message, args, group) {
           content: messageText,
           options: {
             mentions: mentions,
-            mentionAll: true
+            //mentionAll: true
           }
       });
     }
@@ -138,13 +154,25 @@ async function toggleIgnore(bot, message, args, group) {
       group.ignoredUsers = [];
     }
 
-    const numerosPraIgnorar = [];
+    let numerosPraIgnorar = [];
 
     // Rainha dos fallback
     if(message.author){
       numerosPraIgnorar.push(message.author.split("@")[0]);
     }
-    
+
+    if(message.authorAlt){
+      numerosPraIgnorar.push(message.authorAlt.split("@")[0]);
+    }
+
+    if(message.sender){
+      numerosPraIgnorar.push(message.sender.split("@")[0]);
+    }
+
+    if(message.senderAlt){
+      numerosPraIgnorar.push(message.senderAlt.split("@")[0]);
+    }
+   
     if(message.origin){
       if(message.origin.key.participant){
         numerosPraIgnorar.push(message.origin.key.participant.split("@")[0]);
@@ -152,9 +180,9 @@ async function toggleIgnore(bot, message, args, group) {
       if(message.origin.key.participantAlt){
        numerosPraIgnorar.push(message.origin.key.participant.split("@")[0]); 
       }
-
     }
     
+    numerosPraIgnorar = [...new Set(numerosPraIgnorar)];
     const jaIgnorado = numerosPraIgnorar.some(numero => group.ignoredUsers.includes(numero));
 
     if (jaIgnorado) {
@@ -167,7 +195,7 @@ async function toggleIgnore(bot, message, args, group) {
       
       return new ReturnMessage({
         chatId: message.group,
-        content: 'Você agora será incluído nas menções de grupo.',
+        content: 'Você agora será *incluído* nas menções de grupo.',
         options: {
           quotedMessageId: message.origin.id._serialized,
           evoReply: message.origin
@@ -181,7 +209,7 @@ async function toggleIgnore(bot, message, args, group) {
       
       return new ReturnMessage({
         chatId: message.group,
-        content: 'Você agora será ignorado nas menções de grupo.',
+        content: 'Você agora será *ignorado* nas menções de grupo.',
         options: {
           quotedMessageId: message.origin.id._serialized,
           evoReply: message.origin

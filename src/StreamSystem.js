@@ -556,19 +556,28 @@ class StreamSystem {
       const chat = await this.bot.client.getChatById(groupId);
       if (!chat || !chat.isGroup) return [];
 
-      const ignoredSet = new Set(group.ignoredUsers || []);
-      const participants = (chat.participants ?? []).filter(participant => {
-        const idsToTest = [
-          participant.id?._serialized,
-          participant.phoneNumber
-        ];
+      // Obtém usuários ignorados para este grupo
+      const ignoredUsers = group.ignoredUsers || [];
+      
+      // Filtra usuários ignorados (mds, é mto fallback)
+      const participants = chat.participants.filter(participant => {
+          // Cria um array temporário com os IDs desse participante
+          const userIdentifiers = [
+              participant.id?._serialized,
+              participant.lid,
+              participant.phoneNumber
+          ];
 
-        const isIgnored = idsToTest.some(id => ignoredSet.has(id));
+          // Verifica se ALGUM (some) dos identificadores está na lista de ignorados
+          const isIgnored = userIdentifiers.some(id => 
+              id && ignoredUsers.some(iU => id.startsWith(iU))
+          );
 
-        return !isIgnored;
+          // Retorna true apenas se NÃO for ignorado
+          return !isIgnored;
       });
 
-      this.logger.debug(`[getAllMembersMentions][${group.name}] Tem '${chat.participants.length}', mas apenas '${participants.length}' serão mencionados.`, { ignoredSet });
+      this.logger.debug(`[getAllMembersMentions][${group.name}] Tem '${chat.participants.length}', mas apenas '${participants.length}' serão mencionados.`, { ignoredUsers });
 
       // Criar array de menções
       const mentions = participants.map(p => p.id._serialized); // Talvez mencionar phoneNumber tb?
