@@ -129,7 +129,8 @@ class ReactionsHandler {
         // Obtém dados do grupo
         let group = null;
         if (formattedMessage.group) {
-          group = await bot.eventHandler.getOrCreateGroup(formattedMessage.group);
+          const groupData = await bot.eventHandler.getOrCreateGroup(formattedMessage.group);
+          group = groupData.group;
 
           if (group.mutedStrings && Array.isArray(group.mutedStrings)) {
             //this.logger.debug(`[processReaction] ${reaction.reaction}`, {muted: group.mutedStrings})

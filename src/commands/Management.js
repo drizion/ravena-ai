@@ -2202,6 +2202,10 @@ async setWelcomeMessage(bot, message, args, group) {
           // Subscribe to the channel in StreamMonitor
           bot.streamMonitor.subscribe(channelName, 'twitch');
           
+          if(bot.grupoLogs){
+            bot.sendMessage(bot.grupoLogs, `Novo canal da twitch adicionado em '${group.name ?? "grupo"}' (${group.id}):\n- twitch.tv/${channelName}`);
+          }
+
           return new ReturnMessage({
             chatId: group.id,
             content: `Canal da Twitch adicionado: ${channelName}\n\n` +
@@ -2737,6 +2741,10 @@ async setWelcomeMessage(bot, message, args, group) {
       if (bot.streamMonitor) {
         bot.streamMonitor.subscribe(channelName, 'kick');
         
+        if(bot.grupoLogs){
+          bot.sendMessage(bot.grupoLogs, `Novo canal da kick adicionado em '${group.name ?? "grupo"}' (${group.id}):\n- kick.com/${channelName}`);
+        }
+
         return new ReturnMessage({
           chatId: group.id,
           content: `Canal do Kick adicionado: ${channelName}\n\n` +
@@ -3136,7 +3144,11 @@ async setWelcomeMessage(bot, message, args, group) {
       // Subscribe to the channel in StreamMonitor
       if (bot.streamMonitor) {
         bot.streamMonitor.subscribe(channelName, 'youtube');
-        
+
+        if(bot.grupoLogs){
+          bot.sendMessage(bot.grupoLogs, `Novo canal do youtube adicionado em '${group.name ?? "grupo"}' (${group.id}):\n- youtube.com/${channelName}`);
+        }
+
         return new ReturnMessage({
           chatId: group.id,
           content: `Canal do YouTube adicionado: ${channelName}\n\n` +

@@ -65,10 +65,6 @@ class WhatsAppBotEvoGo {
     this.managementUser = options.managementUser ?? process.env.BOTAPI_USER ?? "admin";
     this.managementPW = options.managementPW ?? process.env.BOTAPI_PASSWORD ?? "batata123";
 
-    // Invite Queue
-    this.joinQueue = [];
-    this.lastJoinTime = 0;
-    this.joinQueueTimer = null;
 
     this.redisURL = options.redisURL;
     this.redisDB = options.redisDB || 0;
@@ -119,6 +115,7 @@ class WhatsAppBotEvoGo {
     this.grupoLogs = options.grupoLogs || process.env.GRUPO_LOGS;
     this.grupoInvites = options.grupoInvites || process.env.GRUPO_INVITES;
     this.grupoAvisos = options.grupoAvisos || process.env.GRUPO_AVISOS;
+    this.joinSilencioso = false;
 
     this.userAgent = options.userAgent || process.env.USER_AGENT;
 
@@ -174,8 +171,8 @@ class WhatsAppBotEvoGo {
       setPrivacySettings: (arg) => {
         this.updatePrivacySettings(arg);
       },
-      acceptInvite: (arg) => {
-        return this.acceptInviteCode(arg);
+      acceptInvite: async (arg) => {
+        return await this.acceptInviteCode(arg);
       },
       sendPresenceUpdate: async (xxx) => {
         return true;
@@ -1337,8 +1334,8 @@ class WhatsAppBotEvoGo {
             this._handleGroupParticipantsUpdate({
               JID: joinedData.JID,
               Join: [this.phoneNumber],
-              Sender: joinedData.Sender,
-              SenderPN: joinedData.SenderPN,
+              Sender: joinedData.Sender ?? joinedData.OwnerJID, // Quando é adicionado sem ser por link, não vem o Sender/SenderPN
+              SenderPN: joinedData.SenderPN ?? joinedData.OwnerPN,
               isBotJoining: true,
               _raw: joinedData
             });
@@ -1765,7 +1762,7 @@ class WhatsAppBotEvoGo {
         payload.mentionedJid = options.mentions.join(",");
       }
 
-      this.logger.debug(`[sendMessage] '${endpoint}'`, { contentType: typeof content, content, payload });
+      //this.logger.debug(`[sendMessage] '${endpoint}'`, { contentType: typeof content, content, payload });
       
       if(payload.number.includes("newsletter")){
         this.logger.debug(`[sendMessage][NEWSLETTER] '${endpoint}'`, { contentType: typeof content, content, payload });
@@ -1823,6 +1820,8 @@ class WhatsAppBotEvoGo {
           origin: { getChat: async () => await this.getChatDetails(groupId) }
         };
 
+        this.logger.debug(`[_handleGroupParticipantsUpdate] `, { eventData });
+
         if (action === 'add' || action === 'join') {
           if (this.eventHandler?.onGroupJoin) this.eventHandler.onGroupJoin(this, eventData);
         } else if (action === 'remove' || action === 'leave') {
@@ -1861,73 +1860,26 @@ class WhatsAppBotEvoGo {
     }
   }
 
-  acceptInviteCode(inviteCode) {
-    return new Promise(async (resolve, reject) => {
-      try {
-        this.logger.debug(`[acceptInviteCode][${this.instanceName}] Adicionando à fila: '${inviteCode}'`);
-        
-        this.joinQueue.push({ code: inviteCode, resolve, reject, timestamp: Date.now() });
-        this._processJoinQueue();
-
-      } catch (e) {
-        this.logger.warn(`[acceptInviteCode][${this.instanceName}] Erro ao adicionar invite para '${inviteCode}'`, { e });
-        resolve({ accepted: false, error: e.data?.error ?? "Erro aceitando invite" });
-      }
-    });
-  }
-
-  async _processJoinQueue() {
-    if (this.joinQueue.length === 0) return;
-    if (this.joinQueueTimer) return;
-
-    const now = Date.now();
-    const fifteenMinutes = 15 * 60 * 1000;
-    const timeSinceLastJoin = now - this.lastJoinTime;
-
-    if (timeSinceLastJoin >= fifteenMinutes) {
-      const item = this.joinQueue.shift();
-      try {
-        this.logger.info(`[acceptInviteCode][${this.instanceName}] Processando invite: '${item.code}'`);
-        const resp = await this.apiClient.post(`/group/join`, { code: item.code });
-        
-        this.lastJoinTime = Date.now();
-        item.resolve({ accepted: true });
-      } catch (e) {
-        this.logger.warn(`[acceptInviteCode][${this.instanceName}] Erro na API para '${item.code}'`, { e });
-        this.lastJoinTime = Date.now(); // Reset timer to respect rate limits
-        item.resolve({ accepted: false, error: e.data?.error ?? "Erro aceitando invite" });
-      }
-
-      if (this.joinQueue.length > 0) {
-        this._scheduleNextJoin();
-      }
-    } else {
-      this._scheduleNextJoin(fifteenMinutes - timeSinceLastJoin);
+  logMsgToGrupo(msg, extra = false){
+    if(this.grupoLogs && msg){
+      this.logger.info(`[logMsgToGrupo] ${msg}`, extra);
+      this.sendMessage(this.grupoLogs, msg);
     }
   }
 
-  _scheduleNextJoin(minDelay = 0) {
-    if (this.joinQueueTimer) clearTimeout(this.joinQueueTimer);
+  acceptInviteCode(inviteCode) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        this.logger.debug(`[acceptInviteCode][${this.instanceName}] '${inviteCode}'`);
+        const resp = await this.apiClient.post(`/group/join`, { code: inviteCode });
 
-    let waitTime = Math.max(minDelay, 15 * 60 * 1000);
-    const jitter = Math.floor(Math.random() * 5 * 60 * 1000); 
-    const totalDelay = waitTime + jitter;
+        resolve({ accepted: true });
+      } catch (e) {
+        this.logger.warn(`[acceptInviteCode][${this.instanceName}] Erro aceitando invite para '${inviteCode}'`, { e });
+        resolve({ accepted: false, error: e.data?.error ?? "Erro aceitando invite" });
+      }
 
-    const eta = new Date(Date.now() + totalDelay);
-    this.logger.info(`[InviteQueue] Próximo processamento agendado para: ${eta.toLocaleString()}`);
-
-    // Notify queued items
-    this.joinQueue.forEach(item => {
-        if (!item.notified) {
-            item.resolve({ accepted: true, queued: true, eta: eta.getTime() });
-            item.notified = true;
-        }
     });
-
-    this.joinQueueTimer = setTimeout(() => {
-        this.joinQueueTimer = null;
-        this._processJoinQueue();
-    }, totalDelay);
   }
 
   // NÃO TEM NA EVOGO

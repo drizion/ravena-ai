@@ -45,7 +45,8 @@ async function processListReaction(bot, message, args, group) {
       if (!chat.isGroup) return false;
 
       // Get group data
-      const group = await bot.eventHandler.getOrCreateGroup(chat.id._serialized);
+      const groupData = await bot.eventHandler.getOrCreateGroup(chat.id._serialized);
+      const group = groupData.group;
 
       // Get lists for this group
       const lists = await getGroupLists(chat.id._serialized);

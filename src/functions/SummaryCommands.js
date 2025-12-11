@@ -185,7 +185,7 @@ ${formattedMessages}`;
         content: interaction,
         mentions: llmMentions
       });
-      logger.info(`[${group.id}] Mensagem de interação gerada com sucesso para '${message.group}'`, { resultado });
+      logger.info(`[${group.id}] Mensagem de interação gerada com sucesso para '${message.group}'`);
 
       // Já que deu certo, limpa o historico
       clearRecentMessages(message.group);

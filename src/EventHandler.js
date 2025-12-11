@@ -63,8 +63,11 @@ class EventHandler {
    */
   async getOrCreateGroup(groupId, name = null, prefix = "?") {
     try {
+
+      let newGroup = false;
       if (!this.groups[groupId]) {
         this.logger.info(`Criando novo grupo: ${groupId} com nome: ${name || 'desconhecido'}`);
+        newGroup = true;
 
         // Obtém grupos do banco de dados para garantir que temos o mais recente
         const groups = await this.database.getGroups();
@@ -103,7 +106,7 @@ class EventHandler {
           this.logger.debug(`Resultado de salvamento do grupo: ${saveResult ? 'sucesso' : 'falha'}`);
         }
       }
-      return this.groups[groupId];
+      return { newGroup, group: this.groups[groupId]};
     } catch (error) {
       this.logger.error('Erro em getOrCreateGroup:', error);
       // Cria um objeto de grupo básico se tudo falhar
@@ -207,7 +210,9 @@ class EventHandler {
         // Armazena mensagem para histórico de conversação
         SummaryCommands.storeMessage(message, message.group);
 
-        group = await this.getOrCreateGroup(message.guildId ?? message.group, null, bot.prefix);
+        const groupData = await this.getOrCreateGroup(message.guildId ?? message.group, null, bot.prefix);
+        group = groupData.group;
+
         if (!group.botNotInGroup) {
           group.botNotInGroup = [];
         } else {
@@ -577,13 +582,17 @@ class EventHandler {
    */
   async processGroupJoin(bot, data) {
     const groupId = data.group.id;
+    const isBotJoining = data.isBotJoining || data?.user?.id?.startsWith(bot.phoneNumber);
     if (bot.removeSkipGroup) {
         await bot.removeSkipGroup(groupId);
     }
-    //this.logger.info(`[processGroupJoin] `, { data });
+    this.logger.info(`[processGroupJoin] `, { data });
 
-    if(this.recentlyJoined.includes(data.user.id)) return;
-    this.recentlyJoined.push(data.user.id);
+    if(!isBotJoining){
+      // Se não for o bot sendo adicionado, coloca pessoa numa lista pra ignorar o join e evitar spam no grupo      
+      if(this.recentlyJoined.includes(data.user.id)) return;
+      this.recentlyJoined.push(data.user.id);
+    }
     setTimeout((rtlyL,id) => {
       rtlyL = rtlyL.filter(rt => rt !== id);
     }, 60000, this.recentlyJoined, data.user.id);
@@ -595,30 +604,31 @@ class EventHandler {
       const chat = await data.origin.getChat();
 
       // Verifica se o próprio bot é quem está entrando
-      const isBotJoining = data.isBotJoining || data?.user?.id?.startsWith(bot.phoneNumber);
-      //this.logger.debug(`[processGroupJoin] isBotJoining (${data.isBotJoining} / ${isBotJoining}}) = data.user.id (${data.user.id}) -startsWith- bot.phoneNumber ${bot.phoneNumber}`);
+      this.logger.debug(`[processGroupJoin] isBotJoining (${data.isBotJoining} / ${isBotJoining}}) = data.user.id (${data.user.id}) -startsWith- bot.phoneNumber ${bot.phoneNumber}`);
 
       // Obtém ou cria grupo
       const nomeGrupo = data.group?.name?.replace(/[^a-zA-Z0-9 ]/g, '').replace(/(?:^\w|[A-Z]|\b\w)/g, (w, i) => i === 0 ? w.toLowerCase() : w.toUpperCase()).replace(/\s+/g, '') ?? null;
-      const group = await this.getOrCreateGroup(data.group.id, nomeGrupo, bot.prefix);
-      //this.logger.debug(`Informações do grupo: ${JSON.stringify(group)}`);
+      const groupData = await this.getOrCreateGroup(data.group.id, nomeGrupo, bot.prefix);
+      const group = groupData.group;
+      this.logger.debug(`Informações do grupo: ${JSON.stringify(group)}`);
 
-      // Envia notificação para o grupo de logs
-      if (bot.grupoLogs) {
-        try {
-          if (isBotJoining) {
-            const msgJoin = `🚪 Bot ${bot.id} entrou no grupo: ${data.group.name} (${nomeGrupo}/${data.group.id})\nQuem add: ${data.responsavel.name}/${data.responsavel.id}`;
-            this.logger.info(`[processGroupJoin] ${msgJoin}`);
-            bot.sendMessage(bot.grupoLogs, msgJoin);
-          }
-        } catch (error) {
-          this.logger.error('Erro ao enviar notificação de entrada no grupo para o grupo de logs:', error);
-        }
-      }
 
       if (isBotJoining) {
+        const joinSilencioso = bot.joinSilencioso ?? false;
+        // Envia notificação para o grupo de logs
+        if (bot.grupoLogs) {
+          try {
+              const msgJoin = `🚪 Bot ${bot.id} entrou no grupo (${groupData.newGroup ? "novo" : "antigo"}): ${group.name} (${group.id})\nQuem add: ${data.responsavel.name}/${data.responsavel.id}${joinSilencioso ? "\n\n🔇 Join Silencioso" : ""}`;
+              this.logger.info(`[processGroupJoin] ${msgJoin}`);
+              bot.sendMessage(bot.grupoLogs, msgJoin);
+          } catch (error) {
+            this.logger.error('Erro ao enviar notificação de entrada no grupo para o grupo de logs:', error);
+          }
+        }
+
+
         // Caso 1: Bot entrou no grupo
-        this.logger.info(`Bot entrou no grupo ${data.group.name} (${nomeGrupo}/${data.group.id})`);
+        this.logger.info(`Bot entrou no grupo ${data.group.name} (${nomeGrupo}/${data.group.id}, ${groupData.newGroup ? "novo" : "antigo"})`);
         group.paused = false; // Sempre que o bot entra no grupo, tira o pause (para grupos em que saiu/foi removido)
         await this.database.saveGroup(group);
 
@@ -638,95 +648,126 @@ class EventHandler {
           }
         }
 
+
         // Envia uma mensagem de boas-vindas padrão sobre o bot
-        let botInfoMessage = `🦇 Olá, grupo! Eu sou a *ravenabot*, um bot de WhatsApp. Use "${group.prefix}cmd" para ver os comandos disponíveis.`;
+        let botInfoMessage = "";
 
-        try {
-          const groupJoinPath = path.join(this.database.databasePath, 'textos', 'groupJoin.txt');
+        // Se é grupo novo, a mensagem de boas vindas é enviada
 
-          // Verifica se o arquivo existe
-          const fileExists = await fs.access(groupJoinPath).then(() => true).catch(() => false);
+        if(groupData.newGroup){
+          this.logger.debug(`[groupJoin] Novo grupo, enviando toda mensagem de boas vindas`);
+          if(!joinSilencioso){
+            botInfoMessage = `🦇 Olá, grupo! Eu sou a *ravenabot*, um bot de WhatsApp. Use "${group.prefix}cmd" para ver os comandos disponíveis.`;
+            try {
+              const groupJoinPath = path.join(this.database.databasePath, 'textos', 'groupJoin.txt');
 
-          if (fileExists) {
-            const fileContent = await fs.readFile(groupJoinPath, 'utf8');
-            if (fileContent && fileContent.trim() !== '') {
-              botInfoMessage = fileContent.trim();
-              // Substitui variável {prefix} se presente
-              botInfoMessage = botInfoMessage.replace(/{prefix}/g, group.prefix || '!');
+              // Verifica se o arquivo existe
+              const fileExists = await fs.access(groupJoinPath).then(() => true).catch(() => false);
+
+              if (fileExists) {
+                const fileContent = await fs.readFile(groupJoinPath, 'utf8');
+                if (fileContent && fileContent.trim() !== '') {
+                  botInfoMessage = fileContent.trim();
+                  // Substitui variável {prefix} se presente
+                  botInfoMessage = botInfoMessage.replace(/{prefix}/g, group.prefix || '!');
+                }
+              }
+            } catch (readError) {
+              this.logger.error('Erro ao ler groupJoin.txt, usando mensagem padrão:', readError);
+            }
+
+            let llm_inviterInfo = "";
+
+            // Adiciona informações do convidador se disponíveis
+            if (foundInviter && foundInviter.authorName) {
+              botInfoMessage += `\n_(Adicionado por: ${foundInviter.authorName})_`;
+              llm_inviterInfo = ` '${foundInviter.authorName}'`;
+            }
+
+            botInfoMessage += `\n\nO nome do seu grupo foi definido como *${group.name}*, mas pode você pode alterar usando:- \`${group.prefix}g-setNome [novoNome]\`.\n\nPara fazer a configuração do grupo sem poluir aqui, me envie no PV:\n- ${group.prefix}g-manage ${group.name}`;
+
+            // Se encontramos o autor do convite, adiciona-o como admin adicional
+            if (foundInviter) {
+
+              group.addedBy = foundInviter.authorId;
+              // Inicializa additionalAdmins se não existir
+              if (!group.additionalAdmins) {
+                group.additionalAdmins = [];
+              }
+
+              // Adiciona o autor como admin adicional se ainda não estiver na lista
+              if (!group.additionalAdmins.includes(foundInviter.authorId)) {
+                group.additionalAdmins.push(foundInviter.authorId);
+                await this.database.saveGroup(group);
+              }
+
+              // Remove o join pendente
+              await this.database.removePendingJoin(foundInviter.code);
+            }
+
+            if (bot.comunitario) {
+              if (bot.supportMsg && bot.supportMsg.length > 0) {
+                botInfoMessage += `\n---☭---☭---☭---☭---☭---☭---☭---☭---\n${bot.supportMsg}`;
+              } else {
+                botInfoMessage += `\n\n⭕ Este é um número da ☭ *ravena comunitária* ☭, onde a pessoa que fornece o chip pode ter acesso às suas mensagens (assim como qualquer outro bot ilegal do whats). Se você não concorda com isto, fique lire para removê-la do grupo.⭕\n_Saiba mais enviando !comunitaria ou acessando o site oficial! Ou no !grupao_`;
+              }
+            }
+
+            // Gera e envia uma mensagem com informações sobre o grupo usando LLM
+            try {
+              // Extrai informações do grupo para o LLM
+              const groupInfo = {
+                name: chat.name,
+                description: chat.groupMetadata?.desc || "",
+                memberCount: chat.participants?.length || 0
+              };
+
+              const llmPrompt = `Você é um bot de WhatsApp chamado ravenabot e foi adicionado em um grupo de whatsapp chamado '${groupInfo.name}'${llm_inviterInfo}, este grupo é sobre '${groupInfo.description}' e tem '${groupInfo.memberCount}' participantes. Gere uma mensagem agradecendo a confiança e fazendo de conta que entende do assunto do grupo enviando algo relacionado junto pra se enturmar, seja natural. Não coloque coisas placeholder, pois a mensagem que você retornar, vai ser enviada na íntegra e sem ediçoes.`;
+
+              // Obtém conclusão do LLM sem bloquear
+              this.llmService.getCompletion({ prompt: llmPrompt }).then(groupWelcomeMessage => {
+                // Envia a mensagem de boas-vindas gerada
+                if (groupWelcomeMessage) {
+                  this.logger.debug(`[groupJoin] LLM Welcome: ${groupWelcomeMessage}`);
+                  bot.sendMessage(group.id, groupWelcomeMessage, {delay: 5000}).catch(error => {
+                    this.logger.error('Erro ao enviar mensagem de boas-vindas do grupo:', error);
+                  });
+                }
+              }).catch(error => {
+                this.logger.error('Erro ao gerar mensagem de boas-vindas do grupo:', error);
+              });
+            } catch (llmError) {
+              this.logger.error('Erro ao gerar mensagem de boas-vindas do grupo:', llmError);
             }
           }
-        } catch (readError) {
-          this.logger.error('Erro ao ler groupJoin.txt, usando mensagem padrão:', readError);
-        }
+        } else {
+          this.logger.debug(`[groupJoin] Grupo já existente! Enviando toda mensagem de boas vindas`);
+          try {
+            const groupJoinExistentePath = path.join(this.database.databasePath, 'textos', 'groupJoinExistente.txt');
 
-        let llm_inviterInfo = "";
+            // Verifica se o arquivo existe
+            const fileExists = await fs.access(groupJoinExistentePath).then(() => true).catch(() => false);
 
-        // Adiciona informações do convidador se disponíveis
-        if (foundInviter && foundInviter.authorName) {
-          botInfoMessage += `\n_(Adicionado por: ${foundInviter.authorName})_`;
-          llm_inviterInfo = ` '${foundInviter.authorName}'`;
-        }
-
-        botInfoMessage += `\n\nO nome do seu grupo foi definido como *${group.name}*, mas pode você pode alterar usando:- \`${group.prefix}g-setNome [novoNome]\`.\n\nPara fazer a configuração do grupo sem poluir aqui, me envie no PV:\n- ${group.prefix}g-manage ${group.name}`;
-
-        // Se encontramos o autor do convite, adiciona-o como admin adicional
-        if (foundInviter) {
-
-          group.addedBy = foundInviter.authorId;
-          // Inicializa additionalAdmins se não existir
-          if (!group.additionalAdmins) {
-            group.additionalAdmins = [];
-          }
-
-          // Adiciona o autor como admin adicional se ainda não estiver na lista
-          if (!group.additionalAdmins.includes(foundInviter.authorId)) {
-            group.additionalAdmins.push(foundInviter.authorId);
-            await this.database.saveGroup(group);
-          }
-
-          // Remove o join pendente
-          await this.database.removePendingJoin(foundInviter.code);
-        }
-
-        if (bot.comunitario) {
-          if (bot.supportMsg && bot.supportMsg.length > 0) {
-            botInfoMessage += `\n---☭---☭---☭---☭---☭---☭---☭---☭---\n${bot.supportMsg}`;
-          } else {
-            botInfoMessage += `\n\n⭕ Este é um número da ☭ *ravena comunitária* ☭, onde a pessoa que fornece o chip pode ter acesso às suas mensagens (assim como qualquer outro bot ilegal do whats). Se você não concorda com isto, fique lire para removê-la do grupo.⭕\n_Saiba mais enviando !comunitaria ou acessando o site oficial! Ou no !grupao_`;
+            if (fileExists) {
+              const fileContent = await fs.readFile(groupJoinExistentePath, 'utf8');
+              if (fileContent && fileContent.trim() !== '') {
+                botInfoMessage = fileContent.trim();
+                // Substitui variável {prefix} se presente
+                botInfoMessage = botInfoMessage.replace(/{prefix}/g, group.prefix || '!');
+              }
+            }
+          } catch (readError) {
+            this.logger.error('Erro ao ler groupJoinExistente.txt, usando mensagem padrão:', readError);
+            botInfoMessage = `🦇 Olá, grupo! Eu sou a *ravenabot*. Já estive aqui neste grupo antes, mas se tiverem dúvidas, é só mandar um *!cmd*\n\nFique por dentro das novidades:\n- https://ravena.moothz.win`;
           }
         }
 
         this.logger.debug(`[groupJoin] botInfoMessage: ${botInfoMessage}`);
+
         bot.sendMessage(group.id, botInfoMessage).catch(error => {
           this.logger.error('Erro ao enviar mensagem de boas-vindas do grupo:', error);
         });
 
-        // Gera e envia uma mensagem com informações sobre o grupo usando LLM
-        try {
-          // Extrai informações do grupo para o LLM
-          const groupInfo = {
-            name: chat.name,
-            description: chat.groupMetadata?.desc || "",
-            memberCount: chat.participants?.length || 0
-          };
-
-          const llmPrompt = `Você é um bot de WhatsApp chamado ravenabot e foi adicionado em um grupo de whatsapp chamado '${groupInfo.name}'${llm_inviterInfo}, este grupo é sobre '${groupInfo.description}' e tem '${groupInfo.memberCount}' participantes. Gere uma mensagem agradecendo a confiança e fazendo de conta que entende do assunto do grupo enviando algo relacionado junto pra se enturmar, seja natural. Não coloque coisas placeholder, pois a mensagem que você retornar, vai ser enviada na íntegra e sem ediçoes.`;
-
-          // Obtém conclusão do LLM sem bloquear
-          this.llmService.getCompletion({ prompt: llmPrompt }).then(groupWelcomeMessage => {
-            // Envia a mensagem de boas-vindas gerada
-            if (groupWelcomeMessage) {
-              this.logger.debug(`[groupJoin] LLM Welcome: ${groupWelcomeMessage}`);
-              bot.sendMessage(group.id, groupWelcomeMessage).catch(error => {
-                this.logger.error('Erro ao enviar mensagem de boas-vindas do grupo:', error);
-              });
-            }
-          }).catch(error => {
-            this.logger.error('Erro ao gerar mensagem de boas-vindas do grupo:', error);
-          });
-        } catch (llmError) {
-          this.logger.error('Erro ao gerar mensagem de boas-vindas do grupo:', llmError);
-        }
       } else {
         // Caso 2: Outra pessoa entrou no grupo
         // Gera e envia mensagem de boas-vindas para o novo membro
@@ -761,7 +802,7 @@ class EventHandler {
       rtlyL = rtlyL.filter(rt => rt !== id);
     }, 60000, this.recentlyLeft, data.user.id);
 
-    this.logger.info(`Usuário ${data.user.name} (${data.user.id}) saiu do grupo ${data.group.name} (${data.group.id}). Quem removeu: ${data.responsavel.name}/${data.responsavel.id}`, { quemRemoveu: data.responsavel.name });
+    this.logger.info(`Usuário ${JSON.stringify(data.user.name)} (${data.user.id}) saiu do grupo ${data.group.name} (${data.group.id}). Quem removeu: ${data.responsavel.name}/${data.responsavel.id}`, { quemRemoveu: data.responsavel.name });
 
     try {
       // Obtém grupo
@@ -784,12 +825,15 @@ class EventHandler {
         try {
           if (isBotLeaving) {
             const groupId = data.group.id;
+            const groupData = await this.getOrCreateGroup(groupId, null, bot.prefix);
+            const group = groupData.group;
+
             if (bot.addSkipGroup) {
                 await bot.addSkipGroup(groupId);
             }
             //group.paused = true; // Sempre que o bot sai do grupo, pausa o mesmo
             await this.database.saveGroup(group);
-            bot.sendMessage(bot.grupoLogs, `🚪 Bot ${bot.id} saiu do grupo: ${data.group.name} (${data.group.id})})\nQuem removeu: ${data.responsavel.name}/${data.responsavel.id}`).catch(error => {
+            bot.sendMessage(bot.grupoLogs, `🚪 Bot ${bot.id} saiu do grupo: '${group.name}' (${group.id})})\nQuem removeu: ${data.responsavel.name}/${data.responsavel.id}`).catch(error => {
               this.logger.error('Erro ao enviar notificação de entrada no grupo para o grupo de logs:', error);
             });
 

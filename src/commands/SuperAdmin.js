@@ -354,14 +354,6 @@ ${listGroups}`;
           // Remove dos convites pendentes se existir
           await this.database.removePendingJoin(inviteCode);
 
-          if (joinResult.queued) {
-             const etaDate = new Date(joinResult.eta).toLocaleString('pt-BR');
-             return new ReturnMessage({
-                chatId: chatId,
-                content: `⏳ O convite foi aceito e colocado na fila de segurança.\nPrevisão de entrada: ${etaDate}\n\nO bot entrará automaticamente.`
-             });
-          }
-
           return new ReturnMessage({
             chatId: chatId,
             content: `✅ Entrou com sucesso no grupo com código de convite ${inviteCode}`
