@@ -1,6 +1,5 @@
-﻿// src/functions/PintoGame.js
+// src/functions/PintoGame.js
 const path = require('path');
-const fs = require('fs').promises;
 const Logger = require('../utils/Logger');
 const ReturnMessage = require('../models/ReturnMessage');
 const Command = require('../models/Command');
@@ -8,6 +7,33 @@ const Database = require('../utils/Database');
 
 const logger = new Logger('pinto-game');
 const database = Database.getInstance();
+const dbName = "pinto";
+
+// Initialize database
+database.getSQLiteDb(dbName, `
+    CREATE TABLE IF NOT EXISTS pinto_scores (
+      group_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      user_name TEXT,
+      flaccid REAL,
+      erect REAL,
+      girth REAL,
+      score INTEGER,
+      last_updated INTEGER,
+      PRIMARY KEY (group_id, user_id)
+    );
+    CREATE TABLE IF NOT EXISTS pinto_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      group_id TEXT,
+      user_id TEXT,
+      user_name TEXT,
+      flaccid REAL,
+      erect REAL,
+      girth REAL,
+      score INTEGER,
+      timestamp INTEGER
+    );
+`);
 
 // Constantes do jogo
 const MIN_FLACCID = 0.5;
@@ -18,102 +44,6 @@ const MIN_GIRTH = 6.0;
 const MAX_GIRTH = 20.0;
 const MAX_SCORE = 1000;
 const COOLDOWN_DAYS = 7; // 7 dias de cooldown
-
-// Variáveis para o sistema de cache e salvamento periódico  
-let dadosCache = null;  
-let ultimoSalvamento = 0;  
-const INTERVALO_SALVAMENTO = 5 * 60 * 1000; // 5 minutos em millisegundos  
-let modificacoesNaoSalvas = false;
-
-// Caminho para o arquivo de dados do jogo
-const PINTO_DATA_PATH = path.join(database.databasePath, 'pinto.json');
-
-/**  
- * Obtém os dados do jogo do arquivo JSON dedicado  
- * @returns {Promise<Object>} Dados do jogo  
- */  
-async function getPintoGameData() {  
-  try {  
-    // Return cached data if available  
-    if (dadosCache !== null) {  
-      return dadosCache;  
-    }  
-  
-    // Verifica se o arquivo existe  
-    try {  
-      await fs.access(PINTO_DATA_PATH);  
-    } catch (error) {  
-      // Se o arquivo não existir, cria um novo com estrutura padrão  
-      const defaultData = {  
-        groups: {},  
-        history: []  
-      };  
-        
-      // Garante que o diretório exista  
-      const dir = path.dirname(PINTO_DATA_PATH);  
-      await fs.mkdir(dir, { recursive: true });  
-        
-      await fs.writeFile(PINTO_DATA_PATH, JSON.stringify(defaultData, null, 2));  
-        
-      // Update cache and last save time  
-      dadosCache = defaultData;  
-      ultimoSalvamento = Date.now();  
-        
-      return defaultData;  
-    }  
-  
-    // Lê o arquivo  
-    const data = await fs.readFile(PINTO_DATA_PATH, 'utf8');  
-    const parsedData = JSON.parse(data);  
-      
-    // Update cache and last save time  
-    dadosCache = parsedData;  
-    ultimoSalvamento = Date.now();  
-      
-    return parsedData;  
-  } catch (error) {  
-    logger.error('Erro ao ler dados do jogo:', error);  
-    // Retorna objeto padrão em caso de erro  
-    return {  
-      groups: {},  
-      history: []  
-    };  
-  }  
-}  
-  
-/**  
- * Salva os dados do jogo no arquivo JSON dedicado  
- * @param {Object} gameData Dados do jogo a serem salvos  
- * @param {boolean} forceSave Força o salvamento mesmo que não tenha passado o intervalo  
- * @returns {Promise<boolean>} Status de sucesso  
- */  
-async function savePintoGameData(gameData, forceSave = false) {  
-  try {  
-    // Update cache  
-    dadosCache = gameData;  
-    modificacoesNaoSalvas = true;  
-      
-    // Only save to disk if forced or if enough time has passed since last save  
-    const agora = Date.now();  
-    if (forceSave || (agora - ultimoSalvamento) > INTERVALO_SALVAMENTO) {  
-      // Garante que o diretório exista  
-      const dir = path.dirname(PINTO_DATA_PATH);  
-      await fs.mkdir(dir, { recursive: true });  
-  
-      // Salva os dados  
-      await fs.writeFile(PINTO_DATA_PATH, JSON.stringify(gameData, null, 2));  
-        
-      ultimoSalvamento = agora;  
-      modificacoesNaoSalvas = false;  
-      logger.info('Dados do jogo pinto salvos em disco');  
-    }  
-      
-    return true;  
-  } catch (error) {  
-    logger.error('Erro ao salvar dados do jogo:', error);  
-    return false;  
-  }  
-}
 
 /**
  * Gera um valor aleatório entre min e max com 1 casa decimal
@@ -195,30 +125,34 @@ function formatDate(timestamp) {
  * Verifica se o usuário está em cooldown com base no lastUpdated salvo no banco
  * @param {string} groupId - ID do grupo
  * @param {string} userId - ID do usuário
- * @param {Object} gameData - Dados do jogo
- * @returns {Object} - Status do cooldown e próxima data disponível
+ * @returns {Promise<Object>} - Status do cooldown e próxima data disponível
  */
-function checkCooldown(groupId, userId, gameData) {
-  // Verifica se existe registro do usuário no grupo
-  if (gameData.groups[groupId] && 
-      gameData.groups[groupId][userId] && 
-      gameData.groups[groupId][userId].lastUpdated) {
+async function checkCooldown(groupId, userId) {
+  try {
+    const row = await database.dbGet(dbName, `
+      SELECT last_updated FROM pinto_scores
+      WHERE group_id = ? AND user_id = ?
+    `, [groupId, userId]);
+
+    if (row && row.last_updated) {
+      const now = Date.now();
+      const lastUsed = row.last_updated;
+      const cooldownMs = COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
       
-    const now = Date.now();
-    const lastUsed = gameData.groups[groupId][userId].lastUpdated;
-    const cooldownMs = COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
-    
-    if (now - lastUsed < cooldownMs) {
-      const nextAvailable = new Date(lastUsed + cooldownMs);
-      const timeUntil = nextAvailable - now;
-      const daysUntil = Math.ceil(timeUntil / (24 * 60 * 60 * 1000));
-      
-      return {
-        inCooldown: true,
-        nextAvailable,
-        daysUntil
-      };
+      if (now - lastUsed < cooldownMs) {
+        const nextAvailable = new Date(lastUsed + cooldownMs);
+        const timeUntil = nextAvailable - now;
+        const daysUntil = Math.ceil(timeUntil / (24 * 60 * 60 * 1000));
+        
+        return {
+          inCooldown: true,
+          nextAvailable,
+          daysUntil
+        };
+      }
     }
+  } catch (error) {
+    logger.error('Erro ao verificar cooldown:', error);
   }
   
   // Sem cooldown ativo
@@ -254,16 +188,13 @@ async function pintoCommand(bot, message, args, group) {
     const userId = message.author ?? message.authorAlt;
     const userName = message.name ?? message.pushName ?? message.pushname ?? message.authorName ?? "Fulano";
     
-    // Obtém os dados do jogo
-    const gameData = await getPintoGameData();
-    
     // Verifica o cooldown baseado no lastUpdated salvo no banco
-    const cooldownStatus = checkCooldown(groupId, userId, gameData);
+    const cooldownStatus = await checkCooldown(groupId, userId);
     
     if (cooldownStatus.inCooldown) {
       return new ReturnMessage({
         chatId: groupId,
-        content: `🌀 ${userName}, você já realizou sua avaliação recentemente.\n\nPróxima avaliação disponível em ${cooldownStatus.daysUntil} dia(s), dia ${formatDate(cooldownStatus.nextAvailable)}.`,
+        content: `🌀 ${userName}, você já realizou sua avaliação recentemente.\n\nPróxima avaliação disponível em ${cooldownStatus.daysUntil} dia(s), dia ${formatDate(cooldownStatus.nextAvailable)}.`, 
         options: {
           quotedMessageId: message.origin.id._serialized,
           evoReply: message.origin
@@ -282,47 +213,33 @@ async function pintoCommand(bot, message, args, group) {
     // Obtém um comentário baseado no score
     const comment = getComment(score);
     
+    // Timestamp atual
+    const currentTimestamp = Date.now();
+    
     // Salva os resultados no banco de dados
     try {
-      // Inicializa a estrutura se necessário
-      if (!gameData.groups[groupId]) {
-        gameData.groups[groupId] = {};
-      }
-      
-      // Timestamp atual
-      const currentTimestamp = Date.now();
-      
       // Salva ou atualiza os dados do jogador para este grupo
-      gameData.groups[groupId][userId] = {
-        name: userName,
-        flaccid,
-        erect,
-        girth,
-        score,
-        lastUpdated: currentTimestamp
-      };
+      await database.dbRun(dbName, `
+        INSERT INTO pinto_scores (group_id, user_id, user_name, flaccid, erect, girth, score, last_updated)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(group_id, user_id) DO UPDATE SET
+          user_name = excluded.user_name,
+          flaccid = excluded.flaccid,
+          erect = excluded.erect,
+          girth = excluded.girth,
+          score = excluded.score,
+          last_updated = excluded.last_updated
+      `, [groupId, userId, userName, flaccid, erect, girth, score, currentTimestamp]);
       
       // Adiciona ao histórico geral
-      gameData.history.push({
-        userId,
-        userName,
-        groupId,
-        flaccid,
-        erect,
-        girth,
-        score,
-        timestamp: currentTimestamp
-      });
+      await database.dbRun(dbName, `
+        INSERT INTO pinto_history (group_id, user_id, user_name, flaccid, erect, girth, score, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `, [groupId, userId, userName, flaccid, erect, girth, score, currentTimestamp]);
       
-      // Limita o histórico a 100 entradas
-      if (gameData.history.length > 100) {
-        gameData.history = gameData.history.slice(-100);
-      }
-      
-      // Salva as alterações
-      await savePintoGameData(gameData);
     } catch (dbError) {
       logger.error('Erro ao salvar dados do jogo:', dbError);
+      throw dbError; // Re-throw para cair no catch principal se falhar o banco
     }
     
     // Prepara a mensagem de resposta
@@ -376,44 +293,55 @@ async function pintoRankingCommand(bot, message, args, group) {
     
     const groupId = message.group;
     
-    // Obtém os dados do jogo
-    const gameData = await getPintoGameData();
+    // Obtém o ranking do banco de dados
+    const topPlayers = await database.dbAll(dbName, `
+      SELECT user_id, user_name, score
+      FROM pinto_scores
+      WHERE group_id = ?
+      ORDER BY score DESC
+      LIMIT 10
+    `, [groupId]);
     
-    // Verifica se existem dados do jogo para este grupo
-    if (!gameData.groups[groupId] || Object.keys(gameData.groups[groupId]).length === 0) {
+    if (topPlayers.length === 0) {
       return new ReturnMessage({
         chatId: groupId,
         content: '🏆 Ainda não há dados para o ranking neste grupo. Use !pinto para participar!'
       });
     }
     
-    // Converte para array para poder ordenar
-    const players = Object.entries(gameData.groups[groupId]).map(([id, data]) => ({
-      id,
-      ...data
-    }));
-    
-    // Ordena por score (maior para menor)
-    players.sort((a, b) => b.score - a.score);
-    
-    // Limita a 10 jogadores
-    const topPlayers = players.slice(0, 10);
-    
     // Prepara a mensagem de ranking
-    let rankingMessage = `🍆 *Ranking do Tamanho - ${group.name || "Grupo"}*\n\n`;
+    let rankingMessage = `🍆 *Ranking do Tamanho - ${group.name || "Grupo"}*
+
+`;
     
     topPlayers.forEach((player, index) => {
       const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-      rankingMessage += `${medal} ${player.name}: ${player.score} pontos\n`;
+      rankingMessage += `${medal} ${player.user_name}: ${player.score} pontos\n`;
     });
     
-    // Encontra a posição do autor da mensagem
-    const authorPosition = players.findIndex(player => player.id === message.author);
+    // Verifica a posição do usuário se ele não estiver no top 10
+    const userId = message.author ?? message.authorAlt;
+    const userInTop10 = topPlayers.some(p => p.user_id === userId);
     
-    // Se o autor não está no top 10, mas está no ranking
-    if (authorPosition >= 10) {
-      rankingMessage += `\n...\n\n`;
-      rankingMessage += `${authorPosition + 1}. Você: ${players[authorPosition].score} pontos`;
+    if (!userInTop10) {
+      const userScore = await database.dbGet(dbName, `
+        SELECT score FROM pinto_scores
+        WHERE group_id = ? AND user_id = ?
+      `, [groupId, userId]);
+
+      if (userScore) {
+        const betterPlayers = await database.dbGet(dbName, `
+          SELECT COUNT(*) as count FROM pinto_scores
+          WHERE group_id = ? AND score > ?
+        `, [groupId, userScore.score]);
+        
+        const rank = betterPlayers.count + 1;
+        rankingMessage += `
+...
+
+`;
+        rankingMessage += `${rank}. Você: ${userScore.score} pontos`;
+      }
     }
     
     return new ReturnMessage({
@@ -463,12 +391,16 @@ async function pintoResetCommand(bot, message, args, group) {
         }  
       })];  
     }  
-      
-    // Carrega dados do jogo  
-    let gameData = await getPintoGameData();  
+    
+    // Verifica quantos jogadores existem antes de deletar
+    const countResult = await database.dbGet(dbName, `
+      SELECT COUNT(*) as count FROM pinto_scores WHERE group_id = ?
+    `, [groupId]);
+    
+    const numJogadores = countResult ? countResult.count : 0;
       
     // Verifica se há dados para este grupo  
-    if (!gameData.groups[groupId] || Object.keys(gameData.groups[groupId]).length === 0) {  
+    if (numJogadores === 0) {  
       return [new ReturnMessage({  
         chatId: groupId,  
         content: '⚠️ Não há dados do jogo para este grupo.',  
@@ -482,15 +414,10 @@ async function pintoResetCommand(bot, message, args, group) {
     // Obtém o ranking atual antes de resetar  
     const rankingMessage = await pintoRankingCommand(bot, message, args, group);  
       
-    // Faz backup dos dados atuais  
-    const dadosAntigos = JSON.parse(JSON.stringify(gameData.groups[groupId]));  
-    const numJogadores = Object.keys(dadosAntigos).length;  
-      
-    // Reseta os dados do grupo  
-    gameData.groups[groupId] = {};  
-      
-    // Salva os dados (forçando salvamento imediato)  
-    await savePintoGameData(gameData, true);  
+    // Reseta os dados do grupo (Scores)
+    await database.dbRun(dbName, `
+      DELETE FROM pinto_scores WHERE group_id = ?
+    `, [groupId]);
       
     // Retorna mensagens  
     return [  
@@ -513,36 +440,6 @@ async function pintoResetCommand(bot, message, args, group) {
     })];  
   }  
 }
-
-// Adiciona um intervalo para salvar periodicamente os dados modificados  
-setInterval(async () => {  
-  try {  
-    // Só processa se houver dados em cache e modificações não salvas  
-    if (dadosCache !== null && modificacoesNaoSalvas) {  
-      const agora = Date.now();  
-      if ((agora - ultimoSalvamento) > INTERVALO_SALVAMENTO) {  
-        logger.info('Salvando dados do jogo pinto periodicamente...');  
-        await savePintoGameData(dadosCache, true);  
-      }  
-    }  
-  } catch (error) {  
-    logger.error('Erro ao salvar dados do jogo periodicamente:', error);  
-  }  
-}, 60000); // Verifica a cada minuto  
-  
-// Adicione um handler para salvar dados antes de encerrar o processo  
-process.on('SIGINT', async () => {  
-  try {  
-    if (dadosCache !== null && modificacoesNaoSalvas) {  
-      logger.info('Salvando dados do jogo pinto antes de encerrar...');  
-      await savePintoGameData(dadosCache, true);  
-    }  
-  } catch (error) {  
-    logger.error('Erro ao salvar dados do jogo durante encerramento:', error);  
-  } finally {  
-    process.exit(0);  
-  }  
-});
 
 // Criar array de comandos usando a classe Command
 const commands = [
@@ -573,7 +470,7 @@ const commands = [
     
   new Command({  
     name: 'pinto-reset',  
-    description: 'Reseta os dados do jogo para este grupo',  
+    description: 'Reseta os dados do jogo para este grupo',
     category: "jogos",  
     adminOnly: true,  
     cooldown: 60,  
@@ -585,4 +482,4 @@ const commands = [
   })
 ];
 
-module.exports = { commands, getPintoGameData, savePintoGameData };
+module.exports = { commands };

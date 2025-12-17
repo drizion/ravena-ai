@@ -1411,9 +1411,9 @@ class Database {
 
       // Initialize database structure
       this.sqlites[name].serialize(() => {
-        this.sqlites[name].run(schema, (err) => {
+        this.sqlites[name].exec(schema, (err) => {
           if (err) {
-            logger.error(`Erro ao inicializar base ${name}:`, { schema, err });
+            this.logger.error(`Erro ao inicializar base ${name}:`, { schema, err });
           }
         });
       });
