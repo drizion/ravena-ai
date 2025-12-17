@@ -111,7 +111,7 @@ async function platinaCommand(bot, message, args, group) {
     });
 
   } catch (error) {
-    logger.error("Erro ao buscar platinas:", error);
+    logger.error("Erro ao buscar platinas:");
     
     let errorMessage = '❌ Erro ao buscar informações da Steam.';
     

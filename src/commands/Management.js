@@ -1848,7 +1848,7 @@ async setWelcomeMessage(bot, message, args, group) {
       });
     }
     
-    const commandName = args[0].toLowerCase();
+    const commandName = args[0];
     const emoji = args[1];
     
 
@@ -1911,7 +1911,7 @@ async setWelcomeMessage(bot, message, args, group) {
       });
     }
     
-    const commandName = args[0].toLowerCase();
+    const commandName = args[0];
     const emoji = args[1];
     
     // Verifica se é um comando personalizado
@@ -4717,7 +4717,7 @@ async setWelcomeMessage(bot, message, args, group) {
       });
     }
     
-    const commandName = args[0].toLowerCase();
+    const commandName = args[0];
     const emoji = args[1];
         
     // Verifica se é um comando personalizado
@@ -4776,7 +4776,7 @@ async setWelcomeMessage(bot, message, args, group) {
       });
     }
     
-    const commandName = args[0].toLowerCase();
+    const commandName = args[0];
     const emoji = args[1];
         
     // Verifica se é um comando personalizado
@@ -4834,7 +4834,7 @@ async setWelcomeMessage(bot, message, args, group) {
     }
     
     // Obtém o nome do comando
-    const commandName = args[0].toLowerCase();
+    const commandName = args[0];
     
     // Obtém os horários (start e end)
     let startTime = null;
@@ -4938,7 +4938,7 @@ async setWelcomeMessage(bot, message, args, group) {
     }
     
     // Obtém o nome do comando
-    const commandName = args[0].toLowerCase();
+    const commandName = args[0];
     
     // Obtém os dias
     const days = args.slice(1).map(day => day.toLowerCase());
