@@ -13,7 +13,7 @@ const database = Database.getInstance();
 
 // Define os métodos de comando separadamente
 async function pingCommand(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
 
   const delayMsg = message.responseTime ?? (bot.getCurrentTimestamp() - (message.origin.timestamp ?? message.origin.messageTimestamp ?? bot.getCurrentTimestamp()));
   console.log(message.origin);
@@ -30,7 +30,7 @@ async function pingCommand(bot, message, args, group) {
 }
 
 async function grupaoCommand(bot, message, args, group){
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
   const grupao = await bot.client.getChatById(bot.grupoInteracao);
 
   try{
@@ -48,7 +48,7 @@ async function grupaoCommand(bot, message, args, group){
 }
 
 async function avisosCommand(bot, message, args, group){
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
   const avisos = await bot.client.getChatById(bot.grupoAvisos);
 
   try{
@@ -64,7 +64,7 @@ async function avisosCommand(bot, message, args, group){
 }
 
 async function ravPrivadaCommand(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
 
   try {
     const privPath = path.join(database.databasePath, 'textos', 'private.txt');
@@ -86,7 +86,7 @@ async function ravPrivadaCommand(bot, message, args, group) {
 
 
 async function ravComunitariaCommand(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
 
   try {
     const comuPath = path.join(database.databasePath, 'textos', 'comunitaria.txt');
@@ -108,7 +108,7 @@ async function ravComunitariaCommand(bot, message, args, group) {
 
 
 async function codigoCommand(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
 
   try {
     const codigoPath = path.join(database.databasePath, 'textos', 'codigo.txt');
@@ -131,7 +131,7 @@ async function codigoCommand(bot, message, args, group) {
 
 
 async function conviteCommand(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
 
   try{    
     const invitesHeaderPath = path.join(database.databasePath, 'textos', 'invites_header.txt');
@@ -178,7 +178,7 @@ Após o link, siga as instruções do bot, enviando uma mensagem explicando o mo
 }
 
 async function diferencasCommand(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
 
   return new ReturnMessage({
     chatId: chatId,
@@ -315,7 +315,7 @@ async function apelidoCommand(bot, message, args, group) {
     logger.error('Erro ao definir apelido:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao definir apelido. Por favor, tente novamente.'
     });
   }
@@ -387,8 +387,8 @@ function renderBotStatus(botData){
 }
 
 async function statusCommand(bot, message, args, group) {
-  const chatId = message.group || message.author;
-  const url = `http://localhost:${process.env.API_PORT || 5000}/health`;
+  const chatId = message.group ?? message.author;
+  const url = `http://localhost:${process.env.API_PORT ?? 5000}/health`;
 
   try {
     const response = await axios.get(url);

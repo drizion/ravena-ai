@@ -112,7 +112,7 @@ function extractFirstTwoEmojis(text) {
  */
 async function emojiKitchenCommand(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     // Extrai emojis dos argumentos
     let emojis;
@@ -219,7 +219,7 @@ async function emojiKitchenCommand(bot, message, args, group) {
     logger.error('Erro ao processar comando emojiKitchen:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Ocorreu um erro ao processar o comando. Por favor, tente novamente.'
     });
   }

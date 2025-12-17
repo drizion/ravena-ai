@@ -52,7 +52,7 @@ const DEFAULT_PARAMS = {
  */
 
 async function generateImage(bot, message, args, group, skipNotify = false) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
   const returnMessages = [];
   
   const quotedMsg = await message.origin.getQuotedMessage().catch(() => null);

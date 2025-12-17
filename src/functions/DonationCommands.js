@@ -78,7 +78,7 @@ function formatTimeAgo(timestamp) {
  */
 async function showDonationGoal(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     // Verifica se a meta de doação está configurada
     const goalAmount = process.env.DONATION_GOAL_AMOUNT;
@@ -126,7 +126,7 @@ async function showDonationGoal(bot, message, args, group) {
     });
   } catch (error) {
     logger.error('Erro ao enviar informações de meta de doação:', error);
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     return new ReturnMessage({
       chatId: chatId,
@@ -145,7 +145,7 @@ async function showDonationGoal(bot, message, args, group) {
  */
 async function showTopDonors(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     // Obtém todas as doações
     const donations = await database.getDonations();
@@ -172,7 +172,7 @@ async function showTopDonors(bot, message, args, group) {
     const recentDonorsSummary = {};
 
     donations.forEach(donor => {
-        const recentAmount = (donor.historico || [])
+        const recentAmount = (donor.historico ?? [])
             .filter(h => h.ts > threeMonthsAgoTs)
             .reduce((sum, h) => sum + h.valor, 0);
         
@@ -234,7 +234,7 @@ async function showTopDonors(bot, message, args, group) {
     });
   } catch (error) {
     logger.error('Erro ao enviar lista de principais doadores:', error);
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     return new ReturnMessage({
       chatId: chatId,

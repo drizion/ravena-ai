@@ -7,18 +7,18 @@ class Group {
    * @param {Object} data - Dados do grupo
    */
   constructor(data = {}) {
-    this.id = data.id || null;
-    this.addedBy = data.addedBy || null;
-    this.removedBy = data.removedBy || false;
-    this.name = data.name || (this.id ? this.id.split('@')[0].toLowerCase().replace(/\s+/g, '').substring(0, 16) : null);
-    this.prefix = data.prefix || '!';
-    this.customIgnoresPrefix = data.customIgnoresPrefix || false;
-    this.inviteCode = data.inviteCode || null;
-    this.paused = data.paused || false;
-    this.additionalAdmins = data.additionalAdmins || [];
+    this.id = data.id ?? null;
+    this.addedBy = data.addedBy ?? null;
+    this.removedBy = data.removedBy ?? false;
+    this.name = data.name ?? (this.id ? this.id.split('@')[0].toLowerCase().replace(/\s+/g, '').substring(0, 16) : null);
+    this.prefix = data.prefix ?? '!';
+    this.customIgnoresPrefix = data.customIgnoresPrefix ?? false;
+    this.inviteCode = data.inviteCode ?? null;
+    this.paused = data.paused ?? false;
+    this.additionalAdmins = data.additionalAdmins ?? [];
     
     // Filtros
-    this.filters = data.filters || {
+    this.filters = data.filters ?? {
       nsfw: false,
       links: false,
       words: [],
@@ -26,17 +26,17 @@ class Group {
     };
     
     // Monitoramento de plataformas
-    this.twitch = data.twitch || [];
-    this.kick = data.kick || [];
-    this.youtube = data.youtube || [];
-    this.botNotInGroup = data.botNotInGroup || [];
+    this.twitch = data.twitch ?? [];
+    this.kick = data.kick ?? [];
+    this.youtube = data.youtube ?? [];
+    this.botNotInGroup = data.botNotInGroup ?? [];
 
     // Mensagens de boas-vindas e despedida
-    this.greetings = data.greetings || {};
-    this.farewells = data.farewells || {};
+    this.greetings = data.greetings ?? {};
+    this.farewells = data.farewells ?? {};
 
     // Interacoes Auto
-    this.interact = data.interact || {
+    this.interact = data.interact ?? {
       enabled: true,
       useCmds: true,
       lastInteraction: 0,
@@ -45,16 +45,16 @@ class Group {
     };
 
     // Outras config
-    this.autoStt = data.autoStt || false;
-    this.ignoredNumbers = data.ignoredNumbers || [];
-    this.ignoredUsers = data.ignoredUsers || [];
-    this.mutedStrings = data.mutedStrings || [];
-    this.mutedCategories = data.mutedCategories || [];
-    this.nicks = data.nicks || [];
-    this.customAIPrompt = data.customAIPrompt || [];
+    this.autoStt = data.autoStt ?? false;
+    this.ignoredNumbers = data.ignoredNumbers ?? [];
+    this.ignoredUsers = data.ignoredUsers ?? [];
+    this.mutedStrings = data.mutedStrings ?? [];
+    this.mutedCategories = data.mutedCategories ?? [];
+    this.nicks = data.nicks ?? [];
+    this.customAIPrompt = data.customAIPrompt ?? [];
     
     // Metadados
-    this.createdAt = data.createdAt || Date.now();
+    this.createdAt = data.createdAt ?? Date.now();
     this.updatedAt = Date.now();
   }
 
@@ -85,11 +85,22 @@ class Group {
       ignoredNumbers: this.ignoredNumbers,
       ignoredUsers: this.ignoredUsers, 
       mutedStrings: this.mutedStrings,
+      // FIX: Adicionado mutedCategories que estava faltando
+      mutedCategories: this.mutedCategories,
       nicks: this.nicks,
       customAIPrompt: this.customAIPrompt,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt
     };
+  }
+
+  /**
+   * Cria uma instância de Group a partir de um objeto simples
+   * @param {Object} data - Dados do grupo
+   * @returns {Group} - Nova instância de Group
+   */
+  static fromJSON(data) {
+    return new Group(data);
   }
 
   /**
@@ -150,6 +161,7 @@ class Group {
     if (data.ignoredNumbers) this.ignoredNumbers = data.ignoredNumbers;
     if (data.ignoredUsers) this.ignoredUsers = data.ignoredUsers;
     if (data.mutedStrings) this.mutedStrings = data.mutedStrings;
+    if (data.mutedCategories) this.mutedCategories = data.mutedCategories; // Added support for updating mutedCategories
     if (data.nicks) this.nicks = data.nicks;
     if (data.customAIPrompt) this.customAIPrompt = data.customAIPrompt;
     
@@ -174,11 +186,11 @@ class Group {
    * @returns {boolean} - True se estiver monitorando
    */
   isMonitoring(platform, channel) {
-    if (!this[platform] || !Array.isArray(this[platform])) {
+    if (!this[platform] ?? !Array.isArray(this[platform])) {
       return false;
     }
     
-    if (platform === 'twitch' || platform === 'kick') {
+    if (platform === 'twitch' ?? platform === 'kick') {
       return this[platform].some(ch => ch.name.toLowerCase() === channel.toLowerCase());
     } else if (platform === 'youtube') {
       return this[platform].includes(channel);
@@ -193,11 +205,11 @@ class Group {
    * @param {Object|string} channelData - Dados do canal ou ID
    */
   addMonitoring(platform, channelData) {
-    if (!this[platform] || !Array.isArray(this[platform])) {
+    if (!this[platform] ?? !Array.isArray(this[platform])) {
       this[platform] = [];
     }
     
-    if (platform === 'twitch' || platform === 'kick') {
+    if (platform === 'twitch' ?? platform === 'kick') {
       // Verifica se já está monitorando
       const index = this[platform].findIndex(ch => ch.name.toLowerCase() === channelData.name.toLowerCase());
       
@@ -224,11 +236,11 @@ class Group {
    * @param {string} channel - Nome ou ID do canal
    */
   removeMonitoring(platform, channel) {
-    if (!this[platform] || !Array.isArray(this[platform])) {
+    if (!this[platform] ?? !Array.isArray(this[platform])) {
       return;
     }
     
-    if (platform === 'twitch' || platform === 'kick') {
+    if (platform === 'twitch' ?? platform === 'kick') {
       this[platform] = this[platform].filter(ch => ch.name.toLowerCase() !== channel.toLowerCase());
     } else if (platform === 'youtube') {
       this[platform] = this[platform].filter(id => id !== channel);

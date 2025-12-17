@@ -153,14 +153,14 @@ class CommandHandler {
     }
     
     // Obtém timestamp do último uso
-    const lastUsed = this.cooldowns[finalId][commandName] || 0;
+    const lastUsed = this.cooldowns[finalId][commandName] ?? 0;
     const now = Date.now();
     
     // Obtém valor de cooldown (em segundos)
     let cooldownValue = 0; // Valor padrão
     
     if (typeof command === 'object') {
-      cooldownValue = command.cooldown || cooldownValue;
+      cooldownValue = command.cooldown ?? cooldownValue;
     }
     
     // Converte para milissegundos
@@ -248,15 +248,15 @@ class CommandHandler {
       await message.origin.react("😴");
       
       // Verifica se já enviamos uma mensagem de cooldown para este comando recentemente
-      const cooldownMsgKey = `${groupId}:${command.name || command}`;
-      const lastCooldownMsg = this.cooldownMessages[cooldownMsgKey] || 0;
+      const cooldownMsgKey = `${groupId}:${command.name ?? command}`;
+      const lastCooldownMsg = this.cooldownMessages[cooldownMsgKey] ?? 0;
       const now = Date.now();
       
       // Envia mensagem apenas se não enviamos uma recentemente (nos últimos 30 segundos)
       if (now - lastCooldownMsg > 30000) {
         const returnMessage = new ReturnMessage({
           chatId: groupId,
-          content: `O comando '${command.name || command}' está em cooldown, aguarde ${cooldownInfo.formattedTime} para usar novamente.`
+          content: `O comando '${command.name ?? command}' está em cooldown, aguarde ${cooldownInfo.formattedTime} para usar novamente.`
         });
         
         await bot.sendReturnMessages(returnMessage);
@@ -364,7 +364,7 @@ class CommandHandler {
       };
       
       // Formata lista de dias
-      const daysText = allowedTimes.daysOfWeek.map(day => dayMap[day.toLowerCase()] || day).join(', ');
+      const daysText = allowedTimes.daysOfWeek.map(day => dayMap[day.toLowerCase()] ?? day).join(', ');
       
       if (result) {
         result += ` nos dias: ${daysText}`;
@@ -373,7 +373,7 @@ class CommandHandler {
       }
     }
     
-    return result || "qualquer horário e dia";
+    return result ?? "qualquer horário e dia";
   }
 
 
@@ -422,7 +422,7 @@ class CommandHandler {
                       await bot.sendReturnMessages(result);
                   }
               } else {
-                  const chatId = message.group || message.author;
+                  const chatId = message.group ?? message.author;
                   const returnMessage = new ReturnMessage({
                       chatId: chatId,
                       content: `Comando de super admin desconhecido: ${saCommand}`
@@ -432,7 +432,7 @@ class CommandHandler {
               return;
           } else {
               // Usuário não é super admin
-              const chatId = message.group || message.author;
+              const chatId = message.group ?? message.author;
               const returnMessage = new ReturnMessage({
                   chatId: chatId,
                   content: '⛔ Apenas super administradores podem usar estes comandos.'
@@ -466,7 +466,7 @@ class CommandHandler {
     //this.logger.debug(`Processando comando: ${command}, determinação de tipo`);
     
     // Definir o chatId de resposta - por padrão é o chatId original
-    let replyToChat = message.group || message.author;
+    let replyToChat = message.group ?? message.author;
     let isManagingFromPrivate = false;
     const gidDebug = group?.name ?? 'pv';
 
@@ -493,9 +493,7 @@ class CommandHandler {
                 const returnMessage = new ReturnMessage({
                   chatId: message.author,
                   content: `Você agora está gerenciando o grupo: ${targetGroup.name}`,
-                  reactions: {
-                    after: this.defaultReactions.after
-                  }
+                  reaction: this.defaultReactions.after
                 });
                 await bot.sendReturnMessages(returnMessage);
                 
@@ -504,9 +502,7 @@ class CommandHandler {
                 const returnMessage = new ReturnMessage({
                   chatId: message.author,
                   content: `Você *NÃO É* administrador do grupo '${targetGroup.name}'.`,
-                  reactions: {
-                    after: "🙅‍♂️"
-                  }
+                  reaction: "🙅‍♂️"
                 });
                 await bot.sendReturnMessages(returnMessage);
               }
@@ -516,9 +512,7 @@ class CommandHandler {
               const returnMessage = new ReturnMessage({
                 chatId: message.author,
                 content: `Grupo não encontrado: ${groupName}`,
-                reactions: {
-                  after: this.defaultReactions.after
-                }
+                reaction: this.defaultReactions.after
               });
               await bot.sendReturnMessages(returnMessage);
               
@@ -530,9 +524,7 @@ class CommandHandler {
             const returnMessage = new ReturnMessage({
               chatId: message.author,
               content: `Você agora não está mais gerenciando o grupo pelo pv.`,
-              reactions: {
-                after: this.defaultReactions.after
-              }
+              reaction: this.defaultReactions.after
             });
             await bot.sendReturnMessages(returnMessage);
             return;
@@ -645,7 +637,7 @@ class CommandHandler {
      
       // Determina o chatId correto para a resposta
       // Se estamos gerenciando via PV, a resposta deve ir para o PV
-      const responseChatId = message.managementResponseChatId || message.group || message.author;
+      const responseChatId = message.managementResponseChatId ?? message.group ?? message.author;
       
       // Reage com o emoji "antes"
       try {
@@ -678,9 +670,7 @@ class CommandHandler {
         const returnMessage = new ReturnMessage({
           chatId: responseChatId,
           content: '⛔ Apenas administradores podem usar comandos de gerenciamento.',
-          reactions: {
-            after: this.defaultReactions.error
-          }
+          reaction: this.defaultReactions.error
         });
         await bot.sendReturnMessages(returnMessage);
         
@@ -729,9 +719,7 @@ class CommandHandler {
         const returnMessage = new ReturnMessage({
           chatId: responseChatId,
           content: `Comando de gerenciamento desconhecido: ${managementCommand}`,
-          reactions: {
-            after: this.defaultReactions.after
-          }
+          reaction: this.defaultReactions.after
         });
         await bot.sendReturnMessages(returnMessage);
       }
@@ -746,13 +734,11 @@ class CommandHandler {
     } catch (error) {
       this.logger.error('Erro ao processar comando de gerenciamento:', error.message ?? "xxx");
       
-      const responseChatId = message.managementResponseChatId || message.group || message.author;
+      const responseChatId = message.managementResponseChatId ?? message.group ?? message.author;
       const returnMessage = new ReturnMessage({
         chatId: responseChatId,
         content: 'Erro ao processar comando de gerenciamento',
-        reactions: {
-          after: this.defaultReactions.after
-        }
+        reaction: this.defaultReactions.after
       });
       await bot.sendReturnMessages(returnMessage);
     }
@@ -769,7 +755,7 @@ class CommandHandler {
    */
   async executeFixedCommand(bot, message, command, args, group) {
     try {
-      this.logger.info(`Executando comando fixo: ${command.name}@${command.category}, args: ${args.join(', ')}`);
+      this.logger.info(`[${bot.id}][${message.author ?? message.authorAlt}@${group.name}] Executando comando fixo`, { command, args });
 
       // Verifica se a categoria de comando não está mutada
       if (group && group.mutedCategories && Array.isArray(group.mutedCategories)) {  
@@ -835,7 +821,7 @@ class CommandHandler {
           this.logger.error('Erro ao aplicar reação "indisponível":', reactError.message ?? "xxx");;
         }
         
-        const chatId = message.group || message.author;
+        const chatId = message.group ?? message.author;
         const returnMessage = new ReturnMessage({
           chatId: chatId,
           content: `O comando ${command.name} só está disponível ${this.formatAllowedTimes(command)}.`
@@ -846,7 +832,7 @@ class CommandHandler {
       }
 
       // Verifica cooldown
-      const groupId = message.group || message.author;
+      const groupId = message.group ?? message.author;
       const cooldownInfo = this.checkCooldown(command, groupId, bot.id);
 
       if (cooldownInfo.inCooldown) {
@@ -876,13 +862,11 @@ class CommandHandler {
           if (result instanceof ReturnMessage || 
               (Array.isArray(result) && result.length > 0 && result[0] instanceof ReturnMessage)) {
             // Adiciona reação "depois" nas mensagens se não estiver definida
-            const afterEmoji = command.reactions?.after || this.defaultReactions.after;
-            const errorEmoji = command.reactions?.error || this.defaultReactions.error;
-            
+           
             const messages = Array.isArray(result) ? result : [result];
             messages.forEach(msg => {
-              if (!msg.reactions) {
-                msg.reactions = { after: afterEmoji, error: errorEmoji };
+              if (!msg.reactions && command.reactions?.after) {
+                msg.reaction = command.reactions?.after;
               }
             });
             
@@ -901,7 +885,7 @@ class CommandHandler {
         this.logger.error(`Método de comando inválido para ${command.name}`);
         
         // Reage com emoji "depois" mesmo para erro
-        const afterEmoji = command.reactions?.after || this.defaultReactions.after;
+        const afterEmoji = command.reactions?.after ?? this.defaultReactions.after;
         try {
           message.origin.react(afterEmoji);
         } catch (reactError) {
@@ -911,15 +895,13 @@ class CommandHandler {
     } catch (error) {
       this.logger.error(`Erro ao executar comando fixo ${command.name}:`, error.message ?? "xxx");
       
-      const chatId = message.group || message.author;
-      const errorEmoji = command.reactions?.error || this.defaultReactions.error;
+      const chatId = message.group ?? message.author;
+      const errorEmoji = command.reactions?.error ?? this.defaultReactions.error;
       
       const returnMessage = new ReturnMessage({
         chatId: chatId,
         content: `Erro ao executar comando: ${command.name}`,
-        reactions: {
-          before: errorEmoji
-        }
+        reaction: errorEmoji
       });
       bot.sendReturnMessages(returnMessage);
     }
@@ -933,10 +915,12 @@ class CommandHandler {
    */
   findCustomCommand(commandName, commands) {
     // Primeiro, procura uma correspondência exata
-    const exactMatch = commands.find(cmd => 
-      cmd.startsWith && cmd.startsWith.toLowerCase() === commandName.toLowerCase()
-    );
-    
+    const exactMatch = commands.find(cmd => cmd.startsWith && (
+      cmd.caseSensitive 
+      ? cmd.startsWith === commandName 
+      : cmd.startsWith.toLowerCase() === commandName.toLowerCase()
+    ));
+
     if (exactMatch) {
       this.logger.debug(`Encontrada correspondência exata para comando '${commandName}'`);
       return exactMatch;
@@ -951,7 +935,7 @@ class CommandHandler {
     });
     
     //this.logger.debug(`Buscando comando personalizado '${commandName}': ${partialMatch ? 'encontrado' : 'não encontrado'}`);
-    return partialMatch || null;
+    return partialMatch ?? null;
   }
 
   /**
@@ -967,7 +951,7 @@ class CommandHandler {
       //this.logger.info(`Executando comando personalizado: ${command.startsWith}`);
           
       // Obtém as respostas
-      const responses = command.responses || [];
+      const responses = command.responses ?? [];
       if (responses.length === 0) {
         this.logger.warn(`Comando ${command.startsWith} não tem respostas`);
         return;
@@ -1033,7 +1017,7 @@ class CommandHandler {
       }
       
       // Atualiza estatísticas de uso do comando
-      command.count = (command.count || 0) + 1;
+      command.count = (command.count ?? 0) + 1;
       command.lastUsed = Date.now();
       await this.database.updateCustomCommand(group.id, command);
       this.logger.debug(`Atualizadas estatísticas de uso para o comando *${command.startsWith}*, contagem: ${command.count}`);
@@ -1085,7 +1069,7 @@ class CommandHandler {
 
       
       // Reage com emoji depois (do comando ou padrão)
-      const afterEmoji = command.reactions?.after || null;
+      const afterEmoji = command.reactions?.after ?? null;
       try {
         if (afterEmoji && command.react !== false) {
           message.origin.react(afterEmoji);
@@ -1097,13 +1081,11 @@ class CommandHandler {
     } catch (error) {
       this.logger.error(`Erro ao executar comando personalizado ${command.startsWith}:`, error.message ?? "xxx");
       
-      const errorEmoji = command.reactions?.error || "❌";
+      const errorEmoji = command.reactions?.error ?? "❌";
       const returnMessage = new ReturnMessage({
         chatId: message.group,
         content: `Erro ao executar comando personalizado: ${command.startsWith}`,
-        reactions: {
-          before: command.react !== false ? errorEmoji : null
-        }
+        reaction: command.react !== false ? errorEmoji : null
       });
       bot.sendReturnMessages(returnMessage);
     }
@@ -1153,7 +1135,7 @@ class CommandHandler {
         try {
           // Extrai o comando (pode incluir prefixo ou não)
           let cmdText = processedResponse.command;
-          let prefix = group.prefix || '!';
+          let prefix = group.prefix ?? '!';
           
           // Se o comando já tem um prefixo, usamos ele; senão, usamos o prefixo do grupo
           if (cmdText.startsWith(prefix)) {
@@ -1263,7 +1245,7 @@ class CommandHandler {
               chatId: message.group,
               content: media,
               options: {
-                caption: caption || undefined,
+                caption: caption ?? undefined,
                 sendMediaAsSticker: mediaType === 'sticker',
                 quotedMessageId: command.reply ? message.origin.id._serialized : undefined,
                 evoReply: message.origin,
@@ -1323,8 +1305,8 @@ class CommandHandler {
       if (group.interact && group.interact.enabled) {
         // Verifica o último tempo de interação para cooldown
         const now = Date.now();
-        const lastInteraction = group.interact.lastInteraction || 0;
-        let cdMinutos = (group.interact.cooldown || 60);
+        const lastInteraction = group.interact.lastInteraction ?? 0;
+        let cdMinutos = (group.interact.cooldown ?? 60);
         if(cdMinutos < 30){
           cdMinutos = 30; // Limite 30
         }
@@ -1334,7 +1316,7 @@ class CommandHandler {
 
           // Gera número aleatório entre 1 e 10000
           const randomValue = Math.floor(Math.random() * 10000) + 1;
-          let interactionChance = group.interact.chance || 100; // Padrão 1% de chance (100/10000)
+          let interactionChance = group.interact.chance ?? 100; // Padrão 1% de chance (100/10000)
           if(interactionChance > 500){
             interactionChance = 500; // Limite 5%
           }

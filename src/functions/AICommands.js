@@ -14,7 +14,7 @@ const llmService = new LLMService({});
 const database = Database.getInstance();
 
 async function aiCommand(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
 
   // Contexto e descrição do bot
   const ctxPath = path.join(database.databasePath, 'textos', 'llm_context.txt');
@@ -119,7 +119,7 @@ async function aiCommand(bot, message, args, group) {
       
       // Quando interpretar imagens, usar um contexto diferente
       const ctxPath = path.join(database.databasePath, 'textos', 'llm_context_images.txt');
-      completionOptions.systemContext = await fs.readFile(ctxPath, 'utf8') || "Você se chama ravenabot e deve inter esta imagem enviada no WhatsApp";
+      completionOptions.systemContext = await fs.readFile(ctxPath, 'utf8') ?? "Você se chama ravenabot e deve inter esta imagem enviada no WhatsApp";
       completionOptions.systemContext += customPersonalidade;
     } else {
       return new ReturnMessage({

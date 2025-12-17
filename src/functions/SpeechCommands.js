@@ -142,7 +142,7 @@ function removeWhatsAppMarkup(text) {
  */
 async function textToSpeech(bot, message, args, group, char = "ravena") {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
       
     const quotedMsg = await message.origin.getQuotedMessage().catch(() => null);
     let text = args.join(' ');
@@ -256,7 +256,7 @@ async function textToSpeech(bot, message, args, group, char = "ravena") {
   } catch (error) {
     logger.error('Erro na conversão de texto para voz:');
     console.log(error);
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     return new ReturnMessage({
       chatId: chatId,
@@ -300,7 +300,7 @@ function cleanupString(text) {
  * @returns {Promise<ReturnMessage|Array<ReturnMessage>>} - ReturnMessage ou array de ReturnMessages
  */
 async function speechToText(bot, message, args, group, optimizeWithLLM = true) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
   let audioPath = null;
   let wavPath = null;
   let whisperOutputPath = null;
@@ -466,7 +466,7 @@ async function speechToText(bot, message, args, group, optimizeWithLLM = true) {
     return returnMessage;
   } catch (error) {
     logger.error('Erro na conversão de voz para texto:', error);
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
 
     return new ReturnMessage({
       chatId: chatId,
@@ -494,7 +494,7 @@ async function speechToText(bot, message, args, group, optimizeWithLLM = true) {
  * @returns {Promise<boolean>} - Se a mensagem foi processada
  */
 async function processAutoSTT(bot, message, group, opts) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
   let audioPath = null;
   let wavPath = null;
   let whisperOutputPath = null;

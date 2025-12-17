@@ -75,7 +75,7 @@ function validarPlaca(placa) {
  */
 async function buscarPlaca(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     if (args.length === 0) {
       return new ReturnMessage({
@@ -143,9 +143,7 @@ async function buscarPlaca(bot, message, args, group) {
           quotedMessageId: message.origin.id._serialized,
           evoReply: message.origin
         },
-        reactions: {
-          after: resultado.react || "🚘"
-        }
+        reaction: resultado.react || "🚘"
       })];
     }
     
@@ -168,7 +166,7 @@ async function buscarPlaca(bot, message, args, group) {
   } catch (error) {
     logger.error('Erro ao consultar placa:', error);
     
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     return new ReturnMessage({
       chatId: chatId,
       content: '❌ Erro ao consultar placa. Tente novamente mais tarde.',
@@ -380,7 +378,7 @@ async function getSiPtPlaca(placa, usuario) {
  */
 async function consultarSiPt(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     if (args.length === 0) {
       return new ReturnMessage({
@@ -426,15 +424,13 @@ async function consultarSiPt(bot, message, args, group) {
         quotedMessageId: resultados[0].reply ? message.origin.id._serialized : undefined,
         evoReply: message.origin
       },
-      reactions: {
-        after: resultados[0].react || "🚘"
-      }
+      reaction:resultados[0].react || "🚘"
     });
     
   } catch (error) {
     logger.error('Erro ao consultar placa no SiPt:', error);
     
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     return new ReturnMessage({
       chatId: chatId,
       content: '❌ Erro ao consultar placa no SiPt. Tente novamente mais tarde.',

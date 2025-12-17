@@ -12,7 +12,7 @@ const database = Database.getInstance();
 const cacheManager = new SoundCacheManager(soundcloud, database.databasePath);
 
 async function soundCloudSearchAndDownload(bot, message, args, group) {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     const query = args.join(' ');
     if (!query) {
         return new ReturnMessage({

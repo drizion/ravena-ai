@@ -19,7 +19,7 @@ const variableProcessor = new CustomVariableProcessor();
  * @returns {Promise<ReturnMessage>}
  */
 async function biscoitoCommand(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
 
   try {
     const customVariables = await database.getCustomVariables();

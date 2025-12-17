@@ -183,7 +183,7 @@ async function getAllNewsDates() {
  * @returns {Promise<ReturnMessage>} - Mensagem de retorno
  */
 async function newsCommand(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
   
   try {
     // Define a data (padrão: hoje)
@@ -248,9 +248,7 @@ async function newsCommand(bot, message, args, group) {
       return new ReturnMessage({
         chatId: chatId,
         content: newsContent,
-        reactions: {
-          after: "📰"
-        },
+        reaction: "📰",
         options: {
           quotedMessageId: message.origin.id._serialized,
           evoReply: message.origin
@@ -264,9 +262,7 @@ async function newsCommand(bot, message, args, group) {
       return new ReturnMessage({
         chatId: chatId,
         content: `ℹ️ *MuNews não encontrada para ${formattedDate}*\n\nAs MuNews geralmente chegam entre 06:00 e 7:30 da manhã. Tente novamente mais tarde ou verifique a data informada.\n\n${stringDatasDisponiveis}`,
-        reactions: {
-          after: "😴"
-        },
+        reaction: "😴",
         options: {
           quotedMessageId: message.origin.id._serialized,
           evoReply: message.origin
@@ -279,9 +275,7 @@ async function newsCommand(bot, message, args, group) {
     return new ReturnMessage({
       chatId: chatId,
       content: '❌ Ocorreu um erro ao buscar as MuNews. Por favor, tente novamente mais tarde.',
-      reactions: {
-        after: "❌"
-      }
+      reaction: "❌"
     });
   }
 }

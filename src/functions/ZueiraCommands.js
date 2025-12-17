@@ -160,7 +160,7 @@ function encontrarPrimeiroNumero(args){
 
 
 async function pix(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
 
   const options = {};
   const res = encontrarPrimeiroNumero(args);
@@ -220,7 +220,7 @@ async function pix(bot, message, args, group) {
 }
 
 async function handleComandoVariavelSimples(bot, message, args, group, variavel) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
 
   const customVariables = await database.getCustomVariables();
   const frases = customVariables[variavel];
@@ -243,7 +243,7 @@ async function handleComandoVariavelSimples(bot, message, args, group, variavel)
 }
 
 async function presente(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
 
   const options = {};
   const fraseFinal = await variableProcessor.process("*{nomeAutor}* deu _{presente}_ para *{mention}*! 🎁", {message, group, options, bot});

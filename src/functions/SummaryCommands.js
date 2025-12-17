@@ -95,7 +95,7 @@ Resumo:`;
   } catch (error) {
     logger.error('Erro ao resumir conversa:', error);
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao gerar resumo. Por favor, tente novamente.'
     });
   }
@@ -198,7 +198,7 @@ ${formattedMessages}`;
     logger.error(`[${group.id}] Erro ao gerar interação:`, error);
     if(retornarErro){
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: 'Erro ao gerar mensagem. Por favor, tente novamente.'
       });
     } else {

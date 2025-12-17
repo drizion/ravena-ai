@@ -292,7 +292,7 @@ async function jogarRoletaRussa(bot, message, args, group) {
     logger.error('Erro ao jogar roleta russa:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao jogar roleta russa. Por favor, tente novamente.'
     });
   }
@@ -409,7 +409,7 @@ async function mostrarRanking(bot, message, args, group) {
     logger.error('Erro ao mostrar ranking:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao mostrar ranking da roleta russa. Por favor, tente novamente.'
     });
   }
@@ -497,7 +497,7 @@ async function resetarRoletaRussa(bot, message, args, group) {
     logger.error('Erro ao resetar dados da roleta russa:', error);  
       
     return [new ReturnMessage({  
-      chatId: message.group || message.author,  
+      chatId: message.group ?? message.author,  
       content: 'Erro ao resetar dados da roleta russa. Por favor, tente novamente.'  
     })];  
   }  
@@ -588,7 +588,7 @@ async function definirTempoRoleta(bot, message, args, group) {
     logger.error('Erro ao definir tempo de roleta:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao definir tempo da roleta russa. Por favor, tente novamente.'
     });
   }

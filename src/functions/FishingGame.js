@@ -383,7 +383,7 @@ function regenerateBaits(userData) {
   }
   
   const now = Date.now();
-  const lastRegen = userData.lastBaitRegen || now;
+  const lastRegen = userData.lastBaitRegen ?? now;
   const elapsedSeconds = Math.floor((now - lastRegen) / 1000);
   const regensCount = Math.floor(elapsedSeconds / BAIT_REGEN_TIME);
   
@@ -421,7 +421,7 @@ async function addBaits(userId, baitsNum) {
 
 async function addBaitsCmd(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     if(!adminUtils.isSuperAdmin(message.author)){
       return;
     }
@@ -434,13 +434,13 @@ async function addBaitsCmd(bot, message, args, group) {
       return new ReturnMessage({
         chatId,
         content: `🐡 Erro: usuário não encontrado.`,
-        reactions: { after: "🐡" }
+        reaction: "🐡"
       });
     } else {
       return new ReturnMessage({
         chatId,
         content: `🎣 Iscas de '${destUser}' ajustadas para ${dados.userData.baits}`,
-        reactions: { after: "🎣" }
+        reaction: "🎣" 
       });
     }
   } catch (e){
@@ -451,7 +451,7 @@ async function addBaitsCmd(bot, message, args, group) {
 
 function getNextBaitRegenTime(userData) {
   const now = Date.now();
-  const lastRegen = userData.lastBaitRegen || now;
+  const lastRegen = userData.lastBaitRegen ?? now;
   const elapsedSeconds = Math.floor((now - lastRegen) / 1000);
   const secondsUntilNextBait = BAIT_REGEN_TIME - (elapsedSeconds % BAIT_REGEN_TIME);
   const missingBaits = MAX_BAITS - userData.baits;
@@ -513,11 +513,11 @@ function applyItemEffect(userData, item) {
     case 'trash':
       const baitOnTrashDebuff = userData.debuffs.find(d => d.type === 'bait_on_trash' && d.remainingUses > 0);
       const baitOnTrashBuff = userData.buffs.find(b => b.type === 'bait_on_trash' && b.remainingUses > 0); 
-      const trashProtector = baitOnTrashDebuff || baitOnTrashBuff;
+      const trashProtector = baitOnTrashDebuff ?? baitOnTrashBuff;
 
       if (trashProtector) {
         trashProtector.remainingUses--;
-        effectMessage = `\n\n${item.emoji} Você pescou um(a) ${item.name}, mas seu ${trashProtector.originalName || 'Anzol'} te salvou de perder a isca!`;
+        effectMessage = `\n\n${item.emoji} Você pescou um(a) ${item.name}, mas seu ${trashProtector.originalName ?? 'Anzol'} te salvou de perder a isca!`;
       } else {
         effectMessage = `\n\n${item.emoji} Você pescou um(a) ${item.name}. Que pena!`;
       }
@@ -568,7 +568,7 @@ function applyItemEffect(userData, item) {
           break;
         case 'clear_inventory':
           userData.fishes = [];
-          userData.totalWeight -= userData.inventoryWeight || 0;
+          userData.totalWeight -= userData.inventoryWeight ?? 0;
           userData.inventoryWeight = 0;
           effectMessage = `\n\n${item.emoji} OH NÃO! Você encontrou uma ${item.name}! Seu inventário de peixes foi destruído!`;
           break;
@@ -706,7 +706,7 @@ function consumeDoubleCatchBuff(userData) {
  */
 async function fishCommand(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     const userId = message.author;
     const userName = message.name ?? message.pushName ?? message.pushname ?? message.authorName ?? "Pescador";
     const groupId = message.group; 
@@ -786,7 +786,7 @@ async function fishCommand(bot, message, args, group) {
       userData.fishes.push(modifiedFish);
       userData.totalWeight = (userData.totalWeight || 0) + modifiedFish.weight;
       userData.inventoryWeight = (userData.inventoryWeight || 0) + modifiedFish.weight;
-      userData.totalCatches = (userData.totalCatches || 0) + 1;
+      userData.totalCatches = (userData.totalCatches ?? 0) + 1;
       caughtFishes.push(modifiedFish);
       
       if (!userData.biggestFish || modifiedFish.weight > userData.biggestFish.weight) userData.biggestFish = modifiedFish;
@@ -794,7 +794,7 @@ async function fishCommand(bot, message, args, group) {
       if (groupId) {
         const gUser = fishingData.groupData[groupId][userId];
         gUser.totalWeight = (gUser.totalWeight || 0) + modifiedFish.weight;
-        gUser.totalCatches = (gUser.totalCatches || 0) + 1;
+        gUser.totalCatches = (gUser.totalCatches ?? 0) + 1;
         if (!gUser.biggestFish || modifiedFish.weight > gUser.biggestFish.weight) gUser.biggestFish = modifiedFish;
       }
       
@@ -806,7 +806,7 @@ async function fishCommand(bot, message, args, group) {
           effectMessage += itemResult.effectMessage;
           
           if (randomItem.type === 'trash') {
-            userData.totalTrashCaught = (userData.totalTrashCaught || 0) + 1;
+            userData.totalTrashCaught = (userData.totalTrashCaught ?? 0) + 1;
             caughtFishes.pop();
             userData.fishes.pop();
             userData.totalCatches--;
@@ -828,7 +828,7 @@ async function fishCommand(bot, message, args, group) {
     if (randomItem?.type !== 'trash' || !hasTrashProtection) {
         userData.baits--;
     }
-    userData.totalBaitsUsed = (userData.totalBaitsUsed || 0) + 1;
+    userData.totalBaitsUsed = (userData.totalBaitsUsed ?? 0) + 1;
     
     await saveFishingData(fishingData);
     fishingCooldowns[userId] = now + currentCooldown;
@@ -844,7 +844,7 @@ async function fishCommand(bot, message, args, group) {
       return new ReturnMessage({
         chatId,
         content: `🎣 ${userName} jogou a linha ${extraMsg}e... ${effectMessage}\n\n> 🐛 Iscas restantes: ${userData.baits}/${MAX_BAITS}`,
-        reactions: { after: "🎣" },
+        reaction: "🎣" ,
         options: { quotedMessageId: message.origin.id._serialized, mentions: mentionPessoa, evoReply: message.origin }
       });
     }
@@ -915,24 +915,24 @@ async function fishCommand(bot, message, args, group) {
       return new ReturnMessage({
         chatId, content: rareFishImage,
         options: { caption: fishMessage, quotedMessageId: message.origin.id._serialized, mentions: mentionPessoa, evoReply: message.origin },
-        reactions: { after: "🎣" }
+        reaction: "🎣"
       });
 
     }
     
     return new ReturnMessage({
-      chatId, content: fishMessage, reactions: { after: "🎣" },
+      chatId, content: fishMessage, reaction: "🎣" ,
       options: { quotedMessageId: message.origin.id._serialized, mentions: mentionPessoa, evoReply: message.origin }
     });
   } catch (error) {
     logger.error('Erro no comando de pesca:', error);
-    return new ReturnMessage({ chatId: message.group || message.author, content: '❌ Erro ao pescar.' });
+    return new ReturnMessage({ chatId: message.group ?? message.author, content: '❌ Erro ao pescar.' });
   }
 }
 
 async function myFishCommand(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     const userId = message.author;
     const userName = message.name ?? message.pushName ?? message.pushname ?? message.authorName ?? "Pescador";
     
@@ -958,7 +958,7 @@ async function myFishCommand(bot, message, args, group) {
         fishMessage += `${index + 1}. ${fish.name}: ${fish.weight.toFixed(2)} kg${rareMark}\n`;
       });
       
-      fishMessage += `\n*Stats*:\nTotal: ${userData.totalCatches}\nPeso Inv: ${userData.inventoryWeight?.toFixed(2) || 0} kg\nIscas: ${userData.baits}/${MAX_BAITS}\n`;
+      fishMessage += `\n*Stats*:\nTotal: ${userData.totalCatches}\nPeso Inv: ${userData.inventoryWeight?.toFixed(2) ?? 0} kg\nIscas: ${userData.baits}/${MAX_BAITS}\n`;
       
       if (userData.baits < MAX_BAITS) {
         const regenInfo = getNextBaitRegenTime(userData);
@@ -980,7 +980,7 @@ async function myFishCommand(bot, message, args, group) {
     return new ReturnMessage({ chatId, content: fishMessage, options: { quotedMessageId: message.origin.id._serialized, evoReply: message.origin } });
   } catch (error) {
     logger.error('Erro myFish:', error);
-    return new ReturnMessage({ chatId: message.group || message.author, content: '❌ Erro ao ver peixes.' });
+    return new ReturnMessage({ chatId: message.group ?? message.author, content: '❌ Erro ao ver peixes.' });
   }
 }
 
@@ -995,7 +995,7 @@ async function myFishCommand(bot, message, args, group) {
 async function legendaryFishCommand(bot, message, args, group) {
   try {
     // Obtém ID do chat
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     // Obtém dados de pesca
     const fishingData = await getFishingData();
@@ -1032,7 +1032,7 @@ async function legendaryFishCommand(bot, message, args, group) {
       
       textMessage += `${medal}*${legendary.fishName}* (${legendary.weight.toFixed(2)} kg)\n`;
       textMessage += `   Pescador: ${legendary.userName}\n`;
-      textMessage += `   Local: ${legendary.groupName || 'desconhecido'}\n`;
+      textMessage += `   Local: ${legendary.groupName ?? 'misterioso'}\n`;
       textMessage += `   Data: ${date}\n\n`;
     }
     
@@ -1070,7 +1070,7 @@ async function legendaryFishCommand(bot, message, args, group) {
             
             // Prepara a legenda
             const date = new Date(legendary.timestamp).toLocaleDateString('pt-BR');
-            options.caption = `🏆 *Peixe Lendário*\n\n*${legendary.fishName}* de ${legendary.weight.toFixed(2)} kg\nPescado por: ${legendary.userName}\nLocal: ${legendary.groupName || 'desconhecido'}\nData: ${date}`;
+            options.caption = `🏆 *Peixe Lendário*\n\n*${legendary.fishName}* de ${legendary.weight.toFixed(2)} kg\nPescado por: ${legendary.userName}\nLocal: ${legendary.groupName ?? 'misterioso'}\nData: ${date}`;
           } catch (imageError) {
             // Imagem não existe, pula para o próximo
             logger.error(`Imagem do peixe lendário não encontrada: ${imagePath}`, imageError);
@@ -1104,7 +1104,7 @@ async function legendaryFishCommand(bot, message, args, group) {
     logger.error('Erro no comando de peixes lendários:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: '❌ Ocorreu um erro ao mostrar os peixes lendários. Por favor, tente novamente.'
     });
   }
@@ -1121,7 +1121,7 @@ async function legendaryFishCommand(bot, message, args, group) {
 async function fishingRankingCommand(bot, message, args, group) {
   try {
     // Obtém ID do chat
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     const groupId = message.group;
     
     // Verifica se o comando foi executado em um grupo
@@ -1233,7 +1233,7 @@ async function fishingRankingCommand(bot, message, args, group) {
     logger.error('Erro ao mostrar ranking de pescaria:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: '❌ Ocorreu um erro ao mostrar o ranking. Por favor, tente novamente.'
     });
   }
@@ -1257,7 +1257,7 @@ async function saveRareFishImage(mediaContent, userId, fishName) {
  * @returns {Promise<ReturnMessage>} Mensagem de retorno
  */
 async function fishingInfoCommand(bot, message) {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     try {
         const stats = await getFishingStats();
         const customVariables = await database.getCustomVariables();
@@ -1404,7 +1404,7 @@ async function getFishingStats() {
 async function listFishTypesCommand(bot, message, args, group) {
   try {
     // Obtém ID do chat
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     // Obtém peixes das custom-variables
     let fishArray = [];
@@ -1472,7 +1472,7 @@ async function listFishTypesCommand(bot, message, args, group) {
     logger.error('Erro ao listar tipos de peixes:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: '❌ Ocorreu um erro ao listar os tipos de peixes. Por favor, tente novamente.'
     });
   }
@@ -1489,9 +1489,9 @@ async function listFishTypesCommand(bot, message, args, group) {
 async function showBaitsCommand(bot, message, args, group) {
   try {
     // Obtém IDs do chat e do usuário
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     const userId = message.author;
-    const userName = message.authorName || "Pescador";
+    const userName = message.name ?? message.pushName ?? message.pushname ?? message.authorName ?? "Pescador";
     
     // Obtém dados de pesca
     const fishingData = await getFishingData();
@@ -1562,7 +1562,7 @@ async function showBaitsCommand(bot, message, args, group) {
     logger.error('Erro ao mostrar iscas do jogador:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: '❌ Ocorreu um erro ao mostrar suas iscas. Por favor, tente novamente.'
     });
   }
@@ -1593,7 +1593,7 @@ async function resetFishingDataCommand(bot, message, args, group) {
     const isAdmin = await bot.adminUtils.isAdmin(message.author, group, null, bot.client);  
     if (!isAdmin) {  
       return new ReturnMessage({  
-        chatId: message.group || message.author,  
+        chatId: message.group ?? message.author,  
         content: "❌ Este comando só pode ser usado por administradores do grupo.",  
         options: {  
           quotedMessageId: message.origin.id._serialized,
@@ -1639,7 +1639,7 @@ async function resetFishingDataCommand(bot, message, args, group) {
     logger.error('Erro ao resetar dados de pesca:', error);  
       
     return new ReturnMessage({  
-      chatId: message.group || message.author,  
+      chatId: message.group ?? message.author,  
       content: '❌ Ocorreu um erro ao resetar os dados de pesca. Por favor, tente novamente.',  
       options: {  
         quotedMessageId: message.origin.id._serialized,

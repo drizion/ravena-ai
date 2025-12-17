@@ -44,7 +44,7 @@ class WhatsAppBotEvoGo {
     this.supportMsg = options.supportMsg;
     this.phoneNumber = options.phoneNumber;
     this.eventHandler = options.eventHandler;
-    this.prefix = options.prefix || process.env.DEFAULT_PREFIX || '!';
+    this.prefix = options.prefix ?? process.env.DEFAULT_PREFIX ?? '!';
     this.logger = new Logger(`bot-evo-go-${this.id}`);
     this.websocket = options.useWebsocket ?? false;
     this.evolutionWS = options.evolutionWS;
@@ -53,7 +53,7 @@ class WhatsAppBotEvoGo {
     this.evolutionInstanceApiKey = options.evolutionInstanceApiKey; // Instance Token
     this.instanceName = options.evoInstanceName ?? options.id;
     this.webhookHost = options.webhookHost;
-    this.webhookPort = options.webhookPort || process.env.WEBHOOK_PORT_EVO || 3000;
+    this.webhookPort = options.webhookPort ?? process.env.WEBHOOK_PORT_EVO ?? 3000;
     this.notificarDonate = options.notificarDonate;
     this.pvAI = options.pvAI;
     this.version = "EvolutionGO";
@@ -67,8 +67,8 @@ class WhatsAppBotEvoGo {
 
 
     this.redisURL = options.redisURL;
-    this.redisDB = options.redisDB || 0;
-    this.redisTTL = options.redisTTL || 604800;
+    this.redisDB = options.redisDB ?? 0;
+    this.redisTTL = options.redisTTL ?? 604800;
     this.maxCacheSize = 3000;
 
     this.skipGroupsPath = path.join(__dirname, '..', 'data', `skip-groups-${this.id}.json`);
@@ -107,17 +107,17 @@ class WhatsAppBotEvoGo {
     this.database = Database.getInstance();
     this.isConnected = false;
     this.safeMode = options.safeMode !== undefined ? options.safeMode : (process.env.SAFE_MODE === 'true');
-    this.otherBots = options.otherBots || [];
+    this.otherBots = options.otherBots ?? [];
 
-    this.ignorePV = options.ignorePV || false;
-    this.whitelist = options.whitelistPV || [];
-    this.ignoreInvites = options.ignoreInvites || false;
-    this.grupoLogs = options.grupoLogs || process.env.GRUPO_LOGS;
-    this.grupoInvites = options.grupoInvites || process.env.GRUPO_INVITES;
-    this.grupoAvisos = options.grupoAvisos || process.env.GRUPO_AVISOS;
+    this.ignorePV = options.ignorePV ?? false;
+    this.whitelist = options.whitelistPV ?? [];
+    this.ignoreInvites = options.ignoreInvites ?? false;
+    this.grupoLogs = options.grupoLogs ?? process.env.GRUPO_LOGS;
+    this.grupoInvites = options.grupoInvites ?? process.env.GRUPO_INVITES;
+    this.grupoAvisos = options.grupoAvisos ?? process.env.GRUPO_AVISOS;
     this.joinSilencioso = false;
 
-    this.userAgent = options.userAgent || process.env.USER_AGENT;
+    this.userAgent = options.userAgent ?? process.env.USER_AGENT;
 
     this.mentionHandler = new MentionHandler();
 
@@ -768,7 +768,7 @@ class WhatsAppBotEvoGo {
           messageContent.stickerMessage
         ].find(msg => msg?.mimetype)?.mimetype?.split(";")[0];
 
-        const extension = mime.extension(mimetype) || 'bin';
+        const extension = mime.extension(mimetype) ?? 'bin';
         const tempId = randomBytes(8).toString('hex');
         const fileName = `${tempId}.${extension}`;
         const outputDir = path.join(__dirname, '..', 'public', 'attachments');
@@ -819,7 +819,7 @@ class WhatsAppBotEvoGo {
 
   async createMediaFromBase64(base64Data, mimetype, filename) {
     try {
-      const extension = mime.extension(mimetype) || 'bin';
+      const extension = mime.extension(mimetype) ?? 'bin';
       const buffer = Buffer.from(base64Data, 'base64');
       const size = buffer.length;
       const url = this._storeMediaFile(buffer, `.${extension}`);
@@ -829,7 +829,7 @@ class WhatsAppBotEvoGo {
         mimetype = "video/mp4";
       }
 
-      const media = { mimetype, data: base64Data, filename: filename || `file.${extension}`, source: 'base64', url, isMessageMedia: true, size };
+      const media = { mimetype, data: base64Data, filename: filename ?? `file.${extension}`, source: 'base64', url, isMessageMedia: true, size };
       //this.logger.info(`[createMediaFromBase64] `, media );
       return media;
     } catch (error) {
@@ -862,7 +862,7 @@ class WhatsAppBotEvoGo {
       }
 
       const filename = path.basename(filePath);
-      let mimetype = customMime ? customMime : (mime.lookup(filePath) || 'application/octet-stream');
+      let mimetype = customMime ? customMime : (mime.lookup(filePath) ?? 'application/octet-stream');
 
       // Fixes
       if (mimetype === "application/mp4") {
@@ -881,15 +881,15 @@ class WhatsAppBotEvoGo {
 
   async createMediaFromURL(url, options = { unsafeMime: true, customMime: false }) {
     try {
-      const filename = path.basename(new URL(url).pathname) || 'media_from_url';
-      let mimetype = mime.lookup(url.split("?")[0]) || (options.unsafeMime ? 'application/octet-stream' : null);
+      const filename = path.basename(new URL(url).pathname) ?? 'media_from_url';
+      let mimetype = mime.lookup(url.split("?")[0]) ?? (options.unsafeMime ? 'application/octet-stream' : null);
       const size = await this.getFileSizeByURL(url);
 
       if (!mimetype && options.unsafeMime) {
         try {
           const headResponse = await axios.head(url);
           this.logger.info("mimetype do header? ", headResponse);
-          mimetype = options.customMime ? options.customMime : (headResponse.headers['content-type']?.split(';')[0] || 'application/octet-stream');
+          mimetype = options.customMime ? options.customMime : (headResponse.headers['content-type']?.split(';')[0] ?? 'application/octet-stream');
         } catch (e) { /* ignore */ }
       }
 
@@ -924,17 +924,24 @@ class WhatsAppBotEvoGo {
       }
 
       let contentToSend = message.content;
-      let options = { ...(message.options || {}) }; // Clone options
+      let options = { ...(message.options ?? {}) }; // Clone options
 
       try {
         const result = await this.sendMessage(message.chatId, contentToSend, options);
         results.push(result);
 
-        if (message.reaction && result && result.id?._serialized) {
-          try {
-            await this.sendReaction(message.chatId, result.id._serialized, message.reaction); // Assuming result.id has the ID
-          } catch (reactError) {
-            this.logger.error(`[${this.id}] Erro enviando reaction "${message.reaction}" pra ${result.id._serialized}:`, reactError);
+        if (result && result.id?._serialized) {
+          if(message.reaction){ // CORRETO: ReturnMessage só tem um reaction
+            try {
+              await this.sendReaction(message.chatId, result.id._serialized, message.reaction); // Assuming result.id has the ID
+            } catch (reactError) {
+              this.logger.error(`[${this.id}] Erro enviando reaction "${message.reaction}" pra ${result.id._serialized}:`, reactError);
+            }
+          } else
+          if(message.reactions){
+            // ERRADO: Apenas Command deveria ter mais de 1 reação, então isso deve ser arrumado
+            // Esse código precisa ser excluído depois de arrumar todas as ReturnMessage erradas
+            this.logger.debug(`[sendReturnMessages] ReturnMessage com reactions ao invés de reaction!`, { message });
           }
         }
       } catch (sendError) {
@@ -964,7 +971,7 @@ class WhatsAppBotEvoGo {
 
           //this.logger.debug(`[recoverMsgFromCache] `, { actualId, msg });
           if (!msg || !msg.evoMessageData) {
-            resolve(msg || null);
+            resolve(msg ?? null);
             return;
           }
 
@@ -1197,7 +1204,7 @@ class WhatsAppBotEvoGo {
             const pairingCodeLocation = path.join(this.database.databasePath, `pairingcode_${this.id}.txt`);
             fs.writeFileSync(pairingCodeLocation, `[${new Date().toUTCString()}] ${extra.connectData.pairingCode}`);
           } else if (extra.connectData.code || extra.connectData.qrcode) {
-            const qrBase64 = extra.connectData.code || extra.connectData.qrcode;
+            const qrBase64 = extra.connectData.code ?? extra.connectData.qrcode;
             if (qrBase64) {
               this.logger.info(`[${this.id}] QR Code received.`);
               const qrCodeLocal = path.join(this.database.databasePath, `qrcode_${this.id}.png`);
@@ -1455,7 +1462,7 @@ class WhatsAppBotEvoGo {
         else if (messageContent.stickerMessage) contextInfo = messageContent.stickerMessage.contextInfo;
 
 
-        const mentions = contextInfo?.mentionedJID || [];
+        const mentions = contextInfo?.mentionedJID ?? [];
         const quotedMessageId = contextInfo?.quotedMessage ? contextInfo.stanzaID : null;
         const quotedParticipant = contextInfo?.participant;
 
@@ -1484,7 +1491,7 @@ class WhatsAppBotEvoGo {
           const downloaded = await this._downloadMediaFromEvo(messageContent);
           mediaInfo = {
             mimetype: messageContent.imageMessage.mimetype,
-            url: downloaded?.url || messageContent.imageMessage.url,
+            url: downloaded?.url ?? messageContent.imageMessage.url,
             data: downloaded?.base64,
             _evoMediaDetails: messageContent.imageMessage
           };
@@ -1495,7 +1502,7 @@ class WhatsAppBotEvoGo {
           const downloaded = await this._downloadMediaFromEvo(messageContent);
           mediaInfo = {
             mimetype: messageContent.videoMessage.mimetype,
-            url: downloaded?.url || messageContent.videoMessage.url,
+            url: downloaded?.url ?? messageContent.videoMessage.url,
             data: downloaded?.base64,
             seconds: messageContent.videoMessage.seconds,
             _evoMediaDetails: messageContent.videoMessage
@@ -1506,7 +1513,7 @@ class WhatsAppBotEvoGo {
           const downloaded = await this._downloadMediaFromEvo(messageContent);
           mediaInfo = {
             mimetype: messageContent.audioMessage.mimetype,
-            url: downloaded?.url || messageContent.audioMessage.url,
+            url: downloaded?.url ?? messageContent.audioMessage.url,
             data: downloaded?.base64,
             seconds: messageContent.audioMessage.seconds,
             ptt: messageContent.audioMessage.ptt,
@@ -1518,7 +1525,7 @@ class WhatsAppBotEvoGo {
           const downloaded = await this._downloadMediaFromEvo(messageContent);
           mediaInfo = {
             mimetype: messageContent.stickerMessage.mimetype,
-            url: downloaded?.url || messageContent.stickerMessage.url,
+            url: downloaded?.url ?? messageContent.stickerMessage.url,
             data: downloaded?.base64,
             isAnimated: messageContent.stickerMessage.isAnimated,
             _evoMediaDetails: messageContent.stickerMessage
@@ -1530,7 +1537,7 @@ class WhatsAppBotEvoGo {
           const downloaded = await this._downloadMediaFromEvo(messageContent);
           mediaInfo = {
             mimetype: messageContent.documentMessage.mimetype,
-            url: downloaded?.url || messageContent.documentMessage.url,
+            url: downloaded?.url ?? messageContent.documentMessage.url,
             data: downloaded?.base64,
             filename: messageContent.documentMessage.fileName,
             title: messageContent.documentMessage.title,
@@ -1552,7 +1559,7 @@ class WhatsAppBotEvoGo {
             vcard: messageContent.contactMessage.vcard
           };
         }
-
+        
         const formattedMessage = {
           evoMessageData: evoMessageData,
           id: id,
@@ -1661,7 +1668,7 @@ class WhatsAppBotEvoGo {
 
       const payload = {
         number: chatId,
-        delay: options.delay || 0
+        delay: options.delay ?? 0
       };
 
       //this.logger.debug(`[sendMessage] `, { chatId, content, tipo: typeof content, options });
@@ -1679,7 +1686,7 @@ class WhatsAppBotEvoGo {
           if (quotedMsg) participant = quotedMsg.author || quotedMsg.from;
         }
 
-        const target = participant || chatId; // Fallback
+        const target = participant ?? chatId; // Fallback
         const participantFmt = target.endsWith('@s.whatsapp.net') ? target : `${target}@s.whatsapp.net`;
 
         payload.quoted = {
@@ -1711,7 +1718,7 @@ class WhatsAppBotEvoGo {
             const media = await this.createMediaFromBase64(content.data, content.mimetype, content.filename);
             payload.sticker = media.url;
           } else {
-            payload.sticker = content.url || content.data;
+            payload.sticker = content.url ?? content.data;
           }
         } else {
           endpoint = '/send/media';
@@ -1772,7 +1779,7 @@ class WhatsAppBotEvoGo {
       this.loadReport.trackSentMessage(isGroup);
 
       return {
-        id: { _serialized: response.data?.Info?.ID || 'unknown' },
+        id: { _serialized: response.data?.Info?.ID ?? 'unknown' },
         ack: 1,
         timestamp: Math.floor(Date.now() / 1000),
         _data: response,
@@ -1805,7 +1812,7 @@ class WhatsAppBotEvoGo {
 
 
       let groupDetails = await this.getChatDetails(groupId);
-      let groupName = groupDetails?.name || groupId;
+      let groupName = groupDetails?.name ?? groupId;
 
       for (const participant of participants) {
         // participant is JID string
@@ -1814,8 +1821,8 @@ class WhatsAppBotEvoGo {
 
         const eventData = {
           group: { id: groupId, name: groupName, notInGroup: groupDetails.notInGroup, isBotJoining: groupData.isBotJoining },
-          user: { id: participant, name: contact?.name || participant.split('@')[0] },
-          responsavel: { id: groupData.SenderPN, name: contactResp?.name || groupData.SenderPN?.split('@')[0] },
+          user: { id: participant, name: contact?.name ?? participant.split('@')[0] },
+          responsavel: { id: groupData.SenderPN, name: contactResp?.name ?? groupData.SenderPN?.split('@')[0] },
           action: action,
           origin: { getChat: async () => await this.getChatDetails(groupId) }
         };
@@ -1935,7 +1942,7 @@ class WhatsAppBotEvoGo {
 
           return {
             id: { _serialized: groupInfo.JID },
-            name: groupInfo.Name || chatId,
+            name: groupInfo.Name ?? chatId,
             isGroup: true,
             notInGroup: false,
             groupMetadata: { desc: groupInfo.Topic },
@@ -1969,7 +1976,7 @@ class WhatsAppBotEvoGo {
         const contact = await this.getContactDetails(chatId);
         return {
           id: { _serialized: chatId },
-          name: contact?.name || chatId,
+          name: contact?.name ?? chatId,
           isGroup: false
         };
       }
@@ -2004,7 +2011,7 @@ class WhatsAppBotEvoGo {
     try {
         const data = await readFileAsync(this.skipGroupsPath, 'utf8');
         const allSkips = JSON.parse(data);
-        this.skipGroupInfo = allSkips[this.id] || [];
+        this.skipGroupInfo = allSkips[this.id] ?? [];
         this.logger.info(`[SkipGroups] Loaded ${this.skipGroupInfo.length} skipped groups for bot ${this.id}.`);
     } catch (error) {
         if (error.code === 'ENOENT') {

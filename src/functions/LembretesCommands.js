@@ -164,7 +164,7 @@ function formatarData(data) {
  */
 async function criarLembrete(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     // Verifica se há argumentos
     if (args.length === 0) {
@@ -306,7 +306,7 @@ async function criarLembrete(bot, message, args, group) {
     }
   } catch (error) {
     logger.error('Erro ao criar lembrete:', error);
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     return new ReturnMessage({
       chatId: chatId,
       content: 'Erro ao criar lembrete. Por favor, tente novamente.'
@@ -324,7 +324,7 @@ async function criarLembrete(bot, message, args, group) {
  */
 async function listarLembretes(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     const userId = message.author;
     
     // Carrega lembretes
@@ -389,7 +389,7 @@ async function listarLembretes(bot, message, args, group) {
     });
   } catch (error) {
     logger.error('Erro ao listar lembretes:', error);
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     return new ReturnMessage({
       chatId: chatId,
       content: 'Erro ao listar lembretes. Por favor, tente novamente.'
@@ -407,7 +407,7 @@ async function listarLembretes(bot, message, args, group) {
  */
 async function cancelarLembrete(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     const userId = message.author;
     
     // Verifica se foi fornecido um ID
@@ -473,7 +473,7 @@ async function cancelarLembrete(bot, message, args, group) {
     }
   } catch (error) {
     logger.error('Erro ao cancelar lembrete:', error);
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     return new ReturnMessage({
       chatId: chatId,
       content: 'Erro ao cancelar lembrete. Por favor, tente novamente.'

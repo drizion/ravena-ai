@@ -117,7 +117,7 @@ async function cleanupTempFiles(filePaths) {
  * @returns {Promise<ReturnMessage|Array<ReturnMessage>>} - ReturnMessage ou array de ReturnMessages
  */
 async function handleGetAudio(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
 
   try {
     // Obtém mensagem citada
@@ -179,7 +179,7 @@ async function handleGetAudio(bot, message, args, group) {
  * @returns {Promise<ReturnMessage|Array<ReturnMessage>>} - ReturnMessage ou array de ReturnMessages
  */
 async function handleGetVoice(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
 
   try {
     // Obtém mensagem citada
@@ -241,7 +241,7 @@ async function handleGetVoice(bot, message, args, group) {
  * @returns {Promise<ReturnMessage|Array<ReturnMessage>>} - ReturnMessage ou array de ReturnMessages
  */
 async function handleVolumeAdjust(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
   const returnMessages = [];
   
   try {

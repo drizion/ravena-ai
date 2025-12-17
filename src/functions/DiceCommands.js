@@ -43,7 +43,7 @@ function getRandomInt(min, max) {
  */
 async function rollDice(bot, message, args, group, defaultSides = null) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     let dicePattern, numDice, numSides, modifier, modifierValue, modifierSign;
     
     // Verifica se foi invocado por um comando predefinido (d20, d6, etc.)
@@ -184,8 +184,7 @@ async function rollDice(bot, message, args, group, defaultSides = null) {
     // Verifica se o usuário tem apelido/nome customizado
     let userName = "Jogador";
     try {
-      const contact = await message.origin.getContact();
-      userName = contact.pushname || contact.name || "Jogador";
+      userName = message.name ?? message.pushName ?? message.pushname ?? message.authorName ?? "Jogador";
       
       // Verifica se existe nome personalizado no grupo
       if (group && group.nicks) {
@@ -219,7 +218,7 @@ async function rollDice(bot, message, args, group, defaultSides = null) {
   } catch (error) {
     logger.error('Erro ao rolar dados:', error);
     
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     return new ReturnMessage({
       chatId: chatId,
       content: '❌ Erro ao rolar dados. Por favor, tente novamente.',

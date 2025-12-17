@@ -20,7 +20,7 @@ const logger = new Logger('anime-commands');
  */
 async function buscarAnime(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     if (args.length === 0) {
       return new ReturnMessage({
@@ -57,20 +57,20 @@ async function buscarAnime(bot, message, args, group) {
     
     // Obtém dados do anime
     const titulo = data.title;
-    const tituloJapones = data.japaneseTitle || 'N/A';
-    const sinopse = (await translateText(data.synopsis, "en", "pt")) || 'Sinopse não disponível.';
+    const tituloJapones = data.japaneseTitle ?? 'N/A';
+    const sinopse = (await translateText(data.synopsis, "en", "pt")) ?? 'Sinopse não disponível.';
     const lancamento = data.aired ? data.aired.split(' to ')[0] : 'N/A';
-    const finalizado = data.status || 'N/A';
-    const episodios = data.episodes || 'N/A';
-    const duracao = data.duration || 'N/A';
+    const finalizado = data.status ?? 'N/A';
+    const episodios = data.episodes ?? 'N/A';
+    const duracao = data.duration ?? 'N/A';
     const generos = data.genres ? data.genres.join(', ') : 'N/A';
-    const nota = data.score || 'N/A';
-    const ranking = data.ranked || 'N/A';
-    const popularidade = data.popularity || 'N/A';
-    const imagem = data.picture || null;
-    const fonte = data.source || 'N/A';
+    const nota = data.score ?? 'N/A';
+    const ranking = data.ranked ?? 'N/A';
+    const popularidade = data.popularity ?? 'N/A';
+    const imagem = data.picture ?? null;
+    const fonte = data.source ?? 'N/A';
     const estudio = data.studios ? data.studios.join(', ') : 'N/A';
-    const tipo = data.type || 'N/A';
+    const tipo = data.type ?? 'N/A';
     
     // Prepara o texto da mensagem
     let mensagem = `🗾 *${titulo}* (${tituloJapones})\n\n`;
@@ -125,7 +125,7 @@ async function buscarAnime(bot, message, args, group) {
   } catch (error) {
     logger.error('Erro ao buscar anime:', error);
     
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     let errorMessage = 'Erro ao buscar informações do anime. Por favor, tente novamente.';
     
     if (error.message.includes('Invalid')) {

@@ -423,7 +423,7 @@ function generateStaticMapUrl(pins, labels) {
 
 
 async function testeGeo(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
   const lat = -19.9311066985294;
   const lng = -43.98738786116566;
 
@@ -463,7 +463,7 @@ async function testeGeo(bot, message, args, group) {
  * @returns {Promise<ReturnMessage>} Mensagem de retorno
  */
 async function startGeoguesserGame(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
 
   try {
     // Verifica se está em um grupo
@@ -577,7 +577,7 @@ async function startGeoguesserGame(bot, message, args, group) {
     logger.error('Erro ao iniciar jogo de Geoguesser:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: '❌ Erro ao iniciar o jogo de Geoguesser. Por favor, tente novamente.'
     });
   }
@@ -747,7 +747,7 @@ async function makeGuess(bot, message, args, group) {
     logger.error('Erro ao processar adivinhação:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: '❌ Erro ao processar sua adivinhação. Por favor, tente novamente.'
     });
   }
@@ -892,7 +892,7 @@ async function processLocationMessage(bot, message) {
     }
     
     const userId = message.author;
-    const userName = message.authorName || "Jogador";
+    const userName = message.name ?? message.pushName ?? message.pushname ?? message.authorName ?? "Jogador";
     
     // Calcula a distância
     const targetLocation = activeGames[groupId].location;
@@ -1018,7 +1018,7 @@ async function showGameStatus(bot, message, args, group) {
     logger.error('Erro ao mostrar status do jogo:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: '❌ Erro ao mostrar status do jogo. Por favor, tente novamente.'
     });
   }
@@ -1097,7 +1097,7 @@ async function showGameHistory(bot, message, args, group) {
     logger.error('Erro ao mostrar histórico de jogos:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: '❌ Erro ao mostrar histórico de jogos. Por favor, tente novamente.'
     });
   }
@@ -1181,7 +1181,7 @@ async function registerGeoguesserPoints(userId, userName, groupId, points) {
  */
 async function showGeoguesserRanking(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     // Carrega dados do Geoguesser
     let dados = await carregarDadosGeoguesser();
@@ -1248,7 +1248,7 @@ async function showGeoguesserRanking(bot, message, args, group) {
     logger.error('Erro ao mostrar ranking de Geoguesser:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: '❌ Erro ao mostrar ranking. Por favor, tente novamente.'
     });
   }
