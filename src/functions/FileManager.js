@@ -202,7 +202,7 @@ function formatSize(bytes) {
  */
 async function listFiles(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     // Carrega banco de dados
     let db = await loadFilesDB();
@@ -437,7 +437,7 @@ async function listFiles(bot, message, args, group) {
   } catch (error) {
     logger.error('Erro ao listar arquivos:', error);
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao listar arquivos. Por favor, tente novamente.'
     });
   }
@@ -453,7 +453,7 @@ async function listFiles(bot, message, args, group) {
  */
 async function downloadFile(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     const returnMessages = [];
     
     if (args.length === 0) {
@@ -594,7 +594,7 @@ async function downloadFile(bot, message, args, group) {
   } catch (error) {
     logger.error('Erro ao baixar arquivo/pasta:', error);
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao baixar arquivo/pasta. Por favor, tente novamente.'
     });
   }
@@ -610,7 +610,7 @@ async function downloadFile(bot, message, args, group) {
  */
 async function createFolder(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     if (args.length === 0) {
       return new ReturnMessage({
@@ -680,7 +680,7 @@ async function createFolder(bot, message, args, group) {
   } catch (error) {
     logger.error('Erro ao criar pasta:', error);
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao criar pasta. Por favor, tente novamente.'
     });
   }
@@ -696,7 +696,7 @@ async function createFolder(bot, message, args, group) {
  */
 async function uploadFile(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     // Obtém caminho de destino (pode ser vazio para a raiz)
     let destination = '';
@@ -848,7 +848,7 @@ async function uploadFile(bot, message, args, group) {
   } catch (error) {
     logger.error('Erro ao enviar arquivo:', error);
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao enviar arquivo. Por favor, tente novamente.'
     });
   }
@@ -864,7 +864,7 @@ async function uploadFile(bot, message, args, group) {
  */
 async function deleteFile(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     if (args.length === 0) {
       return new ReturnMessage({
@@ -956,7 +956,7 @@ async function deleteFile(bot, message, args, group) {
   } catch (error) {
     logger.error('Erro ao excluir arquivo/pasta:', error);
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao excluir arquivo/pasta. Por favor, tente novamente.'
     });
   }

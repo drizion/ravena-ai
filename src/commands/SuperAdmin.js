@@ -87,7 +87,7 @@ class SuperAdmin {
 
 
   async wakeOnLan(bot, message, args) {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     try {
       if (!this.isSuperAdmin(message.author)) return;
       if (args[0]) { // Mac tem 17 caracteres
@@ -95,12 +95,12 @@ class SuperAdmin {
         if (macAddress.length === 17) {
           exec(`wakeonlan ${macAddress}`);
           return new ReturnMessage({
-            chatId: message.group || message.author,
+            chatId: message.group ?? message.author,
             content: `✅ Sending magic packet to 255.255.255.255:9 with ${macAddress}`
           });
         } else {
           return new ReturnMessage({
-            chatId: message.group || message.author,
+            chatId: message.group ?? message.author,
             content: `❌ Mac inválido '${macAddress}' (${macAddress.length})`
           });
         }
@@ -111,14 +111,14 @@ class SuperAdmin {
       this.logger.error('Erro no comando wakeOnLan:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
   }
 
   async botStats(bot, message, args) {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     try {
       if (!this.isSuperAdmin(message.author)) return;
 
@@ -150,7 +150,7 @@ class SuperAdmin {
         return acc;
       }, {});
 
-      const formatNum = (num) => (num || 0).toLocaleString('pt-BR');
+      const formatNum = (num) => (num ?? 0).toLocaleString('pt-BR');
 
       const header = `🤖 *${bot.id}* - Estatísticas\n\n` +
         `📊 *Total Mensagens:*\n` +
@@ -162,15 +162,15 @@ class SuperAdmin {
 
       const groupStats = gruposBot.map(grupo => {
         const group = groups.find(g => g.id === grupo.JID);
-        const name = group?.name || 'Sem registro';
+        const name = group?.name ?? 'Sem registro';
         const memberCount = grupo.Participants ? grupo.Participants.length : '?';
         
         // Coleta stats do grupo para cada período
-        const sYear = periodStats.year.byGroup[grupo.JID] || 0;
-        const sMonth = periodStats.month.byGroup[grupo.JID] || 0;
-        const sWeek = periodStats.week.byGroup[grupo.JID] || 0;
-        const sDay = periodStats.day.byGroup[grupo.JID] || 0;
-        const sHour = periodStats.hour.byGroup[grupo.JID] || 0;
+        const sYear = periodStats.year.byGroup[grupo.JID] ?? 0;
+        const sMonth = periodStats.month.byGroup[grupo.JID] ?? 0;
+        const sWeek = periodStats.week.byGroup[grupo.JID] ?? 0;
+        const sDay = periodStats.day.byGroup[grupo.JID] ?? 0;
+        const sHour = periodStats.hour.byGroup[grupo.JID] ?? 0;
 
         return { grupo, name, memberCount, sYear, sMonth, sWeek, sDay, sHour };
       });
@@ -193,7 +193,7 @@ class SuperAdmin {
 ${listGroups}`;
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: dadosBot
       });
 
@@ -201,14 +201,14 @@ ${listGroups}`;
       this.logger.error('Erro no comando botStats:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
   }
 
   async testeMsg(bot, message, args) {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     try {
       if (!this.isSuperAdmin(message.author)) return;
 
@@ -221,7 +221,7 @@ ${listGroups}`;
       this.logger.error('Erro no comando testeMsg:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
@@ -229,7 +229,7 @@ ${listGroups}`;
 
   async sendMsg(bot, message, args) {
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       // Verifica se o usuário é um super admin
       if (!this.isSuperAdmin(message.author) && !this.isComuAdmin(bot, message.author)) {
@@ -294,7 +294,7 @@ ${listGroups}`;
       this.logger.error('Erro no comando sendMsg:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
@@ -309,7 +309,7 @@ ${listGroups}`;
    */
   async joinGroup(bot, message, args) {
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       // Verifica se o usuário é um super admin
       if (!this.isSuperAdmin(message.author) && !this.isComuAdmin(bot, message.author)) {
@@ -377,7 +377,7 @@ ${listGroups}`;
       this.logger.error('Erro no comando joinGroup:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
@@ -405,7 +405,7 @@ ${listGroups}`;
    */
   async addNewDonate(bot, message, args) {
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       // Verifica se o usuário é um super admin
       if (!this.isSuperAdmin(message.author)) {
@@ -456,7 +456,7 @@ ${listGroups}`;
       this.logger.error('Erro no comando addNewDonate:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
@@ -471,7 +471,7 @@ ${listGroups}`;
    */
   async addDonorNumber(bot, message, args) {
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       // Verifica se o usuário é um super admin
       if (!this.isSuperAdmin(message.author)) {
@@ -532,7 +532,7 @@ ${listGroups}`;
       this.logger.error('Erro no comando addDonorNumber:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
@@ -549,7 +549,7 @@ ${listGroups}`;
   async mergeDonors(bot, message, args, group) {
     try {
       if (!this.isSuperAdmin(message.author)) return;
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       // Obtém o texto completo do argumento
       const fullText = args.join(' ');
@@ -588,7 +588,7 @@ ${listGroups}`;
     } catch (error) {
       this.logger.error('Erro no comando mergeDonors:', error);
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: 'Erro ao processar comando.'
       });
     }
@@ -603,7 +603,7 @@ ${listGroups}`;
    */
   async updateDonationAmount(bot, message, args) {
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       // Verifica se o usuário é um super admin
       if (!this.isSuperAdmin(message.author)) {
@@ -650,7 +650,7 @@ ${listGroups}`;
       this.logger.error('Erro no comando updateDonationAmount:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
@@ -711,7 +711,7 @@ ${listGroups}`;
    * @returns {Promise<ReturnMessage>} - Retorna mensagem de sucesso ou erro
    */
   async blockInvites(bot, message, args) {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
 
     // Verifica se o usuário é um super admin
     if (!this.isSuperAdmin(message.author) && !this.isComuAdmin(bot, message.author)) {
@@ -748,7 +748,7 @@ ${listGroups}`;
    * @returns {Promise<ReturnMessage>} - Retorna mensagem de sucesso ou erro
    */
   async unblockInvites(bot, message, args) {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
 
     // Verifica se o usuário é um super admin
     if (!this.isSuperAdmin(message.author) && !this.isComuAdmin(bot, message.author)) {
@@ -787,7 +787,7 @@ ${listGroups}`;
    */
   async blockUser(bot, message, args) {
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       // Verifica se o usuário é um super admin
       if (!this.isSuperAdmin(message.author) && !this.isComuAdmin(bot, message.author)) {
@@ -849,7 +849,7 @@ ${listGroups}`;
       this.logger.error('Erro no comando blockUser:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
@@ -864,7 +864,7 @@ ${listGroups}`;
    */
   async unblockUser(bot, message, args) {
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       // Verifica se o usuário é um super admin
       if (!this.isSuperAdmin(message.author) && !this.isComuAdmin(bot, message.author)) {
@@ -910,7 +910,7 @@ ${listGroups}`;
       this.logger.error('Erro no comando unblockUser:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
@@ -925,7 +925,7 @@ ${listGroups}`;
    */
   async leaveGroup(bot, message, args) {
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       // Verifica se o usuário é um super admin
       if (!this.isSuperAdmin(message.author) && !this.isComuAdmin(bot, message.author)) {
@@ -977,7 +977,7 @@ ${listGroups}`;
         }
 
         // Obtém participantes do grupo
-        const participants = chat.participants || [];
+        const participants = chat.participants ?? [];
 
         // Separa administradores e membros normais
         const admins = [];
@@ -1024,7 +1024,7 @@ ${listGroups}`;
       this.logger.error('Erro no comando leaveGroup:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
@@ -1040,7 +1040,7 @@ ${listGroups}`;
    */
   async setDefaultPrivacySettings(bot, message, args) {
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       // Verifica se o usuário é um super admin
       if (!this.isSuperAdmin(message.author)) {
@@ -1081,7 +1081,7 @@ ${listGroups}`;
       this.logger.error('Erro no comando setDefaultPrivacySettings:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
@@ -1096,7 +1096,7 @@ ${listGroups}`;
    */
   async changeProfilePicture(bot, message, args) {
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       // Verifica se o usuário é um super admin
       if (!this.isSuperAdmin(message.author) && !this.isComuAdmin(bot, message.author)) {
@@ -1137,7 +1137,7 @@ ${listGroups}`;
       this.logger.error('Erro no comando changeProfilePicture:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
@@ -1157,7 +1157,7 @@ ${listGroups}`;
     }
 
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       try {
         const emoji = args[0] ?? "✅";
@@ -1183,7 +1183,7 @@ ${listGroups}`;
     }
 
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       try {
         bot.updateProfileStatus(args.join(" "));
@@ -1206,7 +1206,7 @@ ${listGroups}`;
    */
   async simulateStreamEvent(bot, message, args) {
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       // Verifica se o usuário é um super admin
       if (!this.isSuperAdmin(message.author)) {
@@ -1305,8 +1305,8 @@ ${listGroups}`;
       return new ReturnMessage({
         chatId: chatId,
         content: `✅ Evento ${state === 'on' ? 'online' : 'offline'} simulado com sucesso para ${platform}/${channelName}\n\n` +
-          `Título: ${eventData.title || 'N/A'}\n` +
-          `Jogo: ${eventData.game || 'N/A'}\n` +
+          `Título: ${eventData.title ?? 'N/A'}\n` +
+          `Jogo: ${eventData.game ?? 'N/A'}\n` +
           `Thumbnail: ${eventData.thumbnail ? '[Configurado]' : '[Não disponível]'}\n\n` +
           `O evento foi despachado para todos os grupos que monitoram este canal.`
       });
@@ -1314,7 +1314,7 @@ ${listGroups}`;
       this.logger.error('Erro no comando simulateStreamEvent:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
@@ -1329,7 +1329,7 @@ ${listGroups}`;
    */
   async restartBot(bot, message, args) {
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       // Verifica se o usuário é um super admin
       if (!this.isSuperAdmin(message.author)) {
@@ -1406,7 +1406,7 @@ ${listGroups}`;
       this.logger.error('Erro no comando restartBot:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
@@ -1421,7 +1421,7 @@ ${listGroups}`;
    */
   async getMembros(bot, message, args) {
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       // Verifica se o usuário é um super admin
       if (!this.isSuperAdmin(message.author) && !this.isComuAdmin(bot, message.author)) {
@@ -1462,7 +1462,7 @@ ${listGroups}`;
         }
 
         // Obtém participantes do grupo
-        const participants = chat.participants || [];
+        const participants = chat.participants ?? [];
 
         // Separa administradores e membros normais
         const admins = [];
@@ -1475,7 +1475,7 @@ ${listGroups}`;
           try {
             // Tenta obter dados do contato
             const contact = await bot.client.getContactById(contactId);
-            contactName = contact.pushname || contact.name || contactId.replace('@c.us', '');
+            contactName = contact.pushname ?? contact.name ?? contactId.replace('@c.us', '');
           } catch (contactError) {
             this.logger.debug(`Não foi possível obter informações do contato ${contactId}:`, contactError);
           }
@@ -1516,7 +1516,7 @@ ${listGroups}`;
       this.logger.error('Erro no comando getMembros:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
@@ -1531,7 +1531,7 @@ ${listGroups}`;
    */
   async blockList(bot, message, args) {
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       // Verifica se o usuário é um super admin
       if (!this.isSuperAdmin(message.author)) {
@@ -1607,7 +1607,7 @@ ${listGroups}`;
           results.push({
             id: phoneNumber,
             status: 'Erro',
-            message: blockError.message || 'Erro desconhecido'
+            message: blockError.message ?? 'Erro desconhecido'
           });
         }
       }
@@ -1645,7 +1645,7 @@ ${listGroups}`;
       this.logger.error('Erro no comando blockList:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
@@ -1653,7 +1653,7 @@ ${listGroups}`;
 
   async blockTudoList(bot, message, args) {
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       // Verifica se o usuário é um super admin
       if (!this.isSuperAdmin(message.author)) {
@@ -1727,7 +1727,7 @@ ${listGroups}`;
         try {
           // Obtém o contato
           const contact = await bot.client.getContactById(phoneNumber);
-          const contactName = contact.pushname || contact.name || phoneNumber;
+          const contactName = contact.pushname ?? contact.name ?? phoneNumber;
 
           // Obtém grupos em comum
           const commonGroups = await contact.getCommonGroups();
@@ -1771,7 +1771,7 @@ ${listGroups}`;
 
               // Obtém o chat do grupo
               const chat = await bot.client.getChatById(groupId);
-              const groupName = chat.name || groupId;
+              const groupName = chat.name ?? groupId;
 
               // Verifica se é um grupo especial
               const isSpecialGroup = specialGroups.includes(groupId);
@@ -1816,7 +1816,7 @@ ${listGroups}`;
                 }
               } else {
                 // Para grupos normais, obtém participantes e sai do grupo
-                const participants = chat.participants || [];
+                const participants = chat.participants ?? [];
 
                 // Adiciona ID de cada participante ao conjunto global e marca o grupo como processado
                 if (!processedGroups.has(groupId)) {
@@ -1930,12 +1930,12 @@ ${listGroups}`;
         const statusEmoji = result.status === 'Processado' ? '✅' :
           result.status === 'Sem grupos' ? '⚠️' : '❌';
 
-        responseMessage += `${statusEmoji} *${result.contactName || result.phoneNumber}*: `;
+        responseMessage += `${statusEmoji} *${result.contactName ?? result.phoneNumber}*: `;
 
         if (result.status === 'Processado') {
           responseMessage += `${result.totalGroups} grupos (${result.leftGroups} saídos, ${result.specialGroups} especiais)\n`;
         } else {
-          responseMessage += `${result.status} - ${result.message || ''}\n`;
+          responseMessage += `${result.status} - ${result.message ?? ''}\n`;
         }
       }
 
@@ -1953,7 +1953,7 @@ ${listGroups}`;
       this.logger.error('Erro no comando blockTudoList:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
@@ -1968,7 +1968,7 @@ ${listGroups}`;
    */
   async unblockList(bot, message, args) {
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       // Verifica se o usuário é um super admin
       if (!this.isSuperAdmin(message.author)) {
@@ -2030,7 +2030,7 @@ ${listGroups}`;
           results.push({
             id: phoneNumber,
             status: 'Erro',
-            message: unblockError.message || 'Erro desconhecido'
+            message: unblockError.message ?? 'Erro desconhecido'
           });
         }
       }
@@ -2060,7 +2060,7 @@ ${listGroups}`;
       this.logger.error('Erro no comando unblockList:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
@@ -2075,7 +2075,7 @@ ${listGroups}`;
    */
   async listaGruposPessoa(bot, message, args) {
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       // Verifica se o usuário é um super admin
       if (!this.isSuperAdmin(message.author)) {
@@ -2103,7 +2103,7 @@ ${listGroups}`;
       try {
         // Obtém o contato
         const contact = await bot.client.getContactById(phoneNumber);
-        const contactName = contact.pushname || contact.name || phoneNumber;
+        const contactName = contact.pushname ?? contact.name ?? phoneNumber;
 
         // Obtém grupos em comum
         const commonGroups = await contact.getCommonGroups();
@@ -2131,7 +2131,7 @@ ${listGroups}`;
           let chatName = groupName;
           try {
             const chat = await bot.client.getChatById(groupId);
-            chatName = chat.name || groupName;
+            chatName = chat.name ?? groupName;
           } catch (error) {
             this.logger.debug(`Erro ao obter informações do chat ${groupId}:`, error);
           }
@@ -2155,7 +2155,7 @@ ${listGroups}`;
       this.logger.error('Erro no comando listaGruposPessoa:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
@@ -2171,7 +2171,7 @@ ${listGroups}`;
    */
   async blockTudoPessoa(bot, message, args) {
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       // Verifica se o usuário é um super admin
       if (!this.isSuperAdmin(message.author)) {
@@ -2208,7 +2208,7 @@ ${listGroups}`;
       try {
         // Obtém o contato
         const contact = await bot.client.getContactById(phoneNumber);
-        const contactName = contact.pushname || contact.name || phoneNumber;
+        const contactName = contact.pushname ?? contact.name ?? phoneNumber;
 
         // Obtém grupos em comum
         const commonGroups = await contact.getCommonGroups();
@@ -2239,7 +2239,7 @@ ${listGroups}`;
           try {
             // Obtém o chat do grupo
             const chat = await bot.client.getChatById(groupId);
-            const groupName = chat.name || groupId;
+            const groupName = chat.name ?? groupId;
 
             // Verifica se é um grupo especial
             const isSpecialGroup = specialGroups.includes(groupId);
@@ -2288,7 +2288,7 @@ ${listGroups}`;
               }
             } else {
               // Para grupos normais, obtém participantes e sai do grupo
-              const participants = chat.participants || [];
+              const participants = chat.participants ?? [];
 
               // Adiciona ID de cada participante ao conjunto
               participants.forEach(participant => {
@@ -2371,7 +2371,7 @@ ${listGroups}`;
           else statusEmoji = '❌';
 
           // Melhoria na exibição dos detalhes do grupo
-          const groupName = group.name || 'Nome desconhecido';
+          const groupName = group.name ?? 'Nome desconhecido';
 
           // Verifica se o ID é um objeto e exibe adequadamente
           let groupId;
@@ -2381,7 +2381,7 @@ ${listGroups}`;
             groupId = group.id;
           }
 
-          responseMessage += `${statusEmoji} ${groupId} - ${groupName} (${group.action || group.status})`;
+          responseMessage += `${statusEmoji} ${groupId} - ${groupName} (${group.action ?? group.status})`;
 
           // Adicionar detalhes do erro se houver
           if (group.error) {
@@ -2407,7 +2407,7 @@ ${listGroups}`;
       this.logger.error('Erro no comando blockTudoPessoa:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao processar comando.'
       });
     }
@@ -2423,7 +2423,7 @@ ${listGroups}`;
    */
   async getGroupInfo(bot, message, args) {
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
 
       // Verifica se o usuário é um super admin
       if (!this.isSuperAdmin(message.author) && !this.isComuAdmin(bot, message.author)) {
@@ -2471,7 +2471,7 @@ ${listGroups}`;
       let responseMessage = `*Informações do Grupo: ${group.name}*\n\n`;
       responseMessage += `*ID:* ${group.id}\n`;
       responseMessage += `*Nome de Cadastro:* ${group.name}\n`;
-      responseMessage += `*Prefixo:* ${group.prefix || '!'}\n`;
+      responseMessage += `*Prefixo:* ${group.prefix ?? '!'}\n`;
       responseMessage += `*Pausado:* ${group.paused ? 'Sim' : 'Não'}\n`;
       responseMessage += `*Auto STT:* ${group.autoStt ? 'Ativado' : 'Desativado'}\n`;
 
@@ -2515,7 +2515,7 @@ ${listGroups}`;
       this.logger.error('Erro no comando getGroupInfo:', error);
 
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: `❌ Erro ao processar comando: ${error.message}`
       });
     }

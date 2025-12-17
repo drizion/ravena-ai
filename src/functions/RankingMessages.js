@@ -1,5 +1,3 @@
-const fs = require('fs').promises;
-const path = require('path');
 const Logger = require('../utils/Logger');
 const ReturnMessage = require('../models/ReturnMessage');
 const Command = require('../models/Command');
@@ -7,6 +5,17 @@ const Database = require('../utils/Database');
 const database = Database.getInstance();
 
 const logger = new Logger('ranking-messages');
+const dbName = "ranking";
+
+// Initialize database
+database.getSQLiteDb(dbName, `
+    CREATE TABLE IF NOT EXISTS ranking (
+      chat_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      user_name TEXT,
+      message_count INTEGER DEFAULT 0,
+      PRIMARY KEY (chat_id, user_id)
+    )`);
 
 /**
  * Atualiza o ranking de mensagens para um usuário
@@ -16,52 +25,15 @@ const logger = new Logger('ranking-messages');
  */
 async function updateMessageCount(chatId, userId, userName) {
   try {
-    // Define o caminho do arquivo de ranking
-    const rankingPath = path.join(database.databasePath, 'ranking');
-    const rankingFile = path.join(rankingPath, `${chatId}.json`);
-    
-    // Certifica-se que o diretório existe
-    try {
-      await fs.mkdir(rankingPath, { recursive: true });
-    } catch (error) {
-      if (error.code !== 'EEXIST') {
-        logger.error('Erro ao criar diretório de ranking:', error);
-        return;
-      }
-    }
-    
-    // Carrega o ranking atual ou cria um novo
-    let ranking = [];
-    try {
-      const data = await fs.readFile(rankingFile, 'utf8');
-      ranking = JSON.parse(data);
-    } catch (error) {
-      // Se o arquivo não existir, inicia com array vazio
-      if (error.code !== 'ENOENT') {
-        logger.error(`Erro ao ler arquivo de ranking ${rankingFile}:`, error);
-      }
-    }
-    
-    // Encontra o usuário no ranking ou cria uma nova entrada
-    const userIndex = ranking.findIndex(item => item.numero === userId);
-    
-    if (userIndex !== -1) {
-      // Atualiza entrada existente
-      ranking[userIndex].qtdMsgs++;
-      ranking[userIndex].nome = userName; // Atualiza o nome a cada mensagem
-    } else {
-      // Cria nova entrada
-      ranking.push({
-        nome: userName,
-        numero: userId,
-        qtdMsgs: 1
-      });
-    }
-    
-    // Salva o ranking atualizado
-    await fs.writeFile(rankingFile, JSON.stringify(ranking, null, 2), 'utf8');
+    await database.dbRun(dbName, `
+      INSERT INTO ranking (chat_id, user_id, user_name, message_count)
+      VALUES (?, ?, ?, 1)
+      ON CONFLICT(chat_id, user_id) DO UPDATE SET
+        message_count = message_count + 1,
+        user_name = excluded.user_name
+    `, [chatId, userId, userName]);
   } catch (error) {
-    logger.error('Erro ao atualizar contagem de mensagens:', error);
+    logger.error('Erro ao atualizar contagem de mensagens (SQLite):', error);
   }
 }
 
@@ -72,27 +44,16 @@ async function updateMessageCount(chatId, userId, userName) {
  */
 async function getMessageRanking(chatId) {
   try {
-    // Define o caminho do arquivo de ranking
-    const rankingFile = path.join(database.databasePath, 'ranking', `${chatId}.json`);
+    const rows = await database.dbAll(dbName, `
+      SELECT user_name as nome, user_id as numero, message_count as qtdMsgs
+      FROM ranking
+      WHERE chat_id = ?
+      ORDER BY message_count DESC
+    `, [chatId]);
     
-    // Tenta ler o arquivo de ranking
-    try {
-      const data = await fs.readFile(rankingFile, 'utf8');
-      const ranking = JSON.parse(data);
-      
-      // Ordena o ranking por quantidade de mensagens (decrescente)
-      return ranking.sort((a, b) => b.qtdMsgs - a.qtdMsgs);
-    } catch (error) {
-      // Se o arquivo não existir, retorna array vazio
-      if (error.code === 'ENOENT') {
-        return [];
-      }
-      
-      logger.error(`Erro ao ler arquivo de ranking ${rankingFile}:`, error);
-      return [];
-    }
+    return rows;
   } catch (error) {
-    logger.error('Erro ao obter ranking de mensagens:', error);
+    logger.error('Erro ao obter ranking de mensagens (SQLite):', error);
     return [];
   }
 }
@@ -103,21 +64,28 @@ async function getMessageRanking(chatId) {
  */
 async function processMessage(message) {
   try {
-    if (!message || !message.author) return;
+    if (!message) return;
+
+    // Define userId trying author first, then authorAlt
+    const userId = message.author || message.authorAlt;
+    
+    // If no user ID found, we can't track
+    if (!userId) return;
     
     // Obtém ID do chat (grupo ou PV)
-    const chatId = message.group || message.author;
+    // Se message.group existir, é um grupo. Se não, é PV (usa userId como chat)
+    const chatId = message.group ?? userId;
     
     // Obtém nome do usuário
-    let userName = message.author;
+    let userName = userId;
     try {
-        userName = message.pushname ?? message.authorName ?? message.name ?? message.author ?? "Fulano";
+        userName = message.name ?? message.pushName ?? message.pushname ?? message.authorName ?? "Fulano";
     } catch (error) {
       logger.error('Erro ao obter nome da pessoa que enviou msg:', {error, message});
     }
     
     // Atualiza contagem de mensagens
-    await updateMessageCount(chatId, message.author, userName);
+    await updateMessageCount(chatId, userId, userName);
   } catch (error) {
     logger.error('Erro ao processar mensagem para ranking:', error);
   }
@@ -133,12 +101,13 @@ async function processMessage(message) {
  */
 async function faladoresCommand(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const userId = message.author || message.authorAlt;
+    const chatId = message.group ?? userId;
     
     // Verifica se está em um grupo
     if (!message.group) {
       return new ReturnMessage({
-        chatId: message.author,
+        chatId: chatId,
         content: "Este comando só funciona em grupos."
       });
     }
@@ -154,7 +123,7 @@ async function faladoresCommand(bot, message, args, group) {
     }
     
     // Formata a resposta
-    let response = "*🏆 Ranking de faladores do grupo 🏆*\n\n";
+    let response = "*🏆 Ranking de faladores do grupo 🗣*\n\n";
     
     // Adiciona até os 10 primeiros do ranking
     const topTen = ranking.slice(0, 10);
@@ -182,7 +151,7 @@ async function faladoresCommand(bot, message, args, group) {
     logger.error('Erro ao executar comando de ranking de faladores:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: "Ocorreu um erro ao obter o ranking de faladores."
     });
   }
@@ -194,7 +163,8 @@ const commands = [
     name: 'faladores',
     description: 'Mostra o ranking de quem mais fala no grupo',
     category: "grupo",
-    method: faladoresCommand
+    method: faladoresCommand,
+    reactions: { after: "🗣", error: "❌" }
   })
 ];
 

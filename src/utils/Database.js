@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const Logger = require('./Logger');
+const sqlite3 = require('sqlite3').verbose();
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
@@ -11,7 +12,9 @@ class Database {
     this.logger = new Logger('database');
     this.databasePath = path.join(__dirname, '../../data');
     this.backupPath = path.join(__dirname, '../../data/backups');
-    
+    this.sqlite = sqlite3;
+    this.sqlites = {};
+
     // Configurações de backup
     this.maxBackups = parseInt(process.env.MAX_BACKUPS) || 120; // 4 backups por dia por 30 dias
     this.scheduledBackupHours = [0, 6, 12, 18]; // Horários de backup agendados
@@ -1391,6 +1394,67 @@ class Database {
       return false;
     }
   }
+
+
+  // SQLite
+  getSQLiteDb(name, schema){
+    if(!this.sqlites[name]){
+      this.logger.info(`[database][getSQLiteDb] Carregando base de dados SQLite '${name}'`);
+
+      const databasesFolder = path.join(this.databasePath, "sqlites");
+      if (!fs.existsSync(databasesFolder)) {
+        fs.mkdirSync(databasesFolder, { recursive: true });
+      }
+
+      const dbPath = path.join(databasesFolder, `${name}.db`);
+      this.sqlites[name] = new sqlite3.Database(dbPath);
+
+      // Initialize database structure
+      this.sqlites[name].serialize(() => {
+        this.sqlites[name].run(schema, (err) => {
+          if (err) {
+            logger.error(`Erro ao inicializar base ${name}:`, { schema, err });
+          }
+        });
+      });
+    }
+
+    return this.sqlites[name];
+  }
+
+  /**
+   * Promisified db.run, db.all and db.get
+   */
+  dbRun(dbName, sql, params = []) {
+    const db = this.sqlites[dbName];
+    return new Promise((resolve, reject) => {
+      db.run(sql, params, function (err) {
+        if (err) reject(err);
+        else resolve(this);
+      });
+    });
+  }
+
+  dbAll(dbName, sql, params = []) {
+    const db = this.sqlites[dbName];
+    return new Promise((resolve, reject) => {
+      db.all(sql, params, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    });
+  }
+
+  dbGet(dbName, sql, params = []) {
+    const db = this.sqlites[dbName];
+    return new Promise((resolve, reject) => {
+      db.get(sql, params, (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+  }
+
 }
 
 module.exports = Database;
