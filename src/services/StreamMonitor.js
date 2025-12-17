@@ -52,6 +52,8 @@ class StreamMonitor extends EventEmitter {
       kick: null,
       youtube: null
     };
+
+    this.youtubeNotFounds = {};
     
     // Flag para verificar se o monitoramento está ativo
     this.isMonitoring = false;
@@ -86,8 +88,8 @@ class StreamMonitor extends EventEmitter {
     } else {
       try {
         const data = JSON.parse(fs.readFileSync(this.monitoringDbPath, 'utf8'));
-        this.channels = data.channels || [];
-        this.streamStatuses = data.lastKnownStatuses || {};
+        this.channels = data.channels ?? [];
+        this.streamStatuses = data.lastKnownStatuses ?? {};
       } catch (error) {
         this.logger.error('Error reading monitoring database:', error);
         // Create a new file if the existing one is corrupted
@@ -472,7 +474,7 @@ class StreamMonitor extends EventEmitter {
                 channelHasGroup = true;
 
                 if(channelCheck.includes("http://") || channelCheck.includes("https://")){
-                  this.logger.info(`[cleanupChannelList] Canal Twitch formato de link: ${channelCheck} - Removendo do grupo ${group.id} (${group.name || 'sem nome'})`);
+                  this.logger.info(`[cleanupChannelList] Canal Twitch formato de link: ${channelCheck} - Removendo do grupo ${group.id} (${group.name ?? 'sem nome'})`);
                   channelsToRemove.push(channelCheck.toLowerCase());
                   continue;
                 }
@@ -481,11 +483,11 @@ class StreamMonitor extends EventEmitter {
                 const channelExists = await this.twitchChannelExists(channelCheck);
               
                 if (!channelExists) {
-                  this.logger.info(`[cleanupChannelList] Canal Twitch não encontrado: ${channelCheck} - Removendo do grupo ${group.id} (${group.name || 'sem nome'})`);
+                  this.logger.info(`[cleanupChannelList] Canal Twitch não encontrado: ${channelCheck} - Removendo do grupo ${group.id} (${group.name ?? 'sem nome'})`);
                   channelsToRemove.push(channelCheck.toLowerCase());
                   continue;
                 } else {
-                  this.logger.info(`[cleanupChannelList] ${channelCheck} @ (${group.name || 'sem nome'}), ok, existe!`);
+                  this.logger.info(`[cleanupChannelList] ${channelCheck} @ (${group.name ?? 'sem nome'}), ok, existe!`);
                 }
                 await sleep(500);  // API da twitch fica nervosa com spam
               }
@@ -581,7 +583,7 @@ class StreamMonitor extends EventEmitter {
           const channelName = user.login;
           const channelKey = `twitch:${channelName.toLowerCase()}`;
           const isLiveNow = liveStreamUserIds.includes(user.id);
-          const wasLive = this.streamStatuses[channelKey]?.isLive || false;
+          const wasLive = this.streamStatuses[channelKey]?.isLive ?? false;
           const liveStream = liveStreams.find(stream => stream.user_id === user.id);
           
           // Create or update status
@@ -681,7 +683,7 @@ class StreamMonitor extends EventEmitter {
 
     for (const batch of channelBatches) {
         try {
-            const slugs = [...new Set(batch.map(c => this.sanitizePlatformChannelName(c.name || "", "kick")))]
+            const slugs = [...new Set(batch.map(c => this.sanitizePlatformChannelName(c.name ?? "", "kick")))]
             .filter(Boolean) // remove strings avazias
             .map(name => `slug=${encodeURIComponent(name.substring(0, 25))}`)
             .join("&");
@@ -705,7 +707,7 @@ class StreamMonitor extends EventEmitter {
                     const channelKey = `kick:${channel.name.toLowerCase()}`;
                     const channelData = liveData.get(channel.name.toLowerCase());
                     const isLiveNow = !!(channelData && channelData.stream && channelData.stream.is_live);
-                    const wasLive = this.streamStatuses[channelKey]?.isLive || false;
+                    const wasLive = this.streamStatuses[channelKey]?.isLive ?? false;
 
                     // Create or update status
                     if (!this.streamStatuses[channelKey]) {
@@ -779,7 +781,7 @@ class StreamMonitor extends EventEmitter {
     // Count occurrences of each channel ID
     const counts = {};
     channelIDs.forEach(id => {
-      counts[id] = (counts[id] || 0) + 1;
+      counts[id] = (counts[id] ?? 0) + 1;
     });
     
     // Find the ID with the highest count
@@ -873,6 +875,9 @@ class StreamMonitor extends EventEmitter {
           // No videos or invalid response
           continue;
         }
+
+        // Canal encontrado, a princípio, reseta se tiver erro anterior
+        this.youtubeNotFounds[channel.name] = 0;
         
         // Get the latest video/stream
         const entries = Array.isArray(feed.feed.entry) ? feed.feed.entry : [feed.feed.entry];
@@ -893,7 +898,7 @@ class StreamMonitor extends EventEmitter {
         }
         
         // Check if this is a new video
-        const lastVideoId = this.streamStatuses[channelKey]?.lastVideo?.id || '';
+        const lastVideoId = this.streamStatuses[channelKey]?.lastVideo?.id ?? '';
         if (videoId !== lastVideoId) {
           // Get more details about the video to determine if it's a livestream
           const videoResponse = await axios.get(`https://www.youtube.com/watch?v=${videoId}`);
@@ -975,45 +980,53 @@ class StreamMonitor extends EventEmitter {
       } catch (error) {
         // Verifica se é um erro 404 (canal não encontrado)
         if (error.response && error.response.status === 404) {
-          this.logger.warn(`Canal do YouTube não encontrado: '${channel.name}'. Removendo do monitoramento.`);
-          
-          // Remove o canal do monitoramento
-          this.unsubscribe(channel.name, 'youtube');
-          
-          // Tenta enviar uma mensagem para todos os grupos que monitoram este canal
-          try {
-            // Obtém todos os grupos
-            const Database = require('../utils/Database');
-            const database = Database.getInstance();
-            const groups = await database.getGroups();
-            
-            // Filtra grupos que monitoram este canal
-            for (const group of groups) {
-              if (Array.isArray(group.youtube)) {
-                const channelConfig = group.youtube.find(c => 
-                  c.channel.toLowerCase() === channel.name.toLowerCase()
-                );
+          if(!this.youtubeNotFounds[channel.name]){
+            this.youtubeNotFounds[channel.name] = 1;
+            this.logger.warn(`Canal do YouTube não encontrado: '${channel.name}'. Iniciando monitoramento de not-found para ser removido.`);
+          } else {
+            this.youtubeNotFounds[channel.name]++;
+
+            this.logger.warn(`Canal do YouTube não encontrado (${this.youtubeNotFounds[channel.name]} vezes): '${channel.name}'.`);
+            if(this.youtubeNotFounds[channel.name] > 5){
+              this.logger.warn(`Canal do YouTube não encontrado: '${channel.name}' muitas vezes. Removendo do monitoramento.`);
+
+              // Remove o canal do monitoramento
+              this.unsubscribe(channel.name, 'youtube');
+              
+              // Tenta enviar uma mensagem para todos os grupos que monitoram este canal
+              try {
+                // Obtém todos os grupos
+                const groups = await this.database.getGroups();
                 
-                if (channelConfig) {
-                  // Remove o canal da configuração deste grupo
-                  group.youtube = group.youtube.filter(c => 
-                    c.channel.toLowerCase() !== channel.name.toLowerCase()
-                  );
-                  
-                  // Salva o grupo
-                  await database.saveGroup(group);
-                  
-                  // Envia uma mensagem de notificação
-                  this.emit('channelNotFound', {
-                    platform: 'youtube',
-                    channelName: channel.name,
-                    groupId: group.id
-                  });
+                // Filtra grupos que monitoram este canal
+                for (const group of groups) {
+                  if (Array.isArray(group.youtube)) {
+                    const channelConfig = group.youtube.find(c => 
+                      c.channel.toLowerCase() === channel.name.toLowerCase()
+                    );
+                    
+                    if (channelConfig) {
+                      // Remove o canal da configuração deste grupo
+                      group.youtube = group.youtube.filter(c => 
+                        c.channel.toLowerCase() !== channel.name.toLowerCase()
+                      );
+                      
+                      // Salva o grupo
+                      await this.database.saveGroup(group);
+                      
+                      // Envia uma mensagem de notificação
+                      this.emit('channelNotFound', {
+                        platform: 'youtube',
+                        channelName: channel.name,
+                        groupId: group.id
+                      });
+                    }
+                  }
                 }
+              } catch (notificationError) {
+                this.logger.error(`Erro ao notificar grupos sobre canal não encontrado: ${channel.name}`, notificationError);
               }
             }
-          } catch (notificationError) {
-            this.logger.error(`Erro ao notificar grupos sobre canal não encontrado: ${channel.name}`, notificationError);
           }
         } else {
           this.logger.error(`Erro ao monitorar canal do YouTube ${channel.name}:`, error.message);
@@ -1092,7 +1105,7 @@ class StreamMonitor extends EventEmitter {
           );
           
           // Processa os resultados
-          const liveStreams = streamResponse.data.data || [];
+          const liveStreams = streamResponse.data.data ?? [];
           const liveStreamUserIds = liveStreams.map(stream => stream.user_id);
           
           // Cria objetos de status para cada canal
@@ -1344,12 +1357,12 @@ class StreamMonitor extends EventEmitter {
               .map(stream => ({
                 platform: 'kick',
                 channelName: stream.slug,
-                displayName: stream.user?.username || stream.slug,
+                displayName: stream.user?.username ?? stream.slug,
                 title: stream.session_title,
                 game: stream.categories.length > 0 ? stream.categories[0].name : 'Desconhecido',
                 viewerCount: stream.viewer_count,
                 startedAt: stream.created_at,
-                thumbnail: stream.thumbnail?.url || stream.user?.profile_pic || ''
+                thumbnail: stream.thumbnail?.url ?? stream.user?.profile_pic ?? ''
               }));
           }
         } catch (error) {
@@ -1397,7 +1410,7 @@ class StreamMonitor extends EventEmitter {
     };
 
     // Get rules for the requested platform (fallback to twitch if invalid platform passed)
-    const rules = platformRules[platform.toLowerCase()] || platformRules.twitch;
+    const rules = platformRules[platform.toLowerCase()] ?? platformRules.twitch;
 
     // 1. Remove the URL domain/protocol
     let cleaned = inputString.replace(rules.urlPattern, "");

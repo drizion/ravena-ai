@@ -203,7 +203,7 @@ async function startStopGame(bot, message, args, group) {
     logger.warn('Erro ao iniciar jogo de Stop/Adedonha:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: '❌ Erro ao iniciar o jogo de Stop/Adedonha. Por favor, tente novamente.'
     });
   }

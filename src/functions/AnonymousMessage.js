@@ -31,7 +31,7 @@ function getAnonMessages() {
     }
     
     const data = fs.readFileSync(ANON_MSGS_PATH, 'utf8');
-    return JSON.parse(data || '[]');
+    return JSON.parse(data ?? '[]');
   } catch (error) {
     logger.error('Erro ao carregar mensagens anônimas:', error);
     return [];
@@ -127,7 +127,7 @@ function cleanId(id){
  */
 async function anonymousMessage(bot, message, args, group) {
   try {
-    logger.debug(`[anonymousMessage] `, {message, group});
+    //logger.debug(`[anonymousMessage] `, {message, group, args});
     // Verifica o ID do remetente
     const senderIds = [cleanId(message.author), cleanId(message?.origin?.key?.remoteJidAlt ?? "-"), cleanId(message?.origin?.key?.remoteJid ?? "-"), cleanId(message?.origin?.Info?.SenderAlt ?? "-"), cleanId(message?.origin?.Info?.Sender ?? "-")];
     
@@ -135,13 +135,14 @@ async function anonymousMessage(bot, message, args, group) {
     if (args.length < 2) {
       return new ReturnMessage({
         chatId: senderIds[0],
-        content: `⚠️ Formato incorreto. Use: !anonimo ${group?.name ?? "nomegrupo"} mensagem\n\nExemplo: !anonimo ${group?.name ?? "nomegrupo"} Olá, esta é uma mensagem anônima!`
+        content: `⚠️ Formato incorreto. Use: !anonimo ${group?.name ?? "nomegrupo"} mensagem\n\nExemplo: !anonimo ${group?.name ?? "nomegrupo"} Olá, esta é uma mensagem anônima!\n\nOpcionalmente, você pode colocar a palavra 'original' no início da sua frase para que o bot não anonimize a mensagem.\nExemplo: !anonimo ${group?.name ?? "nomegrupo"} original Minha mensagem anônima na íntegra`
       });
     }
     
     // Obtém o ID do grupo alvo
     const targetGroupName = args[0].toLowerCase();
 
+    
     // Verifica cooldown
     const cooldownCheck = checkUserCooldown(senderIds[0], targetGroupName);
     if (cooldownCheck.onCooldown) {
@@ -151,9 +152,15 @@ async function anonymousMessage(bot, message, args, group) {
       });
     }
     
-    
     // Obtém a mensagem a ser enviada
-    const anonymousText = args.slice(1).join(' ');
+    let anonymousText = args.slice(1).join(' ');
+    let anonimize = true;
+    if(args[1].toLowerCase() === "original"){ // Se a primeira palavra for 'original', não anonimiza com LLM
+      anonimize = false;
+      anonymousText = args.slice(2).join(' ');
+    }
+
+
     
     // Verifica se a mensagem é muito curta
     if (anonymousText.length < 5) {
@@ -209,9 +216,17 @@ async function anonymousMessage(bot, message, args, group) {
     
     let anonimizedMessage = null;
     try {
-      anonimizedMessage = await llmService.getCompletion({ prompt: `Reescreva esta frase em portugues adequado, removendo vícios de linguagens, gírias e idiomas. A mensagem deve ser anonimizada, não sendo possível identificar a pessoa que enviou a mesma. ((Retorne APENAS a frase solicitada)). Texto para processar:\n"${anonymousText}"` });
+      if(anonimize){
+        anonimizedMessage = await llmService.getCompletion({ prompt: `Reescreva esta frase em portugues adequado, removendo vícios de linguagens, gírias e idiomas. A mensagem deve ser anonimizada, não sendo possível identificar a pessoa que enviou a mesma. ((Retorne APENAS a frase solicitada. Se não for possível, retorne o texto original, ((nunca)) retorne mensagens de erro e otros detalhes)). Texto para processar:\n"${anonymousText}"` });
+        if(anonimizedMessage.includes("original não pode ser")){
+          anonimizedMessage = anonymousText;
+        }
+      } else {
+        anonimizedMessage = anonymousText;
+      }
     } catch(e){
       logger.error(`[anonymousMessage] Não consegui deixar a mensagem anonima, usando a original.`);
+      anonimizedMessage = anonymousText;
     }
 
     // Adiciona nova mensagem ao registro

@@ -251,8 +251,8 @@ async function pintoCommand(bot, message, args, group) {
     
     // Obtém IDs e nome
     const groupId = message.group;
-    const userId = message.author;
-    const userName = message.authorName || "Usuário";
+    const userId = message.author ?? message.authorAlt;
+    const userName = message.name ?? message.pushName ?? message.pushname ?? message.authorName ?? "Fulano";
     
     // Obtém os dados do jogo
     const gameData = await getPintoGameData();
@@ -346,7 +346,7 @@ async function pintoCommand(bot, message, args, group) {
     logger.error('Erro no comando de pinto:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: '❌ Erro ao processar o comando. Por favor, tente novamente.',
       options: {
         quotedMessageId: message.origin.id._serialized,
@@ -424,7 +424,7 @@ async function pintoRankingCommand(bot, message, args, group) {
     logger.error('Erro ao mostrar ranking do jogo:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: '❌ Erro ao mostrar ranking. Por favor, tente novamente.'
     });
   }
@@ -508,7 +508,7 @@ async function pintoResetCommand(bot, message, args, group) {
     logger.error('Erro ao resetar dados do jogo:', error);  
       
     return [new ReturnMessage({  
-      chatId: message.group || message.author,  
+      chatId: message.group ?? message.author,  
       content: 'Erro ao resetar dados do jogo. Por favor, tente novamente.'  
     })];  
   }  

@@ -19,7 +19,7 @@ const database = Database.getInstance();
  */
 async function listMonitoredChannels(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     if (!group) {
       return new ReturnMessage({
@@ -97,7 +97,7 @@ async function listMonitoredChannels(bot, message, args, group) {
     logger.error('Erro ao listar canais monitorados:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao listar canais monitorados. Por favor, tente novamente.'
     });
   }
@@ -113,7 +113,7 @@ async function listMonitoredChannels(bot, message, args, group) {
  */
 async function showStreamStatus(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     if (!group) {
       return new ReturnMessage({
@@ -222,7 +222,7 @@ async function showStreamStatus(bot, message, args, group) {
     logger.error('Erro ao mostrar status dos streams:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao mostrar status dos streams. Por favor, tente novamente.'
     });
   }
@@ -238,7 +238,7 @@ async function showStreamStatus(bot, message, args, group) {
  */
 async function listOnlineStreamers(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     // Verifica se o StreamMonitor está inicializado
     if (!bot.streamMonitor) {
@@ -323,7 +323,7 @@ async function listOnlineStreamers(bot, message, args, group) {
     logger.error('Erro ao listar streamers online:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao listar streamers online. Por favor, tente novamente.'
     });
   }
@@ -341,7 +341,7 @@ async function listOnlineStreamers(bot, message, args, group) {
  */
 async function showLiveInfo(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     // Verifica se o StreamMonitor está inicializado
     if (!bot.streamMonitor) {
@@ -451,7 +451,7 @@ async function showLiveInfo(bot, message, args, group) {
     console.error('Erro ao exibir informações de stream Twitch:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao obter informações da stream. Por favor, tente novamente.'
     });
   }
@@ -467,7 +467,7 @@ async function showLiveInfo(bot, message, args, group) {
  */
 async function showLiveKick(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     // Verifica se o StreamMonitor está inicializado
     if (!bot.streamMonitor) {
@@ -573,7 +573,7 @@ async function showLiveKick(bot, message, args, group) {
     console.error('Erro ao exibir informações de stream Kick:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao obter informações da stream. Por favor, tente novamente.'
     });
   }
@@ -711,7 +711,7 @@ async function getStreamInformation(bot, chatId, platform, channelName) {
  */
 async function showPopularStreams(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     // Verifica se o StreamMonitor está inicializado
     if (!bot.streamMonitor) {
@@ -784,7 +784,7 @@ async function showPopularStreams(bot, message, args, group) {
     console.error('Erro ao exibir streams populares:', error);
     
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao obter streams populares. Por favor, tente novamente.'
     });
   }

@@ -94,7 +94,7 @@ async function showCommandsByCategory (bot, message, args, group){
       // If no commands found in this category
       if (commandsInCategory.length === 0 && customCommands.length === 0) {
         return new ReturnMessage({
-          chatId: message.group || message.author,
+          chatId: message.group ?? message.author,
           content: `Nenhum comando encontrado na categoria '${category}'.`
         });
       }
@@ -147,7 +147,7 @@ async function showCommandsByCategory (bot, message, args, group){
       }
       
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: menuText
       });
     }
@@ -157,7 +157,7 @@ async function showCommandsByCategory (bot, message, args, group){
   } catch (error) {
     logger.error('Erro ao enviar lista de comandos por categoria:', error);
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao recuperar lista de comandos por categoria. Por favor, tente novamente.'
     });
   }
@@ -299,7 +299,7 @@ function formatSingleCommand(cmd, prefix) {
  */
 async function sendCommandList(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     logger.debug(`Enviando lista de comandos para ${chatId}`);
     
     // Obtém todos os comandos fixos
@@ -411,7 +411,7 @@ async function sendCommandList(bot, message, args, group) {
     });
   } catch (error) {
     logger.error('Erro ao enviar lista de comandos:', error);
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     return new ReturnMessage({
       chatId: chatId,
@@ -430,7 +430,7 @@ async function sendCommandList(bot, message, args, group) {
  */
 async function sendManagementCommandList(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     logger.debug(`Enviando lista de comandos de gerenciamento para ${chatId}`);
     
     // Lê o cabeçalho do menu
@@ -477,7 +477,7 @@ async function sendManagementCommandList(bot, message, args, group) {
     });
   } catch (error) {
     logger.error('Erro ao enviar lista de comandos de gerenciamento:', error);
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     return new ReturnMessage({
       chatId: chatId,
@@ -496,7 +496,7 @@ async function sendManagementCommandList(bot, message, args, group) {
  */
 async function sendGroupCommandList(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     // Verifica se está em um grupo
     if (!group) {
@@ -572,7 +572,7 @@ async function sendGroupCommandList(bot, message, args, group) {
     });
   } catch (error) {
     logger.error('Erro ao enviar lista de comandos personalizados:', error);
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     return new ReturnMessage({
       chatId: chatId,
@@ -670,7 +670,7 @@ const commands = [
     method: async (bot, message, args, group) => {
 
       return new ReturnMessage({
-          chatId: message.group || message.author,
+          chatId: message.group ?? message.author,
           content: `🤖 *Categorias disponíveis*:\n\n${Object.keys(CATEGORY_EMOJIS).map((c,v) => `- !cmd-${c}`).join("\n")}`
         });
     }

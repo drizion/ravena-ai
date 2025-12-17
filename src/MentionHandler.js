@@ -57,13 +57,11 @@ class MentionHandler {
 
         if (!prompt) {
           // Apenas uma menção sem texto, envia uma resposta padrão
-          const chatId = message.group || message.author;
+          const chatId = message.group ?? message.author;
           const returnMessage = new ReturnMessage({
             chatId: chatId,
             content: "Olá! Como posso te ajudar? Você pode tirar dúvida de quais comandos eu tenho e também como usar eles, com exemplos, é só pedir! Se quiser saber meus comandos, envie !cmd",
-            reactions: {
-              after: this.reactions.after
-            }
+            reaction: this.reactions.after
           });
           
           await bot.sendReturnMessages(returnMessage);

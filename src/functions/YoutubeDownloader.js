@@ -128,7 +128,7 @@ async function processYoutubeReaction(bot, message, emoji) {
     }
     
     // Envia mensagem de confirmação
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     const processingMsg = new ReturnMessage({
       chatId: chatId,
       content: 'Baixando vídeo do YouTube...',
@@ -372,7 +372,7 @@ async function ytCommand(bot, message, args, group) {
     return false;
   }
 
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
   const returnMessages = [];
 
   let input = undefined;
@@ -508,7 +508,7 @@ async function srCommand(bot, message, args, group) {
     return false;
   }
 
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
   const returnMessages = [];
   
   let input = undefined;
@@ -651,6 +651,6 @@ const commands = [
 ];
 
 // Registra os comandos sendo exportados
-//logger.debug(`Exportando ${commands.length} comandos:`, commands.map(cmd => cmd.name));
+//logger.debug(`Exportando ${commands.length} comandos:`, { commands });
 
 module.exports = { commands, processYoutubeReaction };

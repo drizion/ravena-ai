@@ -229,3 +229,4 @@ data/cooldowns.js
 data/skip-groups*.json
 .gemini/settings.json
 /.Trash-1000
+*.db

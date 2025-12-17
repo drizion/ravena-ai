@@ -106,7 +106,7 @@ function normalizeSigno(signo) {
  */
 async function detectHoroscopo(msgBody, groupId) {
   try {
-    const gruposHoroscopo = (process.env.GRUPOS_HOROSCOPOS || '').split(',');
+    const gruposHoroscopo = (process.env.GRUPOS_HOROSCOPOS ?? '').split(',');
     if (gruposHoroscopo.includes(groupId) && gruposHoroscopo.length > 0) {
       logger.info(`Horoscopo detectado em grupo oficial`);
     }
@@ -157,7 +157,7 @@ async function detectHoroscopo(msgBody, groupId) {
  * @returns {Promise<ReturnMessage>} - Mensagem de retorno
  */
 async function horoscopoCommand(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
 
   try {
     let signoQuery = null;
@@ -253,7 +253,7 @@ async function horoscopoCommand(bot, message, args, group) {
     return new ReturnMessage({
       chatId: chatId,
       content: '❌ Ocorreu um erro ao buscar o horóscopo.',
-      reactions: { after: "❌" }
+      reaction:  "❌"
     });
   }
 }

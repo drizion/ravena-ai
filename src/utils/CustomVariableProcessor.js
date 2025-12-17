@@ -46,7 +46,7 @@ class CustomVariableProcessor {
       // Verifica se é uma variável de arquivo
       const fileMatch = text.match(/^\{file-(.*?)\}$/);
       if (fileMatch && context && context.message) {
-        const chatId = context.message.group || context.message.author;
+        const chatId = context.message.group ?? context.message.author;
         const bot = context.bot;
         
         if (bot) {
@@ -288,7 +288,7 @@ class CustomVariableProcessor {
     if (membroRandomMatches && context.bot && context.message && context.message.group) {
       try {
         const randomMember = await this.getRandomGroupMember(context.bot, context.message.group);
-        const memberName = randomMember ? (randomMember.pushname || randomMember.name || "Alguém") : "Alguém";
+        const memberName = randomMember ? (randomMember.pushname ?? randomMember.name ?? "Alguém") : "Alguém";
         text = text.replace(/{membroRandom}/g, memberName);
       } catch (error) {
         this.logger.error('Erro ao processar variável {membroRandom}:', error);
@@ -328,7 +328,7 @@ class CustomVariableProcessor {
               try {
                 // Obtém informações do contato mencionado
                 mentionContact = await context.bot.client.getContactById(mentionId);
-                mentionName = `@${mentionContact?.number?.split('@')[0] || mentionContact?.id?.user.split('@')[0]}`;
+                mentionName = `@${mentionContact?.number?.split('@')[0] ?? mentionContact?.id?.user.split('@')[0]}`;
               } catch (err) {
                 this.logger.error('Erro ao obter contato mencionado:', err);
                 mentionName = `@${mentionId.split('@')[0]}`;
@@ -349,7 +349,7 @@ class CustomVariableProcessor {
               const mentionContact = await quotedMsg.getContact();
               if (mentionContact) {
                 mentionId = mentionContact.id._serialized;
-                mentionName = `@${mentionContact?.number?.split('@')[0] || mentionContact?.id?.user?.split('@')[0]}`;
+                mentionName = `@${mentionContact?.number?.split('@')[0] ?? mentionContact?.id?.user?.split('@')[0]}`;
                 
                 // Marca esta menção como usada
                 usedMentions.push(mentionId);
@@ -363,7 +363,7 @@ class CustomVariableProcessor {
           // 3. Se não há mensagem citada ou já foi usada, seleciona um membro aleatório - a não ser que tenha um fallback especificado
           if(fallbackNumber){
               const mentionContact = await context.bot.client.getContactById(fallbackNumber);
-              mentionName = `@${mentionContact?.number?.split('@')[0] || mentionContact?.id?.user?.split('@')[0]}`;
+              mentionName = `@${mentionContact?.number?.split('@')[0] ?? mentionContact?.id?.user?.split('@')[0]}`;
 
               return { mentionId: fallbackNumber, mentionName, mentionContact };
           } else {
@@ -387,7 +387,7 @@ class CustomVariableProcessor {
                     
                     // Obtém o objeto de contato
                     const mentionContact = await context.bot.client.getContactById(mentionId);
-                    mentionName = `@${mentionContact?.number?.split('@')[0] || mentionContact?.id?.user?.split('@')[0]}`;
+                    mentionName = `@${mentionContact?.number?.split('@')[0] ?? mentionContact?.id?.user?.split('@')[0]}`;
                     
                     // Marca esta menção como usada
                     usedMentions.push(mentionId);
@@ -406,7 +406,7 @@ class CustomVariableProcessor {
                       
                       // Obtém o objeto de contato
                       const mentionContact = await context.bot.client.getContactById(mentionId);
-                      mentionName = `@${mentionContact?.number?.split('@')[0] || mentionContact?.id?.user?.split('@')[0]}`;
+                      mentionName = `@${mentionContact?.number?.split('@')[0] ?? mentionContact?.id?.user?.split('@')[0]}`;
                       
                       return { mentionId, mentionName, mentionContact };
                     }

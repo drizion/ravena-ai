@@ -212,7 +212,7 @@ async function processLastFM(usuario) {
  * @returns {Promise<ReturnMessage>} ReturnMessage
  */
 async function lastfmCommand(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
   
   try {
     // Verifica se foi fornecido um nome de usuário

@@ -126,7 +126,7 @@ function testFetchDataRavena() {
  * Example: !share frutas Laranja
  */
 async function shareVariable(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
 
   try {
     // This command is only available in groups

@@ -33,7 +33,7 @@ async function buscarMetar(icao) {
  * @returns {Promise<ReturnMessage>}
  */
 async function metarCommand(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
 
   try {
     if (!args.length) {

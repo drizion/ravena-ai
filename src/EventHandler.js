@@ -66,7 +66,7 @@ class EventHandler {
 
       let newGroup = false;
       if (!this.groups[groupId]) {
-        this.logger.info(`Criando novo grupo: ${groupId} com nome: ${name || 'desconhecido'}`);
+        this.logger.info(`Criando novo grupo: ${groupId} com nome: ${name ?? 'desconhecido'}`);
         newGroup = true;
 
         // Obtém grupos do banco de dados para garantir que temos o mais recente
@@ -79,9 +79,7 @@ class EventHandler {
           this.groups[groupId] = new Group(existingGroup);
         } else {
           // Cria novo grupo
-          let displayName = name ||
-            (groupId.split('@')[0].toLowerCase().replace(/\s+/g, '').substring(0, 16));
-
+          let displayName = name ?? (groupId.split('@')[0].toLowerCase().replace(/\s+/g, '').substring(0, 16));
 
           // Verifica se já tem grupo com esse nome antes
           let grupoExistente = await this.database.getGroupByName(displayName);
@@ -110,7 +108,7 @@ class EventHandler {
     } catch (error) {
       this.logger.error('Erro em getOrCreateGroup:', error);
       // Cria um objeto de grupo básico se tudo falhar
-      return new Group({ id: groupId, name: name || 'grupo-desconhecido' });
+      return new Group({ id: groupId, name: name ?? 'grupo-desconhecido' });
     }
   }
 
@@ -234,7 +232,7 @@ class EventHandler {
               const contact = await message.origin.getContact();
               // Salva o nome original para possível uso futuro
               if (!message.originalName) {
-                message.originalName = contact.name || contact.pushname || 'Desconhecido';
+                message.originalName = contact.name ?? contact.pushname ?? 'Desconhecido';
               }
               // Atualiza o nome com o apelido
               contact.name = nickData.apelido;
@@ -669,7 +667,7 @@ class EventHandler {
                 if (fileContent && fileContent.trim() !== '') {
                   botInfoMessage = fileContent.trim();
                   // Substitui variável {prefix} se presente
-                  botInfoMessage = botInfoMessage.replace(/{prefix}/g, group.prefix || '!');
+                  botInfoMessage = botInfoMessage.replace(/{prefix}/g, group.prefix ?? '!');
                 }
               }
             } catch (readError) {
@@ -718,8 +716,8 @@ class EventHandler {
               // Extrai informações do grupo para o LLM
               const groupInfo = {
                 name: chat.name,
-                description: chat.groupMetadata?.desc || "",
-                memberCount: chat.participants?.length || 0
+                description: chat.groupMetadata?.desc ?? "",
+                memberCount: chat.participants?.length ?? 0
               };
 
               const llmPrompt = `Você é um bot de WhatsApp chamado ravenabot e foi adicionado em um grupo de whatsapp chamado '${groupInfo.name}'${llm_inviterInfo}, este grupo é sobre '${groupInfo.description}' e tem '${groupInfo.memberCount}' participantes. Gere uma mensagem agradecendo a confiança e fazendo de conta que entende do assunto do grupo enviando algo relacionado junto pra se enturmar, seja natural. Não coloque coisas placeholder, pois a mensagem que você retornar, vai ser enviada na íntegra e sem ediçoes.`;
@@ -753,7 +751,7 @@ class EventHandler {
               if (fileContent && fileContent.trim() !== '') {
                 botInfoMessage = fileContent.trim();
                 // Substitui variável {prefix} se presente
-                botInfoMessage = botInfoMessage.replace(/{prefix}/g, group.prefix || '!');
+                botInfoMessage = botInfoMessage.replace(/{prefix}/g, group.prefix ?? '!');
               }
             }
           } catch (readError) {
@@ -888,12 +886,12 @@ class EventHandler {
       let mentions = [];
 
       if (Array.isArray(user)) {
-        numeroPessoas = user.map(u => `@${u.id.split('@')[0]}` || "@123456780").join(", ");
+        numeroPessoas = user.map(u => `@${u.id.split('@')[0]}` ?? "@123456780").join(", ");
         quantidadePessoas = user.length;
         isPlural = quantidadePessoas > 1;
         mentions = user.map(u => u.id);
       } else {
-        numeroPessoas = `@${user.id.split('@')[0]}` || "@123456780";
+        numeroPessoas = `@${user.id.split('@')[0]}` ?? "@123456780";
         mentions = [user.id];
       }
 
@@ -907,8 +905,8 @@ class EventHandler {
         message = message.replace(/{pessoa}/g, numeroPessoas); // Usa o numero pra marcar
 
         // Variáveis de grupo
-        message = message.replace(/{tituloGrupo}/g, chatData?.name || "Grupo");
-        message = message.replace(/{nomeGrupo}/g, group?.name || "Grupo");
+        message = message.replace(/{tituloGrupo}/g, chatData?.name ?? "Grupo");
+        message = message.replace(/{nomeGrupo}/g, group?.name ?? "Grupo");
         message = message.replace(/{nomePessoas}/g, numeroPessoas);
         message = message.replace(/{numeroPessoas}/g, numeroPessoas);
 
@@ -984,7 +982,7 @@ class EventHandler {
         // Substitui variáveis
         let message = group.farewells.text;
         message = message.replace(/{pessoa}/g, `@${user.id.split('@')[0]}`);
-        message = message.replace(/{tituloGrupo}/g, chatData?.name || "Grupo");
+        message = message.replace(/{tituloGrupo}/g, chatData?.name ?? "Grupo");
 
         // Processa variáveis
         const options = {};
@@ -1039,7 +1037,7 @@ class EventHandler {
 
         // Notifica o usuário (opcional)
         const returnMessage = new ReturnMessage({
-          chatId: message.group || message.author,
+          chatId: message.group ?? message.author,
           content: `⛔ Você não tem permissão para realizar esta ação: ${action}`
         });
         await bot.sendReturnMessages(returnMessage);

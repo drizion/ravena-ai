@@ -56,7 +56,7 @@ class FixedCommands {
                     after: "✅"
                   };
                 }
-                
+
                 // Cria uma nova instância de Command com os dados do objeto
                 return new Command(cmd);
               }
@@ -70,7 +70,7 @@ class FixedCommands {
         }
       }
 
-      this.logger.info(`Carregados ${this.commands.length} comandos fixos`);
+      this.logger.info(`Carregados ${this.commands.length} comandos fixos`); // , {commands: this.commands}
       if(modulosComErro.length > 0){
         this.logger.warn(`ATENÇÃO: ${modulosComErro.length} módulos com erro:\n ${modulosComErro.join("\n- ")}`);
       }

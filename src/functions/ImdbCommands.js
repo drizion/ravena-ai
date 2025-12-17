@@ -10,7 +10,7 @@ const logger = new Logger('imdb-commands');
 //logger.info('Módulo ImdbCommands carregado');
 
 // API key do OMDB (baseado na API do IMDB)
-const OMDB_API_KEY = process.env.OMDB_API_KEY || '';
+const OMDB_API_KEY = process.env.OMDB_API_KEY ?? '';
 
 // URL base da API
 const OMDB_API_URL = 'http://www.omdbapi.com/';
@@ -25,7 +25,7 @@ const OMDB_API_URL = 'http://www.omdbapi.com/';
  */
 async function buscarImdb(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     const returnMessages = [];
     
     // Verificar se a API key está configurada
@@ -161,7 +161,7 @@ async function buscarImdb(bot, message, args, group) {
         data.Plot.substring(0, 297) + '...' : 
         data.Plot;
       
-      sinopse = (await translateText(sinopse, "en", "pt")) || sinopse;
+      sinopse = (await translateText(sinopse, "en", "pt")) ?? sinopse;
       mensagem += `\n📝 *Sinopse:* ${sinopse}\n`;
     }
     
@@ -177,7 +177,7 @@ async function buscarImdb(bot, message, args, group) {
         const base64Image = imageBuffer.toString('base64');
         
         // Determina o tipo de imagem (geralmente jpg, mas pode ser png)
-        const contentType = imageResponse.headers['content-type'] || 'image/jpeg';
+        const contentType = imageResponse.headers['content-type'] ?? 'image/jpeg';
         
         // Cria a mídia para o poster
         const media = new MessageMedia(contentType, base64Image, `${data.imdbID}.jpg`);
@@ -218,7 +218,7 @@ async function buscarImdb(bot, message, args, group) {
   } catch (error) {
     logger.error('Erro ao buscar IMDB:', error);
     
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     let errorMessage = 'Erro ao buscar informações do IMDB. Por favor, tente novamente.';
     
     if (error.response) {

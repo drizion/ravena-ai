@@ -330,7 +330,7 @@ async function translateText(text, sourceLanguage, targetLanguage) {
  * @returns {Promise<ReturnMessage>} - Mensagem de retorno com a tradução
  */
 async function handleTranslation(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
   
   try {
     // Preparar para lidar com diferentes formatos:
@@ -478,7 +478,7 @@ async function processTranslationReaction(bot, message, args, group) {
     const targetLanguage = FLAG_TO_LANGUAGE[emoji];
         
     const textToTranslate = message.content;
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     // Traduzir o texto
     const translatedText = await translateText(textToTranslate, "pt", targetLanguage);

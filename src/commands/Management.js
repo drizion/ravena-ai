@@ -300,7 +300,7 @@ class Management {
    * @returns {Object} - Objeto com comandos e descrições
    */
   getCommandMethod(command) {
-    return this.commandMap[command]?.method || null;
+    return this.commandMap[command]?.method;
   }
 
   /**
@@ -313,7 +313,7 @@ class Management {
     // Constrói objeto de comandos a partir do commandMap
     for (const [cmdName, cmdData] of Object.entries(this.commandMap)) {
       commands[cmdName] = {
-        description: cmdData.description || 'Sem descrição disponível',
+        description: cmdData.description ?? 'Sem descrição disponível',
         method: cmdData.method
       };
     }
@@ -408,7 +408,7 @@ class Management {
       if(args.length > 1){ // Tem argumetnos, tenta pegar o body pra incluir quebras de linha
         if (message.origin && message.origin.body) {
           // Extrai o texto após o comando
-          const prefixo = group.prefix || '!';
+          const prefixo = group.prefix ?? '!';
           commandTrigger = args[0];
           const comandoCompleto = `${prefixo}g-addCmd ${commandTrigger}`;
           bodyTexto = message.origin.body.substring(message.origin.body.indexOf(comandoCompleto) + comandoCompleto.length).trim();
@@ -560,7 +560,7 @@ class Management {
       if(args.length > 1){ // Tem argumetnos, tenta pegar o body pra incluir quebras de linha
         if (message.origin && message.origin.body) {
           // Extrai o texto após o comando
-          const prefixo = group.prefix || '!';
+          const prefixo = group.prefix ?? '!';
           commandTrigger = args[0];
           const comandoCompleto = `${prefixo}g-addCmdReply ${commandTrigger}`;
           bodyTexto = message.origin.body.substring(message.origin.body.indexOf(comandoCompleto) + comandoCompleto.length).trim();
@@ -984,7 +984,7 @@ async setWelcomeMessage(bot, message, args, group) {
   // Se tiver argumentos, usa o corpo da mensagem completa
   else if (message.origin && message.origin.body) {
     // Extrai o texto após o comando
-    const prefixo = group.prefix || '!';
+    const prefixo = group.prefix ?? '!';
     const comandoCompleto = `${prefixo}g-setBoasvindas`;
     const texto = message.origin.body.substring(message.origin.body.indexOf(comandoCompleto) + comandoCompleto.length).trim();
     
@@ -1066,7 +1066,7 @@ async setWelcomeMessage(bot, message, args, group) {
     // Se tiver argumentos, usa o corpo da mensagem completa
     else if (message.origin && message.origin.body) {
       // Extrai o texto após o comando
-      const prefixo = group.prefix || '!';
+      const prefixo = group.prefix ?? '!';
       const comandoCompleto = `${prefixo}g-setDespedida`;
       const texto = message.origin.body.substring(message.origin.body.indexOf(comandoCompleto) + comandoCompleto.length).trim();
       
@@ -1220,11 +1220,11 @@ async setWelcomeMessage(bot, message, args, group) {
           const groupStorage = filesDb.chats[group.id];
           
           // Conta o número de arquivos (não pastas)
-          const files = Object.values(groupStorage.files || {})
+          const files = Object.values(groupStorage.files ?? {})
             .filter(file => !file.isFolder);
           
           filesInfo.totalFiles = files.length;
-          filesInfo.totalSize = groupStorage.totalSize || 0;
+          filesInfo.totalSize = groupStorage.totalSize ?? 0;
         }
       } catch (filesError) {
         this.logger.error('Erro ao obter informações de arquivos:', filesError);
@@ -1268,7 +1268,7 @@ async setWelcomeMessage(bot, message, args, group) {
       infoMessage += `*Pausado:* ${group.paused ? 'Sim' : 'Não'}\n\n`;
       
       // Adiciona informações de admins adicionais
-      const admins = group.additionalAdmins || [];
+      const admins = group.additionalAdmins ?? [];
       if (admins.length > 0) {
         infoMessage += `*Administradores:* ${admins.length}\n`;
         for (let i = 0; i < Math.min(3, admins.length); i++) {
@@ -2005,7 +2005,7 @@ async setWelcomeMessage(bot, message, args, group) {
    */
   findChannelConfig(group, platform, channelName) {
     const channels = this.getChannelConfig(group, platform);
-    return channels.find(c => c.channel.toLowerCase() === channelName.toLowerCase()) || null;
+    return channels.find(c => c.channel.toLowerCase() === channelName.toLowerCase());
   }
 
   /**
@@ -3240,7 +3240,7 @@ async setWelcomeMessage(bot, message, args, group) {
       this.logger.error('Erro ao definir apelido:', error);
       
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: 'Erro ao definir apelido. Por favor, tente novamente.'
       });
     }
@@ -3340,7 +3340,7 @@ async setWelcomeMessage(bot, message, args, group) {
       this.logger.error('Erro ao ignorar usuário:', error);
       
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: 'Erro ao processar comando. Por favor, tente novamente.'
       });
     }
@@ -3356,7 +3356,7 @@ async setWelcomeMessage(bot, message, args, group) {
       
     if (args.length === 0) {  
       // Show current muted categories  
-      const mutedCategories = group.mutedCategories || [];  
+      const mutedCategories = group.mutedCategories ?? [];  
         
       if (mutedCategories.length === 0) {  
         return new ReturnMessage({  
@@ -3480,7 +3480,7 @@ async setWelcomeMessage(bot, message, args, group) {
       this.logger.error('Erro ao configurar mute:', error);
       
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: 'Erro ao processar comando. Por favor, tente novamente.'
       });
     }
@@ -3504,7 +3504,7 @@ async setWelcomeMessage(bot, message, args, group) {
     
     if (args.length === 0) {
       // Mostra lista atual de admins adicionais
-      const admins = group.additionalAdmins || [];
+      const admins = group.additionalAdmins ?? [];
       if (admins.length === 0) {
         return new ReturnMessage({
           chatId: group.id,
@@ -3555,7 +3555,7 @@ async setWelcomeMessage(bot, message, args, group) {
       await this.database.saveGroup(group);
       
       // Exibe a lista atualizada
-      const admins = group.additionalAdmins || [];
+      const admins = group.additionalAdmins ?? [];
       if (admins.length === 0) {
         return new ReturnMessage({
           chatId: group.id,
@@ -3646,7 +3646,7 @@ async setWelcomeMessage(bot, message, args, group) {
       this.logger.error('Erro ao pausar/retomar grupo:', error);
       
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: 'Erro ao processar comando. Por favor, tente novamente.'
       });
     }
@@ -3892,7 +3892,7 @@ async setWelcomeMessage(bot, message, args, group) {
       // Envia mensagem no grupo
       const returnMessageGroup = new ReturnMessage({
         chatId: group.id,
-        content: `✅ ${message.authorName || 'Administrador'} agora está gerenciando o grupo pelo chat privado.`
+        content: `✅ ${message.authorName ?? 'Administrador'} agora está gerenciando o grupo pelo chat privado.`
       });
       
       return [returnMessageGroup, returnMessagePV];
@@ -3900,7 +3900,7 @@ async setWelcomeMessage(bot, message, args, group) {
       this.logger.error('Erro ao configurar gerenciamento de grupo:', error);
       
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '❌ Erro ao configurar gerenciamento de grupo. Por favor, tente novamente.'
       });
     }
@@ -4490,7 +4490,7 @@ async setWelcomeMessage(bot, message, args, group) {
    */
   async listVariables(bot, message, args, group) {
     try {
-      const chatId = message.group || message.author;
+      const chatId = message.group ?? message.author;
       
       // Obtém variáveis personalizadas do banco de dados
       const customVariables = await this.database.getCustomVariables();
@@ -4631,7 +4631,7 @@ async setWelcomeMessage(bot, message, args, group) {
       this.logger.error('Erro ao listar variáveis:', error);
       
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: 'Erro ao listar variáveis disponíveis. Por favor, tente novamente.'
       });
     }
@@ -5066,7 +5066,7 @@ async setWelcomeMessage(bot, message, args, group) {
       this.logger.error(`Erro ao executar comando de ${setAdminsOnly ? 'fechar' : 'abrir'} grupo:`, error);
       
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: `❌ Erro ao executar o comando. Por favor, tente novamente.`
       });
     }
@@ -5182,7 +5182,7 @@ async setWelcomeMessage(bot, message, args, group) {
       this.logger.error('Erro ao definir apelido para usuário:', error);
       
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: 'Erro ao definir apelido. Por favor, tente novamente.'
       });
     }
@@ -5260,7 +5260,7 @@ async setWelcomeMessage(bot, message, args, group) {
     // Generate token  
     const token = this.generateRandomToken(32);  
     const now = new Date();  
-    const expirationMinutes = parseInt(process.env.MANAGEMENT_TOKEN_DURATION || "30");  
+    const expirationMinutes = parseInt(process.env.MANAGEMENT_TOKEN_DURATION ?? "30");  
     const expiration = new Date(now.getTime() + expirationMinutes * 60000);  
       
     // Format for display  
@@ -5274,7 +5274,7 @@ async setWelcomeMessage(bot, message, args, group) {
     const webManagementData = {  
         token,  
         requestNumber: message.author,  
-        authorName: message.authorName || "Unknown",  
+        authorName: message.authorName ?? "Unknown",  
         groupName: group.name,  
         groupId: group.id,  
         createdAt: now.toISOString(),  

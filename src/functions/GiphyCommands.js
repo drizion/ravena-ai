@@ -28,7 +28,7 @@ const GIPHY_TRENDING_URL = 'https://api.giphy.com/v1/gifs/trending';
  */
 async function enviarGif(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     const returnMessages = [];
     
     // Se não tiver API key configurada
@@ -214,7 +214,7 @@ async function enviarGif(bot, message, args, group) {
   } catch (error) {
     logger.error('Erro ao buscar/enviar GIF:', error);
     
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     let errorMessage = 'Erro ao buscar GIF. Por favor, tente novamente.';
     
     if (error.response) {

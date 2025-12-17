@@ -265,7 +265,7 @@ async function showLists(bot, message, args, group) {
     logger.error('Error showing lists:', error);
 
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao mostrar listas. Por favor, tente novamente.'
     });
   }
@@ -363,7 +363,7 @@ async function createList(bot, message, args, group) {
   } catch (error) {
     logger.error('Error creating list:', error);
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao criar lista. Por favor, tente novamente.'
     });
   }
@@ -436,7 +436,7 @@ async function createListWithTitle(bot, message, args, group) {
   } catch (error) {
     logger.error('Error creating list with title:', error);
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao criar lista. Por favor, tente novamente.'
     });
   }
@@ -528,7 +528,7 @@ async function deleteList(bot, message, args, group) {
   } catch (error) {
     logger.error('Error deleting list:', error);
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao excluir lista. Por favor, tente novamente.'
     });
   }
@@ -631,7 +631,7 @@ async function joinList(bot, message, args, group) {
   } catch (error) {
     logger.error('Error joining list:', error);
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao entrar na lista. Por favor, tente novamente.'
     });
   }
@@ -722,7 +722,7 @@ async function leaveList(bot, message, args, group) {
   } catch (error) {
     logger.error('Error leaving list:', error);
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao sair da lista. Por favor, tente novamente.'
     });
   }
@@ -785,7 +785,7 @@ async function setListTitle(bot, message, args, group) {
   } catch (error) {
     logger.error('Error setting list title:', error);
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao definir título da lista. Por favor, tente novamente.'
     });
   }
@@ -890,7 +890,7 @@ async function removeFromList(bot, message, args, group) {
   } catch (error) {
     logger.error('Error removing user from list:', error);
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao remover usuário da lista. Por favor, tente novamente.'
     });
   }

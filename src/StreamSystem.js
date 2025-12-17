@@ -83,7 +83,7 @@ class StreamSystem {
         if (this.debugNotificacoes && this.bot.grupoLogs) {
           await this.bot.sendMessage(
             this.bot.grupoLogs,
-            `🟢 [DEBUG] Stream ONLINE: ${data.platform}/${data.channelName}\nTítulo: ${data.title || 'N/A'}\nJogo: ${data.game || 'N/A'}`
+            `🟢 [DEBUG] Stream ONLINE: ${data.platform}/${data.channelName}\nTítulo: ${data.title ?? 'N/A'}\nJogo: ${data.game ?? 'N/A'}`
           );
         }
 
@@ -121,7 +121,7 @@ class StreamSystem {
         if (this.debugNotificacoes && this.bot.grupoLogs) {
           await this.bot.sendMessage(
             this.bot.grupoLogs,
-            `📺 [DEBUG] Novo vídeo: ${data.platform}/${data.channelName}\nTítulo: ${data.title || 'N/A'}\nURL: ${data.url || 'N/A'}`
+            `📺 [DEBUG] Novo vídeo: ${data.platform}/${data.channelName}\nTítulo: ${data.title ?? 'N/A'}\nURL: ${data.url ?? 'N/A'}`
           );
         }
 
@@ -186,7 +186,7 @@ class StreamSystem {
                 const channelExists = await this.streamMonitor.twitchChannelExists(channel.channel);
 
                 if (!channelExists) {
-                  this.logger.info(`[loadChannelsToMonitor][Cleanup] Canal Twitch não encontrado: ${channel.channel} - Removendo do grupo ${group.id} (${group.name || 'sem nome'})`);
+                  this.logger.info(`[loadChannelsToMonitor][Cleanup] Canal Twitch não encontrado: ${channel.channel} - Removendo do grupo ${group.id} (${group.name ?? 'sem nome'})`);
                   channelsToRemove.push(channel.channel.toLowerCase());
                   continue;
                 }
@@ -391,7 +391,7 @@ class StreamSystem {
         if (this.debugNotificacoes && this.bot.grupoLogs) {
           await this.bot.sendMessage(
             this.bot.grupoLogs,
-            `⚠️ [DEBUG] Sem configuração de mídia para evento ${eventType} no grupo ${group.id} (${group.name || 'sem nome'})`
+            `⚠️ [DEBUG] Sem configuração de mídia para evento ${eventType} no grupo ${group.id} (${group.name ?? 'sem nome'})`
           );
         }
       }
@@ -432,18 +432,18 @@ class StreamSystem {
               content: returnMessage.content,
               options: { ...returnMessage.options },
               delay: returnMessage.delay,
-              reactions: returnMessage.reactions ? { ...returnMessage.reactions } : null,
+              reaction: returnMessage.reaction,
               metadata: returnMessage.metadata ? { ...returnMessage.metadata } : {}
             });
 
             // Adiciona prefixo à legenda, se existir
             if (logMessage.options && logMessage.options.caption) {
-              logMessage.options.caption = `[DEBUG-CÓPIA] Grupo: ${group.name || group.id}\n${logMessage.options.caption}`;
+              logMessage.options.caption = `[DEBUG-CÓPIA] Grupo: ${group.name ?? group.id}\n${logMessage.options.caption}`;
             }
 
             // Se for mensagem de texto, adiciona prefixo
             if (typeof logMessage.content === 'string') {
-              logMessage.content = `[DEBUG-CÓPIA] Grupo: ${group.name || group.id}\n\n${logMessage.content}`;
+              logMessage.content = `[DEBUG-CÓPIA] Grupo: ${group.name ?? group.id}\n\n${logMessage.content}`;
             }
 
             logReturnMessages.push(logMessage);
@@ -461,9 +461,9 @@ class StreamSystem {
           if (this.debugNotificacoes && this.bot.grupoLogs) {
             const logAiMessage = new ReturnMessage({
               chatId: this.bot.grupoLogs,
-              content: `[DEBUG-CÓPIA-IA] Grupo: ${group.name || group.id}\n\n${aiMessage.content}`,
+              content: `[DEBUG-CÓPIA-IA] Grupo: ${group.name ?? group.id}\n\n${aiMessage.content}`,
               delay: aiMessage.delay,
-              reactions: aiMessage.reactions ? { ...aiMessage.reactions } : null
+              reaction: aiMessage.reaction
             });
 
             logReturnMessages.push(logAiMessage);
@@ -518,7 +518,7 @@ class StreamSystem {
         if (this.debugNotificacoes && this.bot.grupoLogs) {
           await this.bot.sendMessage(
             this.bot.grupoLogs,
-            `❌ [DEBUG] Nenhuma mensagem enviada para o grupo ${group.id} (${group.name || 'sem nome'}) sobre ${eventData.platform}/${eventData.channelName}`
+            `❌ [DEBUG] Nenhuma mensagem enviada para o grupo ${group.id} (${group.name ?? 'sem nome'}) sobre ${eventData.platform}/${eventData.channelName}`
           );
         }
       }
@@ -557,7 +557,7 @@ class StreamSystem {
       if (!chat || !chat.isGroup) return [];
 
       // Obtém usuários ignorados para este grupo
-      const ignoredUsers = group.ignoredUsers || [];
+      const ignoredUsers = group.ignoredUsers ?? [];
       
       // Filtra usuários ignorados (mds, é mto fallback)
       const participants = chat.participants.filter(participant => {
@@ -676,7 +676,7 @@ class StreamSystem {
           if (this.debugNotificacoes && this.bot.grupoLogs) {
             await this.bot.sendMessage(
               this.bot.grupoLogs,
-              `🔄 [DEBUG] Título alterado para grupo ${group.id} (${group.name || 'sem nome'}):\nAntigo: ${chat.name}\nNovo: ${newTitle}`
+              `🔄 [DEBUG] Título alterado para grupo ${group.id} (${group.name ?? 'sem nome'}):\nAntigo: ${chat.name}\nNovo: ${newTitle}`
             );
           }
         } catch (titleError) {
@@ -700,7 +700,7 @@ class StreamSystem {
             if (this.debugNotificacoes && this.bot.grupoLogs) {
               await this.bot.sendMessage(
                 this.bot.grupoLogs,
-                `📷 [DEBUG] Foto alterada (online) para grupo ${group.id} (${group.name || 'sem nome'})`
+                `📷 [DEBUG] Foto alterada (online) para grupo ${group.id} (${group.name ?? 'sem nome'})`
               );
             }
           }
@@ -722,7 +722,7 @@ class StreamSystem {
             if (this.debugNotificacoes && this.bot.grupoLogs) {
               await this.bot.sendMessage(
                 this.bot.grupoLogs,
-                `📷 [DEBUG] Foto alterada (offline) para grupo ${group.id} (${group.name || 'sem nome'})`
+                `📷 [DEBUG] Foto alterada (offline) para grupo ${group.id} (${group.name ?? 'sem nome'})`
               );
             }
           }
@@ -763,12 +763,12 @@ class StreamSystem {
         // Substitui variáveis específicas da plataforma
         if (eventData.platform === 'twitch' || eventData.platform === 'kick') {
           content = content.replace(/{nomeCanal}/g, eventData.channelName)
-            .replace(/{titulo}/g, eventData.title || '')
-            .replace(/{jogo}/g, eventData.game || 'Unknown');
+            .replace(/{titulo}/g, eventData.title ?? '')
+            .replace(/{jogo}/g, eventData.game ?? 'Unknown');
         } else if (eventData.platform === 'youtube') {
-          content = content.replace(/{author}/g, eventData.author || eventData.channelName)
-            .replace(/{title}/g, eventData.title || '')
-            .replace(/{link}/g, eventData.url || '');
+          content = content.replace(/{author}/g, eventData.author ?? eventData.channelName)
+            .replace(/{title}/g, eventData.title ?? '')
+            .replace(/{link}/g, eventData.url ?? '');
         }
 
         // Cria a mensagem de retorno com opções de menções, se disponíveis
@@ -803,17 +803,17 @@ class StreamSystem {
           const media = mediaItem.content.startsWith("http") ? mediaItem.content : await this.bot.createMedia(mediaPath);
 
           // Processa variáveis de legenda
-          let caption = mediaItem.caption || '';
+          let caption = mediaItem.caption ?? '';
 
           // Substitui variáveis específicas da plataforma (igual ao texto)
           if (eventData.platform === 'twitch' || eventData.platform === 'kick') {
             caption = caption.replace(/{nomeCanal}/g, eventData.channelName)
-              .replace(/{titulo}/g, eventData.title || '')
-              .replace(/{jogo}/g, eventData.game || 'Unknown');
+              .replace(/{titulo}/g, eventData.title ?? '')
+              .replace(/{jogo}/g, eventData.game ?? 'Unknown');
           } else if (eventData.platform === 'youtube') {
-            caption = caption.replace(/{author}/g, eventData.author || eventData.channelName)
-              .replace(/{title}/g, eventData.title || '')
-              .replace(/{link}/g, eventData.url || '');
+            caption = caption.replace(/{author}/g, eventData.author ?? eventData.channelName)
+              .replace(/{title}/g, eventData.title ?? '')
+              .replace(/{link}/g, eventData.url ?? '');
           }
 
           // Cria a mensagem de retorno, incluindo menções se fornecidas
@@ -821,7 +821,7 @@ class StreamSystem {
             chatId: groupId,
             content: media,
             options: {
-              caption: caption || undefined,
+              caption: caption ?? undefined,
               sendMediaAsSticker: mediaItem.type === 'sticker',
               mentions: mentions.length > 0 ? mentions : undefined
             }
@@ -872,9 +872,9 @@ class StreamSystem {
       let prompt = '';
 
       if (eventData.platform === 'twitch' || eventData.platform === 'kick') {
-        prompt = `O canal ${eventData.channelName} ficou online e está jogando ${eventData.game || 'um jogo'} com o título "${eventData.title || ''}". Gere uma mensagem animada para convidar a galera do grupo a participar da stream. Não use placeholders pois a mensagem será enviada da forma que você responder. A mensagem deve estar pronta para uso.`;
+        prompt = `O canal ${eventData.channelName} ficou online e está jogando ${eventData.game ?? 'um jogo'} com o título "${eventData.title ?? ''}". Gere uma mensagem animada para convidar a galera do grupo a participar da stream. Não use placeholders pois a mensagem será enviada da forma que você responder. A mensagem deve estar pronta para uso.`;
       } else if (eventData.platform === 'youtube') {
-        prompt = `O canal ${eventData.channelName} acabou de lançar um novo vídeo chamado "${eventData.title || ''}". Gere uma mensagem animada para convidar a galera do grupo a assistir o vídeo.  Não use placeholders pois a mensagem será enviada da forma que você responder. A mensagem deve estar pronta para uso.`;
+        prompt = `O canal ${eventData.channelName} acabou de lançar um novo vídeo chamado "${eventData.title ?? ''}". Gere uma mensagem animada para convidar a galera do grupo a assistir o vídeo.  Não use placeholders pois a mensagem será enviada da forma que você responder. A mensagem deve estar pronta para uso.`;
       }
 
       if (this.debugNotificacoes && this.bot.grupoLogs) {

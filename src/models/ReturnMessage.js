@@ -7,11 +7,11 @@ class ReturnMessage {
    * @param {Object} data - Dados da ReturnMessage
    */
   constructor(data = {}) {
-    this.chatId = data.chatId || null;
-    this.content = data.content || '';
+    this.chatId = data.chatId ?? null;
+    this.content = data.content ?? '';
     
     // Configurações padrão completas
-    this.options = data.options || {
+    this.options = data.options ?? {
       // Configurações básicas
       linkPreview: false,           // Mostra previews de links
       sendAudioAsVoice: false,      // Envia áudio como mensagem de voz com forma de onda gerada
@@ -45,9 +45,9 @@ class ReturnMessage {
     }
     
     // Propriedades opcionais adicionais
-    this.reaction = data.reaction || null;
-    this.delay = data.delay || 0;   // Milissegundos para atrasar antes de enviar
-    this.metadata = data.metadata || {}; // Metadados personalizados para rastreamento ou outros fins
+    this.reaction = data.reaction ?? null;
+    this.delay = data.delay ?? 0;   // Milissegundos para atrasar antes de enviar
+    this.metadata = data.metadata ?? {}; // Metadados personalizados para rastreamento ou outros fins
   }
 
   /**
@@ -65,12 +65,21 @@ class ReturnMessage {
   toJSON() {
     return {
       chatId: this.chatId,
-      content: typeof this.content === 'string' ? this.content : '[Conteúdo de Mídia]',
+      content: this.content, 
       options: this.options,
-      reactions: this.reactions,
+      reaction: this.reaction,
       delay: this.delay,
       metadata: this.metadata
     };
+  }
+
+  /**
+   * Cria uma instância de ReturnMessage a partir de um objeto simples
+   * @param {Object} data - Dados da mensagem
+   * @returns {ReturnMessage} - Nova instância
+   */
+  static fromJSON(data) {
+    return new ReturnMessage(data);
   }
 }
 

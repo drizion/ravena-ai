@@ -215,18 +215,18 @@ async function endGame(bot, groupId, reason) {
   clearTimeout(game.timer);
   delete activeGames[groupId];
 
-  const groupData = anagramaData.groups[groupId] || { recordRound: 0, scores: {} };
+  const groupData = anagramaData.groups[groupId] ?? { recordRound: 0, scores: {} };
   let messageContent = '';
 
   if (reason === 'time_up') {
-    const newRecord = game.round > (groupData.recordRound || 0);
+    const newRecord = game.round > (groupData.recordRound ?? 0);
     if (newRecord) {
       groupData.recordRound = game.round;
       anagramaData.groups[groupId] = groupData;
       saveAnagramaData();
     }
 
-    const sortedPlayers = Object.values(groupData.scores || {}).sort((a, b) => b.points - a.points);
+    const sortedPlayers = Object.values(groupData.scores ?? {}).sort((a, b) => b.points - a.points);
     const sessionRanking = sortedPlayers.length > 0
       ? generateRankingText(sortedPlayers, `\n🏆 *Ranking da Partida*\n\n`)
       : "Ninguém pontuou nessa partida.";
@@ -271,7 +271,7 @@ async function startNewRound(bot, message, group, isFirstRound = true) {
   const buffer = await generateImageText(
     scrambledWord,
     `⭐ Rodada ${game.round}`,
-    `🏆 Recorde: ${groupData?.recordRound || 0}`
+    `🏆 Recorde: ${groupData?.recordRound ?? 0}`
   );
 
   const media = new MessageMedia('image/png', buffer.toString('base64'));
@@ -301,11 +301,11 @@ async function startNewRound(bot, message, group, isFirstRound = true) {
  */
 function generateRankingText(users, customText) {
   const sortedUsers = users.sort((a, b) => b.points - a.points).slice(0, 15);
-  let rankingText = `${customText || "🏆 *Ranking do Grupo*\n\n"}`;
+  let rankingText = `${customText ?? "🏆 *Ranking do Grupo*\n\n"}`;
   const emojis = ['🥇', '🥈', '🥉', '🏅', '🎖'];
 
   sortedUsers.forEach((user, i) => {
-    const emoji = emojis[i] || '🔸';
+    const emoji = emojis[i] ?? '🔸';
     rankingText += `${emoji} ${user.name.trim()} - Pontuação: *${user.points}*\n`;
   });
 
@@ -358,10 +358,10 @@ async function guessCommand(bot, message, args, group) {
     game.roundEnded = true;
 
     const userId = message.author;
-    const userName = message.authorName || "Jogador";
+    const userName = message.authorName ?? "Jogador";
 
     // Atualiza a pontuação
-    const groupScores = anagramaData.groups[groupId]?.scores || {};
+    const groupScores = anagramaData.groups[groupId]?.scores ?? {};
     if (!groupScores[userId]) {
       groupScores[userId] = { name: userName, points: 0 };
     }
@@ -463,19 +463,19 @@ async function rankingCommand(bot, message) {
   if (!groupId) return new ReturnMessage({ chatId: message.author, content: '> O ranking só pode ser visto em grupos.' });
 
   const groupData = anagramaData.groups[groupId];
-  if (!groupData || (!groupData.scores && !groupData.recordRound)) {
+  if (!groupData ?? (!groupData.scores || !groupData.recordRound)) {
     return new ReturnMessage({ chatId: groupId, content: '🏆 Ainda não há dados de Anagrama para este grupo. Comece a jogar com `!anagrama`!' });
   }
 
   let rankingMessage = '';
-  const players = Object.values(groupData.scores || {});
+  const players = Object.values(groupData.scores ?? {});
 
   if (players.length === 0) {
     rankingMessage += '📊 *Ainda não há jogadores no ranking.*';
   } else {
     rankingMessage += generateRankingText(players);
   }
-  rankingMessage += `\n📈 *Recorde do Grupo:* ${groupData.recordRound || 0} rodadas`;
+  rankingMessage += `\n📈 *Recorde do Grupo:* ${groupData.recordRound ?? 0} rodadas`;
 
   return new ReturnMessage({ chatId: groupId, content: rankingMessage });
 }

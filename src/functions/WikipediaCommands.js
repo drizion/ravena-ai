@@ -22,7 +22,7 @@ const WIKI_SEARCH_API = 'https://pt.wikipedia.org/w/api.php';
  */
 async function buscarWikipedia(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     const returnMessages = [];
     
     if (args.length === 0) {
@@ -164,7 +164,7 @@ async function buscarWikipedia(bot, message, args, group) {
   } catch (error) {
     logger.error('Erro geral ao buscar Wikipedia:', error);
     
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     let errorMessage = 'Erro ao buscar informações da Wikipedia. Por favor, tente novamente.';
     
     if (error.response) {

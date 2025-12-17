@@ -29,7 +29,7 @@ function decodeHtmlEntities(text) {
  */
 async function searchAircraftRAB(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     if (args.length === 0) {
       return new ReturnMessage({
@@ -106,7 +106,7 @@ async function searchAircraftRAB(bot, message, args, group) {
     
   } catch (error) {
     logger.error('Erro na consulta RAB:', error);
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     return new ReturnMessage({
       chatId: chatId,
@@ -130,7 +130,7 @@ async function searchAircraftRAB(bot, message, args, group) {
  */
 async function searchWeb(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     if (args.length === 0) {
       return new ReturnMessage({
@@ -222,7 +222,7 @@ async function searchWeb(bot, message, args, group) {
     logger.info(`Resultados de busca enviados com sucesso para "${query}"`);
   } catch (error) {
     logger.error('Erro na busca web:', error);
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     return new ReturnMessage({
       chatId: chatId,
@@ -245,7 +245,7 @@ async function searchWeb(bot, message, args, group) {
  */
 async function searchImages(bot, message, args, group) {
   try {
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     const returnMessages = [];
     
     if (args.length === 0) {
@@ -454,7 +454,7 @@ async function searchImages(bot, message, args, group) {
     }
   } catch (error) {
     logger.error('Erro na busca de imagens:', error);
-    const chatId = message.group || message.author;
+    const chatId = message.group ?? message.author;
     
     return new ReturnMessage({
       chatId: chatId,

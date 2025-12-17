@@ -52,7 +52,7 @@ async function buscarAudios(pesquisa) {
  * @returns {Promise<ReturnMessage|Array<ReturnMessage>>}
  */
 async function audioCommand(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
 
   try {
     if (args.length < 1) {

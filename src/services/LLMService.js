@@ -13,16 +13,16 @@ class LLMService {
 	 */
 	constructor(config = {}) {
 		this.logger = new Logger('llm-service');
-		this.openRouterKey = config.openRouterKey || process.env.OPENROUTER_API_KEY;
-		this.openAIKey = config.openAIKey || process.env.OPENAI_API_KEY;
-		this.googleKey = config.googleKey || process.env.GOOGLE_API_KEY;
-		this.deepseekKey = config.deepseekKey || process.env.DEEPSEEK_API_KEY;
-		this.localEndpoint = config.localEndpoint || process.env.LOCAL_LLM_ENDPOINT || 'http://localhost:1234';
-		this.apiTimeout = config.apiTimeout || parseInt(process.env.API_TIMEOUT) || 60000;
-		this.localModel = process.env.LOCAL_LLM_MODEL || "google/gemma-3-12b";
+		this.openRouterKey = config.openRouterKey ?? process.env.OPENROUTER_API_KEY;
+		this.openAIKey = config.openAIKey ?? process.env.OPENAI_API_KEY;
+		this.googleKey = config.googleKey ?? process.env.GOOGLE_API_KEY;
+		this.deepseekKey = config.deepseekKey ?? process.env.DEEPSEEK_API_KEY;
+		this.localEndpoint = config.localEndpoint ?? process.env.LOCAL_LLM_ENDPOINT ?? 'http://localhost:1234';
+		this.apiTimeout = config.apiTimeout ?? parseInt(process.env.API_TIMEOUT) ?? 60000;
+		this.localModel = process.env.LOCAL_LLM_MODEL ?? "google/gemma-3-12b";
 		this.LMStudioToken = process.env.LMSTUDIO_TOKEN ?? "";
-		this.ollamaEndpoint = config.ollamaEndpoint || process.env.OLLAMA_ENDPOINT || 'http://localhost:11434';
-		this.ollamaModel = config.ollamaModel || process.env.OLLAMA_MODEL || 'gemma3:12b';
+		this.ollamaEndpoint = config.ollamaEndpoint ?? process.env.OLLAMA_ENDPOINT ?? 'http://localhost:11434';
+		this.ollamaModel = config.ollamaModel ?? process.env.OLLAMA_MODEL ?? 'gemma3:12b';
 
 		this.providerDefinitions = [
 			{
@@ -104,27 +104,27 @@ class LLMService {
 			}
 
 			this.logger.debug('Enviando solicitação para API OpenRouter:', { 
-				model: options.model || 'google/gemini-2.5-flash:free',
+				model: options.model ?? 'google/gemini-2.5-flash:free',
 				promptLength: options.prompt.length,
-				maxTokens: options.maxTokens || 5000
+				maxTokens: options.maxTokens ?? 5000
 			});
 
 			const response = await axios.post(
 				'https://openrouter.ai/api/v1/chat/completions',
 				{
-					model: options.model || 'google/gemini-2.5-flash:free',
+					model: options.model ?? 'google/gemini-2.5-flash:free',
 					messages: [
 						{ role: 'user', content: options.prompt }
 					],
-					max_tokens: options.maxTokens || 5000,
-					temperature: options.temperature || 0.7
+					max_tokens: options.maxTokens ?? 5000,
+					temperature: options.temperature ?? 0.7
 				},
 				{
 					headers: {
 						'Authorization': `Bearer ${this.openRouterKey}`,
 						'Content-Type': 'application/json'
 					},
-					timeout: options.timeout || this.apiTimeout
+					timeout: options.timeout ?? this.apiTimeout
 				}
 			);
 
@@ -157,11 +157,11 @@ class LLMService {
 				throw new Error('Chave da API Google não configurada');
 			}
 
-			const model = options.model || 'gemini-2.5-flash';
+			const model = options.model ?? 'gemini-2.5-flash';
 			this.logger.debug('[LLMService] Enviando solicitação para API Gemini:', { 
 				model: model,
 				promptLength: options.prompt.length,
-				maxTokens: options.maxTokens || 5000
+				maxTokens: options.maxTokens ?? 5000
 			});
 
 			//if(options.systemContext){
@@ -189,15 +189,15 @@ class LLMService {
 						]
 					},
 					generationConfig: {
-						maxOutputTokens: options.maxTokens || 5000,
-						temperature: options.temperature || 0.7
+						maxOutputTokens: options.maxTokens ?? 5000,
+						temperature: options.temperature ?? 0.7
 					}
 				},
 				{
 					headers: {
 						'Content-Type': 'application/json'
 					},
-					timeout: options.timeout || this.apiTimeout
+					timeout: options.timeout ?? this.apiTimeout
 				}
 			);
 
@@ -231,13 +231,13 @@ class LLMService {
 			}
 
 			const model = options.version === 'v1' ? 'deepseek-coder' : 'deepseek-chat';
-			const baseUrl = `https://api.deepseek.com/${options.version || 'v3'}`;
+			const baseUrl = `https://api.deepseek.com/${options.version ?? 'v3'}`;
 			
 			this.logger.debug('Enviando solicitação para API Deepseek:', { 
 				model: model,
-				version: options.version || 'v3',
+				version: options.version ?? 'v3',
 				promptLength: options.prompt.length,
-				maxTokens: options.maxTokens || 5000
+				maxTokens: options.maxTokens ?? 5000
 			});
 
 			const response = await axios.post(
@@ -247,15 +247,15 @@ class LLMService {
 					messages: [
 						{ role: 'user', content: options.prompt }
 					],
-					max_tokens: options.maxTokens || 5000,
-					temperature: options.temperature || 0.7
+					max_tokens: options.maxTokens ?? 5000,
+					temperature: options.temperature ?? 0.7
 				},
 				{
 					headers: {
 						'Authorization': `Bearer ${this.deepseekKey}`,
 						'Content-Type': 'application/json'
 					},
-					timeout: options.timeout || this.apiTimeout
+					timeout: options.timeout ?? this.apiTimeout
 				}
 			);
 
@@ -297,9 +297,9 @@ class LLMService {
 
 			this.logger.debug(`Enviando solicitação para API ${options.useLocal ? 'LM Studio Local' : 'OpenAI'}:`, { 
 				endpoint,
-				model: options.model || 'gpt-3.5-turbo',
+				model: options.model ?? 'gpt-3.5-turbo',
 				promptLength: options.prompt.length,
-				maxTokens: options.maxTokens || 5000 
+				maxTokens: options.maxTokens ?? 5000 
 			});
 
 			const ctxInclude = options.systemContext ?? "Você é ravena, um bot de whatsapp criado por moothz. Não se apresente, a menos que solicitado pelo usuário.";
@@ -307,20 +307,20 @@ class LLMService {
 			const response = await axios.post(
 				endpoint,
 				{
-					model: options.model || 'gpt-3.5-turbo',
+					model: options.model ?? 'gpt-3.5-turbo',
 					messages: [
 						{ role: 'system', content: ctxInclude },
 						{ role: 'user', content: options.prompt }
 					],
-					max_tokens: options.maxTokens || 5000,
-					temperature: options.temperature || 0.7
+					max_tokens: options.maxTokens ?? 5000,
+					temperature: options.temperature ?? 0.7
 				},
 				{
 					headers: {
 						'Authorization': apiKey,
 						'Content-Type': 'application/json'
 					},
-					timeout: options.timeout || this.apiTimeout
+					timeout: options.timeout ?? this.apiTimeout
 				}
 			);
 
@@ -366,7 +366,7 @@ class LLMService {
 					image_url = options.image;
 				} else if (fs.existsSync(options.image)) {
 					const fileContent = fs.readFileSync(options.image, 'base64');
-					const mimeType = path.extname(options.image).replace('.', '') || 'jpeg';
+					const mimeType = path.extname(options.image).replace('.', '') ?? 'jpeg';
 					image_url = `data:image/${mimeType};base64,${fileContent}`;
 				} else {
 					image_url = `data:image/jpeg;base64,${options.image}`;
@@ -384,10 +384,10 @@ class LLMService {
 
 
 			const queryOptions = {
-				model: options.model || this.localModel,
+				model: options.model ?? this.localModel,
 				messages: messages,
-				max_tokens: options.maxTokens || 8096,
-				temperature: options.temperature || 0.7,
+				max_tokens: options.maxTokens ?? 8096,
+				temperature: options.temperature ?? 0.7,
 				stream: false
 			};
 
@@ -405,7 +405,7 @@ class LLMService {
 						'Authorization': `Bearer ${this.LMStudioToken}`,
 						'Content-Type': 'application/json'
 					},
-					timeout: options.timeout || this.apiTimeout
+					timeout: options.timeout ?? this.apiTimeout
 				}
 			);
 
@@ -485,17 +485,17 @@ class LLMService {
 			}
 
 			const payload = {
-				model: options.model || this.ollamaModel,
+				model: options.model ?? this.ollamaModel,
 				messages: messages,
 				format: ollamaFormat,
 				stream: false,
 				options: {
-					temperature: options.temperature || 0.7,
-					num_predict: options.maxTokens || 8096,
+					temperature: options.temperature ?? 0.7,
+					num_predict: options.maxTokens ?? 8096,
 				},
 			};
 
-			const toTime = options.timeout || this.apiTimeout || 60000;
+			const toTime = options.timeout ?? this.apiTimeout ?? 60000;
 			const debugData = {
 					endpoint: endpoint,
 					model: payload.model,
@@ -551,7 +551,7 @@ class LLMService {
 				this.logger.debug('[LLMService] Obtendo completação com opções:', { 
 					provider: options.provider,
 					promptLength: options.prompt.length,
-					temperature: options.temperature || 0.7
+					temperature: options.temperature ?? 0.7
 				});
 
 				let response = await this.getCompletionFromSpecificProvider(options);
@@ -603,7 +603,7 @@ class LLMService {
 			case 'gemini':
 				response = await this.geminiCompletion(options);
 				if (!response || !response.candidates || !response.candidates[0] || 
-						!response.candidates[0].content || !response.candidates[0].content.parts || 
+						!response.candidates[0].content || !response.candidates[0].content.parts ||
 						!response.candidates[0].content.parts[0]) {
 					this.logger.error('Resposta inválida da API Gemini:', response);
 					return "Erro: Não foi possível gerar uma resposta. Por favor, tente novamente mais tarde.";

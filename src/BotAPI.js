@@ -20,16 +20,16 @@ class BotAPI {
    * @param {Array} options.bots - Array de instâncias de WhatsAppBot
    */
   constructor(options = {}) {
-    this.port = options.port || process.env.API_PORT || 5000;
-    this.bots = options.bots || [];
-    this.eventHandler = options.eventHandler || false;
+    this.port = options.port ?? process.env.API_PORT ?? 5000;
+    this.bots = options.bots ?? [];
+    this.eventHandler = options.eventHandler ?? false;
     this.logger = new Logger('bot-api');
     this.database = Database.getInstance();
     this.app = express();
 
     // Credenciais de autenticação para endpoints protegidos
-    this.apiUser = process.env.BOTAPI_USER || 'admin';
-    this.apiPassword = process.env.BOTAPI_PASSWORD || 'senha12345';
+    this.apiUser = process.env.BOTAPI_USER ?? 'admin';
+    this.apiPassword = process.env.BOTAPI_PASSWORD ?? 'senha12345';
 
     // Cache para os dados analíticos processados
     this.analyticsCache = {
@@ -111,35 +111,35 @@ class BotAPI {
           timestamp: Date.now(),
           bots: this.bots.filter(bot => !bot.privado && !bot.useTelegram && !bot.useDiscord).map(bot => {
             // Busca relatório mais recente para este bot
-            const report = botReports[bot.id] || null;
+            const report = botReports[bot.id] ?? null;
             const messagesPerHour = report && report.messages ?
-              report.messages.messagesPerHour || 0 : 0;
+              report.messages.messagesPerHour ?? 0 : 0;
 
             // Adiciona informações de tempo de resposta
             const avgResponseTime = report && report.responseTime ?
-              parseFloat(report.responseTime.average) || 0 : 0;
+              parseFloat(report.responseTime.average) ?? 0 : 0;
             const maxResponseTime = report && report.responseTime ?
-              report.responseTime.max || 0 : 0;
+              report.responseTime.max ?? 0 : 0;
 
             return {
               id: bot.id,
               phoneNumber: bot.phoneNumber,
               supportNumber: bot.supportNumber,
               connected: bot.isConnected,
-              lastMessageReceived: bot.lastMessageReceived || null,
+              lastMessageReceived: bot.lastMessageReceived ?? null,
               msgsHr: messagesPerHour,
               responseTime: {
                 avg: avgResponseTime,
                 max: maxResponseTime
               },
-              semPV: bot.ignorePV || false,
-              semConvites: bot.ignoreInvites || false,
-              banido: bot.banido || false,
-              comunitario: bot.comunitario || false,
-              numeroResponsavel: bot.numeroResponsavel || false,
-              banido: bot.banido || false,
-              supportMsg: bot.supportMsg || false,
-              vip: bot.vip || false
+              semPV: bot.ignorePV ?? false,
+              semConvites: bot.ignoreInvites ?? false,
+              banido: bot.banido ?? false,
+              comunitario: bot.comunitario ?? false,
+              numeroResponsavel: bot.numeroResponsavel ?? false,
+              banido: bot.banido ?? false,
+              supportMsg: bot.supportMsg ?? false,
+              vip: bot.vip ?? false
             };
           })
         });
@@ -153,20 +153,20 @@ class BotAPI {
             id: bot.id,
             phoneNumber: bot.phoneNumber,
             connected: bot.isConnected,
-            lastMessageReceived: bot.lastMessageReceived || null,
+            lastMessageReceived: bot.lastMessageReceived ?? null,
             msgsHr: 0,
             responseTime: {
               avg: 0,
               max: 0
             },
-            semPV: bot.ignorePV || false,
-            semConvites: bot.ignoreInvites || false,
-            banido: bot.banido || false,
-            comunitario: bot.comunitario || false,
-            numeroResponsavel: bot.numeroResponsavel || false,
-            banido: bot.banido || false,
-            supportMsg: bot.supportMsg || false,
-            vip: bot.vip || false
+            semPV: bot.ignorePV ?? false,
+            semConvites: bot.ignoreInvites ?? false,
+            banido: bot.banido ?? false,
+            comunitario: bot.comunitario ?? false,
+            numeroResponsavel: bot.numeroResponsavel ?? false,
+            banido: bot.banido ?? false,
+            supportMsg: bot.supportMsg ?? false,
+            vip: bot.vip ?? false
           }))
         });
       }
@@ -224,7 +224,7 @@ class BotAPI {
       try {
         // Obter parâmetros
         const { botId } = req.params;
-        const { reason } = req.body || {};
+        const { reason } = req.body ?? {};
 
         // Validar parâmetros
         if (!botId) {
@@ -252,7 +252,7 @@ class BotAPI {
         }
 
         // Iniciar reinicialização em modo assíncrono
-        const restartReason = reason || `Reinicialização via API em ${new Date().toLocaleString("pt-BR")}`;
+        const restartReason = reason ?? `Reinicialização via API em ${new Date().toLocaleString("pt-BR")}`;
 
 
         try {
@@ -327,7 +327,7 @@ class BotAPI {
         this.logger.debug('Dados da doação:', donateData);
 
         // Verifica o segredo do webhook
-        const headerTipa = req.headers["x-tipa-webhook-secret-token"] || false;
+        const headerTipa = req.headers["x-tipa-webhook-secret-token"] ?? false;
         const expectedToken = process.env.TIPA_TOKEN;
 
         if (!headerTipa || headerTipa !== expectedToken) {
@@ -336,9 +336,9 @@ class BotAPI {
         }
 
         // Extrai detalhes da doação
-        let nome = req.body.payload.tip.name || "Alguém";
-        const valor = parseFloat(req.body.payload.tip.amount) || 0;
-        const msg = req.body.payload.tip.message || "";
+        let nome = req.body.payload.tip.name ?? "Alguém";
+        const valor = parseFloat(req.body.payload.tip.amount) ?? 0;
+        const msg = req.body.payload.tip.message ?? "";
 
         nome = nome.trim();
 
@@ -393,7 +393,7 @@ class BotAPI {
     this.app.get('/analytics', (req, res) => {
       try {
         // Obtém parâmetros da requisição
-        const period = req.query.period || 'today';
+        const period = req.query.period ?? 'today';
         let selectedBots = req.query['bots[]'];
 
         // Converte para array se não for
@@ -1222,13 +1222,13 @@ class BotAPI {
           // Cria um mapa de data para valor
           if (botData.dates && botData.values) {
             for (let i = 0; i < botData.dates.length; i++) {
-              dateValueMap[botData.dates[i]] = botData.values[i] || 0;
+              dateValueMap[botData.dates[i]] = botData.values[i] ?? 0;
             }
           }
 
           // Preenche o novo array de valores com base nas datas ordenadas
           sortedDates.forEach(date => {
-            newValues.push(dateValueMap[date] || 0);
+            newValues.push(dateValueMap[date] ?? 0);
           });
 
           // Atualiza o objeto de dados do bot
@@ -1265,7 +1265,7 @@ class BotAPI {
           const hour = date.getHours();
 
           // Soma mensagens totais deste relatório
-          const totalMsgs = (report.messages.totalReceived || 0) + (report.messages.totalSent || 0);
+          const totalMsgs = (report.messages.totalReceived ?? 0) + (report.messages.totalSent ?? 0);
 
           // Adiciona ao contador de horas e totais
           hourCounts[hour]++;
@@ -1306,7 +1306,7 @@ class BotAPI {
           const day = date.getDay(); // 0-6 (Domingo-Sábado)
 
           // Soma mensagens totais deste relatório
-          const totalMsgs = (report.messages.totalReceived || 0) + (report.messages.totalSent || 0);
+          const totalMsgs = (report.messages.totalReceived ?? 0) + (report.messages.totalSent ?? 0);
 
           // Adiciona ao contador de dias e totais
           dayCounts[day]++;
@@ -1347,7 +1347,7 @@ class BotAPI {
           const day = date.getDate() - 1; // 0-30
 
           // Soma mensagens totais deste relatório
-          const totalMsgs = (report.messages.totalReceived || 0) + (report.messages.totalSent || 0);
+          const totalMsgs = (report.messages.totalReceived ?? 0) + (report.messages.totalSent ?? 0);
 
           // Adiciona ao contador de dias e totais
           dayCounts[day]++;
@@ -1387,7 +1387,7 @@ class BotAPI {
           const dateString = date.toISOString().split('T')[0]; // YYYY-MM-DD
 
           // Soma mensagens totais deste relatório
-          const totalMsgs = (report.messages.totalReceived || 0) + (report.messages.totalSent || 0);
+          const totalMsgs = (report.messages.totalReceived ?? 0) + (report.messages.totalSent ?? 0);
 
           // Adiciona ao total diário
           if (!dailyTotals[dateString]) {
@@ -1399,7 +1399,7 @@ class BotAPI {
 
       // Converte para arrays ordenados por data
       const dates = Object.keys(dailyTotals).sort();
-      const values = dates.map(date => dailyTotals[date] || 0);
+      const values = dates.map(date => dailyTotals[date] ?? 0);
 
       return {
         dates,
@@ -1449,9 +1449,9 @@ class BotAPI {
           hours: periodKey === 'daily' ? Array.from({ length: 24 }, (_, i) => i) : null,
           days: periodKey === 'weekly' ? ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'] :
             periodKey === 'monthly' ? Array.from({ length: 31 }, (_, i) => i + 1) : null,
-          dates: periodKey === 'yearly' ? (periodData.dates || []) : null,
+          dates: periodKey === 'yearly' ? (periodData.dates ?? []) : null,
           values: periodKey === 'daily' ?
-            (selectedBots.length === 1 ? periodData[selectedBots[0]]?.values || [] : []) : null,
+            (selectedBots.length === 1 ? periodData[selectedBots[0]]?.values ?? [] : []) : null,
           series: seriesData
         };
       };

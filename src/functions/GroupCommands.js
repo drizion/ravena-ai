@@ -126,7 +126,7 @@ async function mentionAllMembers(bot, message, args, group) {
   } catch (error) {
     logger.error('Erro ao mencionar membros do grupo:', error);
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao mencionar membros do grupo. Por favor, tente novamente.'
     });
   }
@@ -221,7 +221,7 @@ async function toggleIgnore(bot, message, args, group) {
   } catch (error) {
     logger.error('Erro ao alternar status de ignorar:', error);
     return new ReturnMessage({
-      chatId: message.group || message.author,
+      chatId: message.group ?? message.author,
       content: 'Erro ao atualizar seu status de ignorar. Por favor, tente novamente.'
     });
   }
@@ -285,7 +285,7 @@ async function apagarMensagem(bot, message, args, group) {
       
       // Se chegou aqui, ou não está em grupo ou bot não é admin
       return new ReturnMessage({
-        chatId: message.group || message.author,
+        chatId: message.group ?? message.author,
         content: '🗑 Só posso apagar minhas próprias mensagens ou mensagens de outros em grupos (e preciso ser admin)'
       });
     }

@@ -197,7 +197,7 @@ function cleanupTempFiles(files) {
  * @returns {Promise<ReturnMessage|Array<ReturnMessage>>} - ReturnMessage ou array de ReturnMessage
  */
 async function handleRemoveBg(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
   const returnMessages = [];
   
   // Cadeia de promessas sem bloqueio
@@ -275,7 +275,7 @@ async function handleRemoveBg(bot, message, args, group) {
  * @returns {Promise<ReturnMessage|Array<ReturnMessage>>} - ReturnMessage ou array de ReturnMessage
  */
 async function handleDistort(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
   
   // Obtém intensidade dos args se fornecida
   let intensity = 50; // Padrão
@@ -352,7 +352,7 @@ async function handleDistort(bot, message, args, group) {
  * @returns {Promise<ReturnMessage|Array<ReturnMessage>>} - ReturnMessage ou array de ReturnMessage
  */
 async function handleStickerBg(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
   
   try {
     const media = await getMediaFromMessage(message);
@@ -433,7 +433,7 @@ async function handleStickerBg(bot, message, args, group) {
  * @returns {Promise<ReturnMessage|Array<ReturnMessage>>} - ReturnMessage ou array de ReturnMessage
  */
 async function handleArtisticEffect(bot, message, args, group, effect) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
   
   try {
     const media = await getMediaFromMessage(message);

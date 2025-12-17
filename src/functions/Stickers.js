@@ -22,7 +22,7 @@ const TEMP_DIR = path.join(__dirname, '../../temp', 'whatsapp-bot-stickers');
  * @returns {Promise<ReturnMessage>} - ReturnMessage com o sticker
  */
 async function stickerCommand(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
   logger.debug(`Executando comando sticker para ${chatId}`);
   
   // Manipula mídia direta
@@ -411,7 +411,7 @@ async function processMediaToSquare(mediaBuffer, mimeType, cropType) {
  * @returns {Promise<ReturnMessage>} - ReturnMessage com o sticker
  */
 async function squareStickerCommand(bot, message, args, group, cropType) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
   logger.debug(`Executando comando sticker quadrado (${cropType}) para ${chatId}`);
   
   try {

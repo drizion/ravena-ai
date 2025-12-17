@@ -316,7 +316,7 @@ function formatWeatherMessage(weatherData) {
  * @returns {Promise<ReturnMessage|Array<ReturnMessage>>} ReturnMessage ou array de ReturnMessages
  */
 async function handleWeatherCommand(bot, message, args, group) {
-  const chatId = message.group || message.author;
+  const chatId = message.group ?? message.author;
   const returnMessages = [];
   
   try {
