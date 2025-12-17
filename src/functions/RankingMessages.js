@@ -5,7 +5,7 @@ const Database = require('../utils/Database');
 const database = Database.getInstance();
 
 const logger = new Logger('ranking-messages');
-const dbName = "ranking";
+const dbName = "msgranking";
 
 // Initialize database
 database.getSQLiteDb(dbName, `
