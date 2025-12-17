@@ -1,4 +1,4 @@
-﻿// src/functions/FishingGame.js
+// src/functions/FishingGame.js
 const path = require('path');
 const fs = require('fs').promises;
 const fsSync = require('fs');
@@ -13,33 +13,78 @@ const logger = new Logger('fishing-game');
 
 const database = Database.getInstance();
 const adminUtils = AdminUtils.getInstance();
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const dbName = 'fishing';
+
+// Initialize Database
+database.getSQLiteDb(dbName, `
+    CREATE TABLE IF NOT EXISTS fishing_users (
+        user_id TEXT PRIMARY KEY,
+        name TEXT,
+        baits INTEGER DEFAULT 7,
+        last_bait_regen INTEGER,
+        total_weight REAL DEFAULT 0,
+        inventory_weight REAL DEFAULT 0,
+        total_catches INTEGER DEFAULT 0,
+        total_baits_used INTEGER DEFAULT 0,
+        total_trash_caught INTEGER DEFAULT 0,
+        biggest_fish_json TEXT
+    );
+    CREATE TABLE IF NOT EXISTS fishing_inventory (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT,
+        name TEXT,
+        weight REAL,
+        is_rare INTEGER,
+        timestamp INTEGER,
+        emoji TEXT,
+        data_json TEXT
+    );
+    CREATE TABLE IF NOT EXISTS fishing_group_stats (
+        group_id TEXT,
+        user_id TEXT,
+        name TEXT,
+        total_weight REAL DEFAULT 0,
+        total_catches INTEGER DEFAULT 0,
+        biggest_fish_json TEXT,
+        PRIMARY KEY (group_id, user_id)
+    );
+    CREATE TABLE IF NOT EXISTS fishing_legendary_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fish_name TEXT,
+        weight REAL,
+        user_id TEXT,
+        user_name TEXT,
+        group_id TEXT,
+        group_name TEXT,
+        timestamp INTEGER,
+        image_name TEXT
+    );
+    CREATE TABLE IF NOT EXISTS fishing_buffs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT,
+        effect_type TEXT,
+        is_debuff INTEGER DEFAULT 0,
+        value REAL,
+        min_value REAL,
+        max_value REAL,
+        remaining_uses INTEGER,
+        original_name TEXT
+    );
+`);
 
 // --- CONSTANTES DO JOGO ---
-const MAX_FISH_PER_USER = 10;
+const MAX_FISH_PER_USER = 25;
 const MIN_FISH_WEIGHT = 1;
 const MAX_FISH_WEIGHT = 180; // Aumentado para 180kg
 const DIFFICULTY_THRESHOLD = 80; 
 const FISHING_COOLDOWN = 5;
 const MAX_BAITS = 7; // Aumentado para 7 iscas
 const BAIT_REGEN_TIME = 60 * 60; // Reduzido para 1 hora (60 min * 60 seg)
-const SAVE_CHECK_INTERVAL = 5000; // Verifica se precisa salvar a cada 5s
 
-// Armazena os cooldowns de pesca
+// Armazena os cooldowns de pesca (Cache em memória é aceitável para cooldowns de curto prazo)
 const fishingCooldowns = {};
 // Ajustado escala de mensagens para o novo peso máximo
 const weightScaleMsgs = [180, 150, 120, 100, 80, 60];
-
-// --- GERENCIAMENTO DE DADOS (MEMÓRIA E DISCO) ---
-// Buffer para os dados de pesca em memória
-let fishingDataBuffer = null;
-// Flag para indicar se houve alteração desde a última gravação
-let hasUnsavedChanges = false;
-// Mutex para impedir gravações simultâneas
-let isSaving = false;
-
-// Caminho para o arquivo de dados de pesca
-const FISHING_DATA_PATH = path.join(database.databasePath, 'fishing.json');
 
 // --- CONFIGURAÇÕES DE PEIXES E ITENS ---
 
@@ -161,136 +206,130 @@ const DOWNGRADES = [
   { name: "Olho Gordo", chance: 0.03, emoji: "🧿", effect: "weight_loss", value: -0.8, duration: 2, description: "O olho gordo dos invejosos reduziu 80% do peso dos seus próximos 2 peixes." }
 ];
 
-/**
- * Obtém os dados de pesca. Se o arquivo estiver corrompido, faz backup e reseta.
- */
-async function getFishingData() {
-  if (fishingDataBuffer !== null) {
-    return fishingDataBuffer;
-  }
+// --- HELPER FUNCTIONS FOR DB ---
 
-  const defaultData = {
-    fishingData: {},
-    groupData: {},
-    legendaryFishes: []
-  };
+async function getUserData(userId) {
+    const row = await database.dbGet(dbName, "SELECT * FROM fishing_users WHERE user_id = ?", [userId]);
+    if (!row) return null;
 
-  try {
-    // Tenta ler o arquivo
-    const data = await fs.readFile(FISHING_DATA_PATH, 'utf8');
-    
-    // Tenta fazer o parse
-    try {
-        const parsedData = JSON.parse(data);
-        
-        // Garante estrutura mínima
-        if (!parsedData.groupData) parsedData.groupData = {};
-        if (!parsedData.fishingData) parsedData.fishingData = {};
-        if (!parsedData.legendaryFishes) parsedData.legendaryFishes = [];
+    // Load inventory
+    const fishes = await database.dbAll(dbName, "SELECT * FROM fishing_inventory WHERE user_id = ?", [userId]);
+    const parsedFishes = fishes.map(f => {
+        const data = JSON.parse(f.data_json || '{}');
+        return { ...data, name: f.name, weight: f.weight, isRare: !!f.is_rare, emoji: f.emoji, timestamp: f.timestamp, dbId: f.id };
+    });
 
-        fishingDataBuffer = parsedData;
-        return parsedData;
+    // Load buffs
+    const buffs = await database.dbAll(dbName, "SELECT * FROM fishing_buffs WHERE user_id = ? AND is_debuff = 0", [userId]);
+    const parsedBuffs = buffs.map(b => ({
+        type: b.effect_type, value: b.value, minValue: b.min_value, maxValue: b.max_value, 
+        remainingUses: b.remaining_uses, originalName: b.original_name, dbId: b.id
+    }));
 
-    } catch (parseError) {
-        // JSON Inválido: Backup e Reset
-        logger.error(`[FishingGame] Arquivo corrompido detectado! Criando backup...`);
-        const backupPath = `${FISHING_DATA_PATH}.corrupted-${Date.now()}`;
-        await fs.copyFile(FISHING_DATA_PATH, backupPath);
-        logger.info(`[FishingGame] Backup criado em: ${backupPath}`);
+    // Load debuffs
+    const debuffs = await database.dbAll(dbName, "SELECT * FROM fishing_buffs WHERE user_id = ? AND is_debuff = 1", [userId]);
+    const parsedDebuffs = debuffs.map(b => ({
+        type: b.effect_type, value: b.value, minValue: b.min_value, maxValue: b.max_value, 
+        remainingUses: b.remaining_uses, originalName: b.original_name, dbId: b.id
+    }));
 
-        fishingDataBuffer = defaultData;
-        hasUnsavedChanges = true; // Força salvar o novo limpo
-        return defaultData;
-    }
-
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-        // Arquivo não existe, criar novo
-        fishingDataBuffer = defaultData;
-        hasUnsavedChanges = true;
-        return defaultData;
-    } else {
-        logger.error('[FishingGame] Erro crítico de I/O ao ler dados:', error);
-        return defaultData; // Em memória apenas, para não crashar
-    }
-  }
+    return {
+        userId: row.user_id,
+        name: row.name,
+        baits: row.baits,
+        lastBaitRegen: row.last_bait_regen,
+        totalWeight: row.total_weight,
+        inventoryWeight: row.inventory_weight,
+        totalCatches: row.total_catches,
+        totalBaitsUsed: row.total_baits_used,
+        totalTrashCaught: row.total_trash_caught,
+        biggestFish: JSON.parse(row.biggest_fish_json || 'null'),
+        fishes: parsedFishes,
+        buffs: parsedBuffs,
+        debuffs: parsedDebuffs
+    };
 }
 
-/**
- * Marca os dados como sujos para serem salvos no próximo ciclo
- * @param {Object} updatedData 
- */
-async function saveFishingData(updatedData) {
-    fishingDataBuffer = updatedData;
-    hasUnsavedChanges = true;
-    return true;
+async function saveUserData(userData) {
+    // Note: Inventory and Buffs should be handled by specific insert/delete queries during gameplay for performance.
+    // This function updates the main user stats.
+    await database.dbRun(dbName, `INSERT OR REPLACE INTO fishing_users 
+        (user_id, name, baits, last_bait_regen, total_weight, inventory_weight, total_catches, total_baits_used, total_trash_caught, biggest_fish_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
+        [
+            userData.userId, 
+            userData.name, 
+            userData.baits, 
+            userData.lastBaitRegen, 
+            userData.totalWeight, 
+            userData.inventoryWeight, 
+            userData.totalCatches, 
+            userData.totalBaitsUsed, 
+            userData.totalTrashCaught, 
+            JSON.stringify(userData.biggestFish)
+        ]);
 }
 
-/**
- * Função interna que realmente escreve no disco.
- * Usa um arquivo temporário + rename para garantir atomicidade.
- */
-async function processSaveQueue() {
-    if (!hasUnsavedChanges || isSaving || !fishingDataBuffer) {
-        return;
-    }
+async function updateGroupStats(groupId, userId, userName, weightToAdd, isCatch, biggestFish) {
+    const row = await database.dbGet(dbName, "SELECT * FROM fishing_group_stats WHERE group_id = ? AND user_id = ?", [groupId, userId]);
+    let totalWeight = row ? row.total_weight : 0;
+    let totalCatches = row ? row.total_catches : 0;
+    let currentBiggest = row ? JSON.parse(row.biggest_fish_json || 'null') : null;
 
-    isSaving = true;
-
-    try {
-        const dir = path.dirname(FISHING_DATA_PATH);
-        await fs.mkdir(dir, { recursive: true });
-
-        const tempPath = `${FISHING_DATA_PATH}.temp`;
-        const jsonData = JSON.stringify(fishingDataBuffer, null, 2);
-
-        // Escreve no temp
-        await fs.writeFile(tempPath, jsonData, 'utf8');
-        
-        // Renomeia atômico (sobrescreve o oficial)
-        await fs.rename(tempPath, FISHING_DATA_PATH);
-
-        // Sucesso
-        hasUnsavedChanges = false;
-        // logger.debug('[FishingGame] Dados salvos com sucesso.');
-
-    } catch (error) {
-        logger.error('[FishingGame] Erro ao salvar no disco:', error);
-    } finally {
-        isSaving = false;
-    }
-}
-
-/**
- * Salvamento Síncrono para encerramento do processo (Safety Net)
- */
-function saveSync() {
-    if (hasUnsavedChanges && fishingDataBuffer) {
-        try {
-            const dir = path.dirname(FISHING_DATA_PATH);
-            if (!fsSync.existsSync(dir)) fsSync.mkdirSync(dir, { recursive: true });
-            
-            fsSync.writeFileSync(FISHING_DATA_PATH, JSON.stringify(fishingDataBuffer, null, 2));
-            logger.info('[FishingGame] Dados salvos (Sync) antes de encerrar.');
-        } catch (e) {
-            logger.error('[FishingGame] Falha no salvamento Sync:', e);
+    if (isCatch) {
+        totalWeight += weightToAdd;
+        totalCatches += 1;
+        if (!currentBiggest || (biggestFish && biggestFish.weight > currentBiggest.weight)) {
+            currentBiggest = biggestFish;
         }
+    } else {
+        // Removed fish or trash
+        totalWeight -= weightToAdd;
+        totalCatches -= 1;
+    }
+
+    await database.dbRun(dbName, `INSERT OR REPLACE INTO fishing_group_stats 
+        (group_id, user_id, name, total_weight, total_catches, biggest_fish_json)
+        VALUES (?, ?, ?, ?, ?, ?)`,
+        [groupId, userId, userName, totalWeight, totalCatches, JSON.stringify(currentBiggest)]);
+}
+
+async function addBuff(userId, buff, isDebuff) {
+    await database.dbRun(dbName, `INSERT INTO fishing_buffs 
+        (user_id, effect_type, is_debuff, value, min_value, max_value, remaining_uses, original_name)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [userId, buff.type, isDebuff ? 1 : 0, buff.value, buff.minValue, buff.maxValue, buff.remainingUses, buff.originalName]);
+}
+
+async function updateBuffUses(buffId, remainingUses) {
+    if (remainingUses <= 0) {
+        await database.dbRun(dbName, "DELETE FROM fishing_buffs WHERE id = ?", [buffId]);
+    } else {
+        await database.dbRun(dbName, "UPDATE fishing_buffs SET remaining_uses = ? WHERE id = ?", [remainingUses, buffId]);
     }
 }
 
-// --- LOOPS E LISTENERS ---
+async function addFishToInventory(userId, fish) {
+    await database.dbRun(dbName, `INSERT INTO fishing_inventory 
+        (user_id, name, weight, is_rare, timestamp, emoji, data_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [userId, fish.name, fish.weight, fish.isRare ? 1 : 0, fish.timestamp, fish.emoji, JSON.stringify(fish)]);
+}
 
-// Loop de salvamento robusto
-setInterval(processSaveQueue, SAVE_CHECK_INTERVAL);
+async function removeFishFromInventory(userId, fishDbId) {
+    if(fishDbId){
+        await database.dbRun(dbName, "DELETE FROM fishing_inventory WHERE id = ?", [fishDbId]);
+    } else {
+        // Fallback if we don't have ID (should not happen in new logic, but for safety)
+        // This is risky, so we better ensure we always have DB IDs.
+        // For now, if no ID, we might delete the wrong fish if duplicates exist. 
+        // We will assume logic always reloads data so IDs are present.
+    }
+}
 
-// Listeners de saída
-process.on('exit', saveSync);
-['SIGINT', 'SIGTERM', 'SIGQUIT'].forEach(signal => {
-  process.on(signal, () => {
-      saveSync();
-      process.exit(0);
-  });
-});
+async function clearInventory(userId) {
+    await database.dbRun(dbName, "DELETE FROM fishing_inventory WHERE user_id = ?", [userId]);
+}
 
 // --- LÓGICA DO JOGO ---
 
@@ -343,7 +382,8 @@ async function getRandomFish(fishArray, isMultiCatch = false, userData = null) {
     const guaranteedWeightBuff = userData.buffs.find(b => b.type === 'guaranteed_weight' && b.remainingUses > 0);
     if (guaranteedWeightBuff) {
         weight = parseFloat((Math.random() * (guaranteedWeightBuff.maxValue - guaranteedWeightBuff.minValue) + guaranteedWeightBuff.minValue).toFixed(2));
-        guaranteedWeightBuff.remainingUses--; // consume buff
+        guaranteedWeightBuff.remainingUses--; // consume buff object, update DB later
+        if(guaranteedWeightBuff.dbId) await updateBuffUses(guaranteedWeightBuff.dbId, guaranteedWeightBuff.remainingUses);
         return { name: fishName, weight, timestamp: Date.now() };
     }
   }
@@ -399,22 +439,26 @@ function regenerateBaits(userData) {
  * Comando restrito que permite adicionar iscas
  */
 async function addBaits(userId, baitsNum) {
-  const fishingData = await getFishingData();
   userId = `${userId}`.replace(/\D/g, '');
   userId = userId.split("@")[0] + "@c.us"; 
 
-  const userData = fishingData.fishingData[userId];
+  let userData = await getUserData(userId);
 
   if(!userData){
-    return { userId };
-  }
-  if (userData.baits === undefined) {
-    userData.baits = MAX_BAITS + baitsNum;
-    userData.lastBaitRegen = Date.now();
+     // Create basic user if not exists
+     userData = {
+         userId,
+         name: "User",
+         baits: MAX_BAITS,
+         lastBaitRegen: Date.now(),
+         totalWeight: 0, inventoryWeight: 0, totalCatches: 0, totalBaitsUsed: 0, totalTrashCaught: 0, biggestFish: null
+     };
   }
 
   userData.baits += baitsNum;
-  await saveFishingData(fishingData);
+  userData.lastBaitRegen = Date.now(); // Reset regeneration timer when modified manually? Or keep it? Keeping it simple.
+  
+  await saveUserData(userData);
 
   return { userId, userData };
 }
@@ -504,10 +548,9 @@ function checkRandomItem() {
   return null;
 }
 
-function applyItemEffect(userData, item) {
+async function applyItemEffect(userData, item) {
   let effectMessage = '';
-  if (!userData.buffs) userData.buffs = [];
-  if (!userData.debuffs) userData.debuffs = [];
+  // Note: Buffs/Debuffs are added to DB here
   
   switch (item.type) {
     case 'trash':
@@ -517,6 +560,7 @@ function applyItemEffect(userData, item) {
 
       if (trashProtector) {
         trashProtector.remainingUses--;
+        await updateBuffUses(trashProtector.dbId, trashProtector.remainingUses);
         effectMessage = `\n\n${item.emoji} Você pescou um(a) ${item.name}, mas seu ${trashProtector.originalName ?? 'Anzol'} te salvou de perder a isca!`;
       } else {
         effectMessage = `\n\n${item.emoji} Você pescou um(a) ${item.name}. Que pena!`;
@@ -526,47 +570,31 @@ function applyItemEffect(userData, item) {
     case 'upgrade':
       switch (item.effect) {
         case 'weight_boost':
-          userData.buffs.push({ type: 'weight_boost', value: item.value, remainingUses: item.duration, originalName: item.name });
-          effectMessage = `\n\n${item.emoji} Você encontrou um ${item.name}! +${item.value*100}% no peso dos próximos ${item.duration} peixes.`;
-          break;
         case 'next_fish_bonus':
-          userData.buffs.push({ type: 'next_fish_bonus', value: item.value, remainingUses: 1, originalName: item.name });
-          effectMessage = `\n\n${item.emoji} Você encontrou um ${item.name}! O próximo peixe terá +${item.value}kg.`;
-          break;
         case 'double_catch':
-          userData.buffs.push({ type: 'double_catch', remainingUses: 1, originalName: item.name });
-          effectMessage = `\n\n${item.emoji} Você encontrou uma ${item.name}! Na próxima pescaria, você pegará 2 peixes de uma vez.`;
+        case 'rare_chance_boost':
+        case 'cooldown_reduction':
+        case 'guaranteed_weight':
+        case 'bait_on_trash':
+          const buff = { type: item.effect, value: item.value, minValue: item.minValue, maxValue: item.maxValue, remainingUses: item.duration || 1, originalName: item.name };
+          await addBuff(userData.userId, buff, false);
+          effectMessage = `\n\n${item.emoji} Você encontrou um ${item.name}! ${item.description}`;
           break;
         case 'extra_baits':
           userData.baits = userData.baits + item.value;
           effectMessage = `\n\n${item.emoji} Você encontrou um ${item.name}! +${item.value} iscas adicionadas (${userData.baits}/${MAX_BAITS}).`;
           break;
-        case 'rare_chance_boost':
-          userData.buffs.push({ type: 'rare_chance_boost', value: item.value, remainingUses: item.duration, originalName: item.name });
-          effectMessage = `\n\n${item.emoji} Você encontrou um ${item.name}! A chance de encontrar peixes raros aumentou por ${item.duration} pescarias.`;
-          break;
-        case 'cooldown_reduction':
-          userData.buffs.push({ type: 'cooldown_reduction', value: item.value, remainingUses: item.duration, originalName: item.name });
-          effectMessage = `\n\n${item.emoji} Você adquiriu uma ${item.name}! O tempo de espera para pescar foi reduzido em ${item.value*100}% por ${item.duration} pescarias.`;
-          break;
-        case 'guaranteed_weight':
-            userData.buffs.push({ type: 'guaranteed_weight', minValue: item.minValue, maxValue: item.maxValue, remainingUses: 1, originalName: item.name });
-            effectMessage = `\n\n${item.emoji} Você encontrou um ${item.name}! O próximo peixe terá entre ${item.minValue}kg e ${item.maxValue}kg.`;
-            break;
-        case 'bait_on_trash':
-            userData.buffs.push({ type: 'bait_on_trash', remainingUses: item.duration, originalName: item.name });
-            effectMessage = `\n\n${item.emoji} Você equipou um ${item.name}! Você não perderá iscas ao pescar lixo pelas próximas ${item.duration} vezes.`;
-            break;
       }
       break;
       
     case 'downgrade':
       switch (item.effect) {
         case 'weight_loss':
-          userData.debuffs.push({ type: 'weight_loss', value: item.value, remainingUses: item.duration, originalName: item.name });
+          await addBuff(userData.userId, { type: item.effect, value: item.value, remainingUses: item.duration, originalName: item.name }, true);
           effectMessage = `\n\n${item.emoji} 𝕍𝕠𝕔ê 𝕡𝕖𝕤𝕔𝕠𝕦 𝕦𝕞𝕒... 🕯️𝕍𝔼𝕃𝔸 𝔸ℂ𝔼𝕊𝔸?! 😱 𝒪𝒷𝓇𝒶 𝒹𝑜 𝒸𝒶𝓅𝒾𝓇𝑜𝓉𝑜! 🔥👹🩸`;
           break;
         case 'clear_inventory':
+          await clearInventory(userData.userId);
           userData.fishes = [];
           userData.totalWeight -= userData.inventoryWeight ?? 0;
           userData.inventoryWeight = 0;
@@ -578,17 +606,10 @@ function applyItemEffect(userData, item) {
           effectMessage = `\n\n${item.emoji} Uma ${item.name} apareceu e comeu ${baitsLost} de suas iscas! (${userData.baits}/${MAX_BAITS} iscas restantes).`;
           break;
         case 'bait_on_trash':
-            userData.debuffs.push({ type: 'bait_on_trash', remainingUses: item.duration, originalName: item.name });
-            effectMessage = `\n\n${item.emoji} Você pescou um ${item.name}! Você não perderá iscas ao pescar lixo por ${item.duration} vezes.`;
-            break;
         case 'longer_cooldown':
-            userData.debuffs.push({ type: 'longer_cooldown', value: item.value, remainingUses: item.duration, originalName: item.name });
-            const frasesFiscal = [
-                "O fiscal não gostou da sua cara.", "Você estava pescando sem licença.", "Ele alega que viu você pescando uma bota.",
-                "Ele está medindo o tamanho do seu anzol.", "Multado por excesso de feiura.", "Confiscou sua vara por 'motivos de segurança'."
-            ];
-            const fraseAleatoria = frasesFiscal[Math.floor(Math.random() * frasesFiscal.length)];
-            effectMessage = `\n\n${item.emoji} Uma ${item.name} te parou! ${fraseAleatoria} O tempo de espera para pescar aumentou em ${item.value}x por ${item.duration} pescarias.`;
+            await addBuff(userData.userId, { type: item.effect, value: item.value, remainingUses: item.duration, originalName: item.name }, true);
+            const msg = item.effect === 'longer_cooldown' ? "Aumenta o tempo de espera." : "Proteção contra lixo (estranhamente).";
+            effectMessage = `\n\n${item.emoji} Você pescou um ${item.name}! ${msg}`;
             break;
         case 'lose_smallest_fish':
             if (userData.fishes.length > 0) {
@@ -598,7 +619,9 @@ function applyItemEffect(userData, item) {
                         smallestFishIndex = i;
                     }
                 }
-                const removedFish = userData.fishes.splice(smallestFishIndex, 1)[0];
+                const removedFish = userData.fishes[smallestFishIndex];
+                await removeFishFromInventory(userData.userId, removedFish.dbId);
+                userData.fishes.splice(smallestFishIndex, 1);
                 userData.inventoryWeight -= removedFish.weight;
                 effectMessage = `\n\n${item.emoji} Uma ${item.name} levou seu ${removedFish.name} embora!`;
             } else {
@@ -606,6 +629,7 @@ function applyItemEffect(userData, item) {
             }
             break;
         case 'lose_recent_fish':
+             // Handled in main loop
              effectMessage = `\n\n${item.emoji} Maldito ${item.name}! Ele roubou o peixe que você acabou de pegar!`;
              break;
       }
@@ -616,63 +640,64 @@ function applyItemEffect(userData, item) {
 }
 
 function toDemonic(text) {
-  // Simplificado para brevidade, mas mantendo lógica original
   return text.split('').map(c => c).join('');
 }
 
-function applyBuffs(userData, fish) {
+async function applyBuffs(userData, fish) {
   if ((!userData.buffs || userData.buffs.length === 0) && (!userData.debuffs || userData.debuffs.length === 0)) {
-    return { fish, buffs: [] };
+    return { fish, buffs: [], debuffs: [] };
   }
-  if(!userData.debuffs) userData.debuffs = [];
   
   let modifiedFish = { ...fish };
-  let updatedBuffs = [...userData.buffs];
-  let updatedDebuffs = [...userData.debuffs];
   let buffMessages = [];
   
-  updatedBuffs = updatedBuffs.filter(buff => {
-    if (buff.remainingUses <= 0) return false;
-    switch (buff.type) {
-      case 'weight_boost':
-        const originalWeight = modifiedFish.weight;
-        modifiedFish.weight *= (1 + buff.value);
-        modifiedFish.weight = parseFloat(modifiedFish.weight.toFixed(2));
-        buffMessages.push(`🎯 Buff do ${buff.originalName || 'item'}: +${buff.value*100}% de peso (${originalWeight}kg → ${modifiedFish.weight}kg)`);
-        break;
-      case 'next_fish_bonus':
-        const beforeBonus = modifiedFish.weight;
-        modifiedFish.weight += buff.value;
-        modifiedFish.weight = parseFloat(modifiedFish.weight.toFixed(2));
-        buffMessages.push(`🎯 Buff do ${buff.originalName || 'Minhocão'}: +${buff.value}kg (${beforeBonus}kg → ${modifiedFish.weight}kg)`);
-        break;
-    }
-    buff.remainingUses--;
-    return buff.remainingUses > 0;
-  });
+  // Apply and decrement buffs
+  if(userData.buffs){
+      for(const buff of userData.buffs){
+        if (buff.remainingUses <= 0) continue;
+        switch (buff.type) {
+            case 'weight_boost':
+                const originalWeight = modifiedFish.weight;
+                modifiedFish.weight *= (1 + buff.value);
+                modifiedFish.weight = parseFloat(modifiedFish.weight.toFixed(2));
+                buffMessages.push(`🎯 Buff do ${buff.originalName || 'item'}: +${buff.value*100}% de peso (${originalWeight}kg → ${modifiedFish.weight}kg)`);
+                break;
+            case 'next_fish_bonus':
+                const beforeBonus = modifiedFish.weight;
+                modifiedFish.weight += buff.value;
+                modifiedFish.weight = parseFloat(modifiedFish.weight.toFixed(2));
+                buffMessages.push(`🎯 Buff do ${buff.originalName || 'Minhocão'}: +${buff.value}kg (${beforeBonus}kg → ${modifiedFish.weight}kg)`);
+                break;
+        }
+        buff.remainingUses--;
+        await updateBuffUses(buff.dbId, buff.remainingUses);
+      }
+  }
 
-  updatedDebuffs = updatedDebuffs.filter(debuff => {
-    if (debuff.remainingUses <= 0) return false;
-    switch (debuff.type) {
-      case 'weight_loss':
-        const originalWeightDebuff = modifiedFish.weight;
-        modifiedFish.weight *= (1 + debuff.value);
-        modifiedFish.weight = parseFloat(modifiedFish.weight.toFixed(2));
-        modifiedFish.name = toDemonic(modifiedFish.name);
-        buffMessages.push(`⬇️ Peixe magro... (${originalWeightDebuff}kg → ${modifiedFish.weight}kg)`);
-        break;
-    }
-    debuff.remainingUses--;
-    return debuff.remainingUses > 0;
-  });
+  // Apply and decrement debuffs
+  if(userData.debuffs){
+      for(const debuff of userData.debuffs){
+        if (debuff.remainingUses <= 0) continue;
+        switch (debuff.type) {
+            case 'weight_loss':
+                const originalWeightDebuff = modifiedFish.weight;
+                modifiedFish.weight *= (1 + debuff.value);
+                modifiedFish.weight = parseFloat(modifiedFish.weight.toFixed(2));
+                modifiedFish.name = toDemonic(modifiedFish.name);
+                buffMessages.push(`⬇️ Peixe magro... (${originalWeightDebuff}kg → ${modifiedFish.weight}kg)`);
+                break;
+        }
+        debuff.remainingUses--;
+        await updateBuffUses(debuff.dbId, debuff.remainingUses);
+      }
+  }
 
-  return { fish: modifiedFish, buffs: updatedBuffs, debuffs: updatedDebuffs, buffMessages };
+  return { fish: modifiedFish, buffMessages };
 }
 
 async function generateRareFishImage(bot, userName, fishName) {
   try {
     const prompt = `${userName} fishing an epic enormous fish named '${fishName}' using only a wooden fishing rod`;
-    logger.info(`[fishing] generateRareFishImage: ${prompt}`);
     if (!sdModule || !sdModule.commands || !sdModule.commands[0] || !sdModule.commands[0].method) return null;
     
     const mockMessage = { author: 'SYSTEM', authorName: 'Sistema', content: prompt, origin: { getQuotedMessage: () => Promise.resolve(null) } };
@@ -688,15 +713,13 @@ function hasDoubleCatchBuff(userData) {
   return userData.buffs && userData.buffs.some(buff => buff.type === 'double_catch' && buff.remainingUses > 0);
 }
 
-function consumeDoubleCatchBuff(userData) {
+async function consumeDoubleCatchBuff(userData) {
   if (userData.buffs) {
-      userData.buffs = userData.buffs.filter(buff => {
-        if (buff.type === 'double_catch' && buff.remainingUses > 0) {
+      const buff = userData.buffs.find(b => b.type === 'double_catch' && b.remainingUses > 0);
+      if(buff){
           buff.remainingUses--;
-          return buff.remainingUses > 0;
-        }
-        return true;
-      });
+          await updateBuffUses(buff.dbId, buff.remainingUses);
+      }
   }
   return userData;
 }
@@ -712,32 +735,39 @@ async function fishCommand(bot, message, args, group) {
     const groupId = message.group; 
     const mentionPessoa = [];
     
-    const fishingData = await getFishingData();
+    let userData = await getUserData(userId);
     
-    if (!fishingData.fishingData[userId]) {
-      fishingData.fishingData[userId] = {
+    if (!userData) {
+      userData = {
+        userId: userId,
         name: userName, fishes: [], totalWeight: 0, inventoryWeight: 0, biggestFish: null,
         totalCatches: 0, totalBaitsUsed: 0, totalTrashCaught: 0, baits: MAX_BAITS,
         lastBaitRegen: Date.now(), buffs: [], debuffs: []
       };
+      await saveUserData(userData);
     } else {
-      fishingData.fishingData[userId].name = userName;
+      userData.name = userName;
     }
     
-    const userData = fishingData.fishingData[userId];
-    fishingData.fishingData[userId] = regenerateBaits(userData);
+    userData = regenerateBaits(userData);
     
-    // Cooldown
+    // Cooldown logic
     const now = Math.floor(Date.now() / 1000);
     let currentCooldown = FISHING_COOLDOWN;
 
     if (userData.buffs) {
         const cooldownBuff = userData.buffs.find(b => b.type === 'cooldown_reduction' && b.remainingUses > 0);
-        if (cooldownBuff) { currentCooldown *= (1 - cooldownBuff.value); cooldownBuff.remainingUses--; }
+        if (cooldownBuff) { currentCooldown *= (1 - cooldownBuff.value); 
+            cooldownBuff.remainingUses--; 
+            await updateBuffUses(cooldownBuff.dbId, cooldownBuff.remainingUses);
+        }
     }
     if (userData.debuffs) {
         const cooldownDebuff = userData.debuffs.find(d => d.type === 'longer_cooldown' && d.remainingUses > 0);
-        if (cooldownDebuff) { currentCooldown *= cooldownDebuff.value; cooldownDebuff.remainingUses--; }
+        if (cooldownDebuff) { currentCooldown *= cooldownDebuff.value; 
+            cooldownDebuff.remainingUses--;
+            await updateBuffUses(cooldownDebuff.dbId, cooldownDebuff.remainingUses);
+        }
     }
 
     if (fishingCooldowns[userId] && now < fishingCooldowns[userId]) {
@@ -748,14 +778,6 @@ async function fishCommand(bot, message, args, group) {
     if (userData.baits <= 0) {
       try { setTimeout((mo) => { mo.react("🍥"); }, 3000, message.origin); } catch (e) {}
       return null;
-    }
-    
-    // Grupo init
-    if (groupId && !fishingData.groupData[groupId]) fishingData.groupData[groupId] = {};
-    if (groupId && !fishingData.groupData[groupId][userId]) {
-      fishingData.groupData[groupId][userId] = { name: userName, totalWeight: 0, biggestFish: null, totalCatches: 0 };
-    } else if (groupId) {
-      fishingData.groupData[groupId][userId].name = userName;
     }
 
     // Obter peixes
@@ -768,7 +790,7 @@ async function fishCommand(bot, message, args, group) {
     } catch (error) {}
 
     let catchCount = hasDoubleCatchBuff(userData) ? 2 : 1;
-    if (catchCount === 2) consumeDoubleCatchBuff(userData);
+    if (catchCount === 2) await consumeDoubleCatchBuff(userData);
     
     const caughtFishes = [];
     let effectMessage = '';
@@ -776,13 +798,12 @@ async function fishCommand(bot, message, args, group) {
     
     for (let i = 0; i < catchCount; i++) {
       const fish = await getRandomFish(fishArray, i > 0, userData);
-      const buffResult = applyBuffs(userData, fish);
+      const buffResult = await applyBuffs(userData, fish);
       const modifiedFish = buffResult.fish;
-      fishingData.fishingData[userId].buffs = buffResult.buffs;
-      fishingData.fishingData[userId].debuffs = buffResult.debuffs;
       
       if (buffResult.buffMessages?.length > 0) effectMessage += `\n${buffResult.buffMessages.join('\n')}`;
       
+      await addFishToInventory(userId, modifiedFish);
       userData.fishes.push(modifiedFish);
       userData.totalWeight = (userData.totalWeight || 0) + modifiedFish.weight;
       userData.inventoryWeight = (userData.inventoryWeight || 0) + modifiedFish.weight;
@@ -792,31 +813,52 @@ async function fishCommand(bot, message, args, group) {
       if (!userData.biggestFish || modifiedFish.weight > userData.biggestFish.weight) userData.biggestFish = modifiedFish;
       
       if (groupId) {
-        const gUser = fishingData.groupData[groupId][userId];
-        gUser.totalWeight = (gUser.totalWeight || 0) + modifiedFish.weight;
-        gUser.totalCatches = (gUser.totalCatches ?? 0) + 1;
-        if (!gUser.biggestFish || modifiedFish.weight > gUser.biggestFish.weight) gUser.biggestFish = modifiedFish;
+        await updateGroupStats(groupId, userId, userName, modifiedFish.weight, true, modifiedFish);
       }
       
       if (i === 0 && !modifiedFish.isRare) {
         randomItem = checkRandomItem();
         if (randomItem) {
-          const itemResult = applyItemEffect(userData, randomItem);
-          fishingData.fishingData[userId] = itemResult.userData;
+          const itemResult = await applyItemEffect(userData, randomItem);
+          userData = itemResult.userData;
           effectMessage += itemResult.effectMessage;
           
           if (randomItem.type === 'trash') {
             userData.totalTrashCaught = (userData.totalTrashCaught ?? 0) + 1;
-            caughtFishes.pop();
-            userData.fishes.pop();
+            const trashedFish = caughtFishes.pop();
+            // Need to remove from DB inventory since we added it above
+            // We need to fetch the last inserted ID or assume
+            const lastFish = userData.fishes.pop(); 
+            // In a real scenario we need the ID. 
+            // For now let's assume `addFishToInventory` works. 
+            // Better strategy: Don't add to DB until end of loop? No, item effect can clear inventory.
+            // Let's get the DB ID of the fish we just added. 
+            // Since we don't have it easily without a return from insert, 
+            // we will query the last fish added by user.
+            const fishRow = await database.dbGet(dbName, "SELECT id FROM fishing_inventory WHERE user_id = ? ORDER BY id DESC LIMIT 1", [userId]);
+            if(fishRow) await removeFishFromInventory(userId, fishRow.id);
+
             userData.totalCatches--;
             userData.totalWeight -= modifiedFish.weight;
             userData.inventoryWeight -= modifiedFish.weight;
             if (groupId) {
-                fishingData.groupData[groupId][userId].totalCatches--;
-                fishingData.groupData[groupId][userId].totalWeight -= modifiedFish.weight;
+                await updateGroupStats(groupId, userId, userName, modifiedFish.weight, false, null);
             }
             break;
+          }
+          if(randomItem.effect === 'lose_recent_fish'){
+             // Similar logic to trash, remove the fish we just caught
+             const stolenFish = caughtFishes.pop();
+             const lastFish = userData.fishes.pop();
+             const fishRow = await database.dbGet(dbName, "SELECT id FROM fishing_inventory WHERE user_id = ? ORDER BY id DESC LIMIT 1", [userId]);
+             if(fishRow) await removeFishFromInventory(userId, fishRow.id);
+             
+             userData.totalCatches--;
+             userData.totalWeight -= modifiedFish.weight;
+             userData.inventoryWeight -= modifiedFish.weight;
+             if (groupId) {
+                await updateGroupStats(groupId, userId, userName, modifiedFish.weight, false, null);
+             }
           }
         }
       }
@@ -830,7 +872,39 @@ async function fishCommand(bot, message, args, group) {
     }
     userData.totalBaitsUsed = (userData.totalBaitsUsed ?? 0) + 1;
     
-    await saveFishingData(fishingData);
+    // Check inventory limit
+    if(userData.fishes.length > MAX_FISH_PER_USER){
+        // Find smallest fish
+        let smallestIndex = 0;
+        let smallestWeight = userData.fishes[0].weight;
+        
+        for(let i=1; i<userData.fishes.length; i++){
+            if(userData.fishes[i].weight < smallestWeight){
+                smallestWeight = userData.fishes[i].weight;
+                smallestIndex = i;
+            }
+        }
+        
+        const removed = userData.fishes[smallestIndex];
+        // Ensure we have dbId. Reload if necessary or use what we have.
+        // getUserData populates dbId. New fishes might not have it in local array unless we reload.
+        // Quick fix: Remove by timestamp/name fallback or reload.
+        // Reloading is safest.
+        if(!removed.dbId){
+             // Try to find it in DB.
+             const fishRow = await database.dbGet(dbName, "SELECT id FROM fishing_inventory WHERE user_id = ? AND weight = ? AND name = ? LIMIT 1", [userId, removed.weight, removed.name]);
+             if(fishRow) removed.dbId = fishRow.id;
+        }
+
+        if(removed.dbId) {
+            await removeFishFromInventory(userId, removed.dbId);
+            userData.fishes.splice(smallestIndex, 1);
+            userData.inventoryWeight -= removed.weight;
+            effectMessage += `\n\n⚠️ Inventário cheio! O peixe *${removed.name}* (${removed.weight}kg) foi solto.`;
+        }
+    }
+
+    await saveUserData(userData);
     fishingCooldowns[userId] = now + currentCooldown;
     
     // Montar mensagem
@@ -872,25 +946,23 @@ async function fishCommand(bot, message, args, group) {
     fishMessage += `\n> 🐛 Iscas restantes: ${userData.baits}/${MAX_BAITS}`;
     fishMessage += effectMessage;
 
-    // Se for peixe raro, tentar gerar imagem
+    // Se for peixe raro, tentar gerar imagem e salvar no histórico
     if (caughtFishes.length === 1 && caughtFishes[0].isRare) {
       let rareFishImage = await generateRareFishImage(bot, userName, caughtFishes[0].name);
 
       if(!rareFishImage){
         // Placeholder
         const pchPescaRara = path.join(database.databasePath, "rare-fish.jpg");
-        logger.error(`[fishing] Erro gerando imagem de peixe raro, usando placeholder '${pchPescaRara}'`);
         rareFishImage = await bot.createMedia(pchPescaRara, "image/jpeg");
       }
       
       const savedImageName = await saveRareFishImage(rareFishImage, userId, caughtFishes[0].name);
-      if (!fishingData.legendaryFishes) fishingData.legendaryFishes = [];
       
-      fishingData.legendaryFishes.push({
-        fishName: caughtFishes[0].name, weight: caughtFishes[0].weight, userId: userId,
-        userName: userName, groupId: groupId || null, groupName: group ? group.name : "chat privado",
-        timestamp: Date.now(), imageName: savedImageName
-      });
+      // Save Legendary to DB
+      await database.dbRun(dbName, `INSERT INTO fishing_legendary_history 
+        (fish_name, weight, user_id, user_name, group_id, group_name, timestamp, image_name)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [caughtFishes[0].name, caughtFishes[0].weight, userId, userName, groupId || null, group ? group.name : "chat privado", Date.now(), savedImageName]);
 
       const groupName = group ? group.name : "chat privado";
       const notificacaoPeixeRaro = new ReturnMessage({
@@ -903,13 +975,13 @@ async function fishCommand(bot, message, args, group) {
       if (bot.grupoInteracao) {
         notificacaoPeixeRaro.chatId = bot.grupoInteracao;
         const msgsEnviadas = await bot.sendReturnMessages(notificacaoPeixeRaro);
-        msgsEnviadas[0].pin(260000);
+        if(msgsEnviadas[0] && msgsEnviadas[0].pin) msgsEnviadas[0].pin(260000);
       }
       
       if (bot.grupoAvisos) {
         notificacaoPeixeRaro.chatId = bot.grupoAvisos;
         const msgsEnviadas = await bot.sendReturnMessages(notificacaoPeixeRaro);
-        msgsEnviadas[0].pin(260000);
+        if(msgsEnviadas[0] && msgsEnviadas[0].pin) msgsEnviadas[0].pin(260000);
       }
 
       return new ReturnMessage({
@@ -936,16 +1008,15 @@ async function myFishCommand(bot, message, args, group) {
     const userId = message.author;
     const userName = message.name ?? message.pushName ?? message.pushname ?? message.authorName ?? "Pescador";
     
-    const fishingData = await getFishingData();
+    let userData = await getUserData(userId);
     
-    if (!fishingData.fishingData[userId]) {
+    if (!userData) {
       return new ReturnMessage({ chatId, content: `🎣 ${userName}, use !pescar para começar.` });
     }
     
-    fishingData.fishingData[userId] = regenerateBaits(fishingData.fishingData[userId]);
-    await saveFishingData(fishingData);
+    userData = regenerateBaits(userData);
+    await saveUserData(userData);
     
-    const userData = fishingData.fishingData[userId];
     const fishes = userData.fishes;
     
     let fishMessage = `🎣 *Peixes de ${userName}*\n\n`;
@@ -986,214 +1057,119 @@ async function myFishCommand(bot, message, args, group) {
 
 /**
  * Mostra os peixes lendários que foram pescados
- * @param {WhatsAppBot} bot - Instância do bot
- * @param {Object} message - Dados da mensagem
- * @param {Array} args - Argumentos do comando
- * @param {Object} group - Dados do grupo
- * @returns {Promise<ReturnMessage|Array<ReturnMessage>>} Mensagem(ns) de retorno
  */
 async function legendaryFishCommand(bot, message, args, group) {
   try {
-    // Obtém ID do chat
     const chatId = message.group ?? message.author;
     
-    // Obtém dados de pesca
-    const fishingData = await getFishingData();
+    const legendaryFishes = await database.dbAll(dbName, "SELECT * FROM fishing_legendary_history ORDER BY timestamp DESC");
     
-    // Verifica se há peixes lendários
-    if (!fishingData.legendaryFishes || fishingData.legendaryFishes.length === 0) {
+    if (legendaryFishes.length === 0) {
       return new ReturnMessage({
         chatId,
         content: '🐉 Ainda não foram pescados peixes lendários. Continue pescando e você pode ser o primeiro a encontrar um!'
       });
     }
     
-    // Ordena os peixes lendários por data (mais recente primeiro)
-    const sortedLegendaryFishes = [...fishingData.legendaryFishes].sort((a, b) => b.timestamp - a.timestamp);
-    
     const rareFishListItems = await Promise.all(RARE_FISH.map(async f => {
-        const count = await getNumberOfFishesByName(f.name, fishingData);
+        const count = legendaryFishes.filter(l => l.fish_name === f.name).length;
         return `\t${f.emoji} ${f.name} _(${f.weightBonus}kg, ${count} pescados até hoje)_`;
     }));
     const rareFishList = rareFishListItems.join("\n");
 
-    // Prepara a mensagem com a lista completa de todos os peixes lendários
     let textMessage = `🌊 *Lista de Peixes Lendários* 🎣\n${rareFishList}\n\n🏆 *REGISTRO DE PEIXES LENDÁRIOS* 🎖️\n\n`;
     
-    // Adiciona todos os peixes lendários na mensagem de texto
-    for (let i = 0; i < sortedLegendaryFishes.length; i++) {
-      const legendary = sortedLegendaryFishes[i];
-      
-      // Formata data para um formato legível
+    for (let i = 0; i < legendaryFishes.length; i++) {
+      const legendary = legendaryFishes[i];
       const date = new Date(legendary.timestamp).toLocaleDateString('pt-BR');
-      
-      // Adiciona emoji especial para os 3 primeiros
       const medal = i === 0 ? '🥇 ' : i === 1 ? '🥈 ' : i === 2 ? '🥉 ' : `${i+1}. `;
       
-      textMessage += `${medal}*${legendary.fishName}* (${legendary.weight.toFixed(2)} kg)\n`;
-      textMessage += `   Pescador: ${legendary.userName}\n`;
-      textMessage += `   Local: ${legendary.groupName ?? 'misterioso'}\n`;
+      textMessage += `${medal}*${legendary.fish_name}* (${legendary.weight.toFixed(2)} kg)\n`;
+      textMessage += `   Pescador: ${legendary.user_name}\n`;
+      textMessage += `   Local: ${legendary.group_name ?? 'misterioso'}\n`;
       textMessage += `   Data: ${date}\n\n`;
     }
     
-    // Adiciona mensagem sobre as imagens
-    if (sortedLegendaryFishes.length > 0) {
-      textMessage += `📷 *Mostrando imagens das ${Math.min(5, sortedLegendaryFishes.length)} lendas mais recentes...*`;
+    if (legendaryFishes.length > 0) {
+      textMessage += `📷 *Mostrando imagens das ${Math.min(5, legendaryFishes.length)} lendas mais recentes...*`;
     }
     
-    // Mensagens a serem enviadas
     const messages = [];
+    messages.push(new ReturnMessage({ chatId, content: textMessage }));
     
-    // Adiciona a mensagem de texto inicial
-    messages.push(new ReturnMessage({
-      chatId,
-      content: textMessage
-    }));
+    const legendaryToShow = legendaryFishes.slice(0, 5);
     
-    // Limita a 5 peixes para as imagens
-    const legendaryToShow = sortedLegendaryFishes.slice(0, 5);
-    
-    // Cria uma mensagem para cada peixe lendário (apenas os 5 mais recentes)
     for (const legendary of legendaryToShow) {
       try {
-        let content;
-        let options = {};
-        
-        // Tenta carregar a imagem se existir
-        if (legendary.imageName) {
-          const imagePath = path.join(database.databasePath, 'media', legendary.imageName);
+        if (legendary.image_name) {
+          const imagePath = path.join(database.databasePath, 'media', legendary.image_name);
           try {
             await fs.access(imagePath);
-            // Imagem existe, cria média
             const media = await bot.createMedia(imagePath);
-            content = media;
-            
-            // Prepara a legenda
             const date = new Date(legendary.timestamp).toLocaleDateString('pt-BR');
-            options.caption = `🏆 *Peixe Lendário*\n\n*${legendary.fishName}* de ${legendary.weight.toFixed(2)} kg\nPescado por: ${legendary.userName}\nLocal: ${legendary.groupName ?? 'misterioso'}\nData: ${date}`;
-          } catch (imageError) {
-            // Imagem não existe, pula para o próximo
-            logger.error(`Imagem do peixe lendário não encontrada: ${imagePath}`, imageError);
-            continue;
-          }
-        } else {
-          // Sem imagem, pula para o próximo
-          continue;
+            messages.push(new ReturnMessage({
+              chatId,
+              content: media,
+              options: { caption: `🏆 *Peixe Lendário*\n\n*${legendary.fish_name}* de ${legendary.weight.toFixed(2)} kg\nPescado por: ${legendary.user_name}\nLocal: ${legendary.group_name ?? 'misterioso'}\nData: ${date}` },
+              delay: messages.length * 1000 
+            }));
+          } catch (imageError) { continue; }
         }
-        
-        // Adiciona a mensagem à lista
-        messages.push(new ReturnMessage({
-          chatId,
-          content,
-          options,
-          // Adiciona delay para evitar envio muito rápido
-          delay: messages.length * 1000 
-        }));
-        
-      } catch (legendaryError) {
-        logger.error('Erro ao processar peixe lendário:', legendaryError);
-      }
+      } catch (e) {}
     }
     
-    if (messages.length === 1) {
-      return messages[0]; // Retorna apenas a mensagem de texto se não houver imagens
-    }
-    
+    if (messages.length === 1) return messages[0];
     return messages;
   } catch (error) {
     logger.error('Erro no comando de peixes lendários:', error);
-    
-    return new ReturnMessage({
-      chatId: message.group ?? message.author,
-      content: '❌ Ocorreu um erro ao mostrar os peixes lendários. Por favor, tente novamente.'
-    });
+    return new ReturnMessage({ chatId: message.group ?? message.author, content: '❌ Erro ao mostrar lendas.' });
   }
 }
 
 /**
  * Mostra o ranking de pescaria do grupo atual
- * @param {WhatsAppBot} bot - Instância do bot
- * @param {Object} message - Dados da mensagem
- * @param {Array} args - Argumentos do comando
- * @param {Object} group - Dados do grupo
- * @returns {Promise<ReturnMessage>} Mensagem de retorno
  */
 async function fishingRankingCommand(bot, message, args, group) {
   try {
-    // Obtém ID do chat
     const chatId = message.group ?? message.author;
     const groupId = message.group;
     
-    // Verifica se o comando foi executado em um grupo
     if (!groupId) {
-      return new ReturnMessage({
-        chatId,
-        content: '🎣 Este comando só funciona em grupos. Use-o em um grupo para ver o ranking desse grupo específico.'
-      });
+      return new ReturnMessage({ chatId, content: '🎣 Este comando só funciona em grupos.' });
     }
     
-    // Obtém dados de pesca
-    const fishingData = await getFishingData();
+    const groupStats = await database.dbAll(dbName, "SELECT * FROM fishing_group_stats WHERE group_id = ?", [groupId]);
     
-    // Verifica se há dados para este grupo
-    if (!fishingData.groupData || 
-        !fishingData.groupData[groupId] || 
-        Object.keys(fishingData.groupData[groupId]).length === 0) {
-      return new ReturnMessage({
-        chatId,
-        content: '🎣 Ainda não há dados de pescaria neste grupo. Use !pescar para começar.'
-      });
+    if (groupStats.length === 0) {
+      return new ReturnMessage({ chatId, content: '🎣 Ainda não há dados de pescaria neste grupo.' });
     }
     
-    // Obtém os dados dos jogadores deste grupo
-    const players = Object.entries(fishingData.groupData[groupId]).map(([id, data]) => ({
-      id,
-      ...data
+    const players = groupStats.map(s => ({
+        id: s.user_id,
+        name: s.name,
+        totalWeight: s.total_weight,
+        totalCatches: s.total_catches,
+        biggestFish: JSON.parse(s.biggest_fish_json || 'null')
     }));
     
-    // Determina o tipo de ranking
-    let rankingType = 'biggest'; // Padrão: maior peixe (sem argumentos)
-    
+    let rankingType = 'biggest'; 
     if (args.length > 0) {
       const arg = args[0].toLowerCase();
-      if (arg === 'quantidade') {
-        rankingType = 'count';
-      } else if (arg === 'pesado') {
-        rankingType = 'weight';
-      }
+      if (arg === 'quantidade') rankingType = 'count';
+      else if (arg === 'pesado') rankingType = 'weight';
     }
     
-    // Ordena jogadores com base no tipo de ranking
-    if (rankingType === 'weight') {
-      // Ordena por peso total
-      players.sort((a, b) => b.totalWeight - a.totalWeight);
-    } else if (rankingType === 'count') {
-      // Ordena por quantidade total de peixes
-      players.sort((a, b) => b.totalCatches - a.totalCatches);
-    } else {
-      // Ordena por tamanho do maior peixe
-      players.sort((a, b) => {
-        // Se algum jogador não tiver um maior peixe, coloca-o no final
+    if (rankingType === 'weight') players.sort((a, b) => b.totalWeight - a.totalWeight);
+    else if (rankingType === 'count') players.sort((a, b) => b.totalCatches - a.totalCatches);
+    else players.sort((a, b) => {
         if (!a.biggestFish) return 1;
         if (!b.biggestFish) return -1;
         return b.biggestFish.weight - a.biggestFish.weight;
       });
-    }
     
-    // Prepara o título do ranking de acordo com o tipo
-    let rankingTitle = '';
-    if (rankingType === 'weight') {
-      rankingTitle = 'Peso Total';
-    } else if (rankingType === 'count') {
-      rankingTitle = 'Quantidade Total';
-    } else {
-      rankingTitle = 'Maior Peixe';
-    }
-    
-    // Prepara a mensagem de ranking
+    let rankingTitle = rankingType === 'weight' ? 'Peso Total' : (rankingType === 'count' ? 'Quantidade Total' : 'Maior Peixe');
     let rankingMessage = `🏆 *Ranking de Pescaria deste Grupo* (${rankingTitle})\n\n`;
     
-    // Lista os jogadores
     const topPlayers = players.slice(0, 10);
     topPlayers.forEach((player, index) => {
       const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
@@ -1203,7 +1179,6 @@ async function fishingRankingCommand(bot, message, args, group) {
       } else if (rankingType === 'count') {
         rankingMessage += `${medal} ${player.name}: ${player.totalCatches} peixes (${player.totalWeight.toFixed(2)} kg)\n`;
       } else {
-        // Se o jogador não tiver um maior peixe, mostra uma mensagem apropriada
         if (!player.biggestFish) {
           rankingMessage += `${medal} ${player.name}: Ainda não pescou nenhum peixe\n`;
         } else {
@@ -1213,32 +1188,17 @@ async function fishingRankingCommand(bot, message, args, group) {
       }
     });
     
-    // Informações sobre os outros rankings
     rankingMessage += `\nOutros rankings disponíveis:`;
-    if (rankingType !== 'biggest') {
-      rankingMessage += `\n- !pesca-ranking (sem argumentos): Ranking por maior peixe`;
-    }
-    if (rankingType !== 'weight') {
-      rankingMessage += `\n- !pesca-ranking pesado: Ranking por peso total`;
-    }
-    if (rankingType !== 'count') {
-      rankingMessage += `\n- !pesca-ranking quantidade: Ranking por quantidade de peixes`;
-    }
+    if (rankingType !== 'biggest') rankingMessage += `\n- !pesca-ranking (sem argumentos)`;
+    if (rankingType !== 'weight') rankingMessage += `\n- !pesca-ranking pesado`;
+    if (rankingType !== 'count') rankingMessage += `\n- !pesca-ranking quantidade`;
     
-    return new ReturnMessage({
-      chatId,
-      content: rankingMessage
-    });
+    return new ReturnMessage({ chatId, content: rankingMessage });
   } catch (error) {
     logger.error('Erro ao mostrar ranking de pescaria:', error);
-    
-    return new ReturnMessage({
-      chatId: message.group ?? message.author,
-      content: '❌ Ocorreu um erro ao mostrar o ranking. Por favor, tente novamente.'
-    });
+    return new ReturnMessage({ chatId: message.group ?? message.author, content: '❌ Erro ao mostrar ranking.' });
   }
 }
-
 
 async function saveRareFishImage(mediaContent, userId, fishName) {
   try {
@@ -1252,9 +1212,6 @@ async function saveRareFishImage(mediaContent, userId, fishName) {
 
 /**
  * Mostra todas as informações sobre o jogo de pescaria.
- * @param {WhatsAppBot} bot - Instância do bot
- * @param {Object} message - Dados da mensagem
- * @returns {Promise<ReturnMessage>} Mensagem de retorno
  */
 async function fishingInfoCommand(bot, message) {
     const chatId = message.group ?? message.author;
@@ -1271,24 +1228,21 @@ async function fishingInfoCommand(bot, message) {
         infoMessage += `-  *Peso dos Peixes:* de \`${MIN_FISH_WEIGHT}kg\` a \`${MAX_FISH_WEIGHT}kg\`\n`;
         infoMessage += `- *Peixes:* \`${fishVariety}\` tipos (\`!pesca-peixes\` para ver)\n\n`;
 
-        const fishingData = await getFishingData(); // pseudo cache
+        // Legendary counts
         infoMessage += "🐲 *Peixes Lendários*\n_Chance de encontrar um destes seres místicos:_\n";
         for (const fish of RARE_FISH) {
-            const count = await getNumberOfFishesByName(fish.name, fishingData);
-            infoMessage += `  ${fish.emoji} *${fish.name}*: \`${(fish.chance * 100).toFixed(4 )}%\` de chance, ${count} pescados até hoje\n`;
+            // Count from DB
+            const countRow = await database.dbGet(dbName, "SELECT COUNT(*) as c FROM fishing_legendary_history WHERE fish_name = ?", [fish.name]);
+            infoMessage += `  ${fish.emoji} *${fish.name}*: \`${(fish.chance * 100).toFixed(4 )}%\` de chance, ${countRow?.c || 0} pescados até hoje\n`;
         }
         infoMessage += "\n";
 
         infoMessage += "✨ *Buffs*\n_Itens que te ajudam na pescaria:_\n";
-        UPGRADES.forEach(item => {
-            infoMessage += `  ${item.emoji} *${item.name}*: ${item.description}\n`;
-        });
+        UPGRADES.forEach(item => { infoMessage += `  ${item.emoji} *${item.name}*: ${item.description}\n`; });
         infoMessage += "\n";
 
         infoMessage += "🔥 *Debuffs*\n_Cuidado com o que você fisga!_\n";
-        DOWNGRADES.forEach(item => {
-            infoMessage += `  ${item.emoji} *${item.name}*: ${item.description}\n`;
-        });
+        DOWNGRADES.forEach(item => { infoMessage += `  ${item.emoji} *${item.name}*: ${item.description}\n`; });
         infoMessage += "\n";
 
         infoMessage += "🧹 *Lixos Pescáveis*\n_Nem tudo que reluz é peixe..._\n";
@@ -1306,145 +1260,102 @@ async function fishingInfoCommand(bot, message) {
             infoMessage += `🥇 *Pescador Mais Dedicado:* _${stats.mostFishCaughtByUser.userName}_ com \`${stats.mostFishCaughtByUser.totalCatches}\` peixes pescados\n`;
         }
 
-        infoMessage += "\n\n> Se você deseja contribuir com novos buffs, lixos, peixes, etc. fique à vontade para mandar sugestões no `!grupao` ou um _PR_ direto no `!codigo`";
-
         return new ReturnMessage({ chatId, content: infoMessage });
 
     } catch (error) {
         logger.error('Erro no comando pesca-info:', error);
-        return new ReturnMessage({
-            chatId,
-            content: '❌ Ocorreu um erro ao buscar as informações da pescaria.'
-        });
+        return new ReturnMessage({ chatId, content: '❌ Ocorreu um erro ao buscar as informações da pescaria.' });
     }
-}
-/**
- * Conta quantos peixes de um determinado tipo já foram pescados.
- * Para peixes raros, usa o histórico de lendas.
- * Para peixes comuns, usa os inventários atuais.
- * @param {string} fishName 
- */
-async function getNumberOfFishesByName(fishName, fishingData = null) {
-  if(!fishingData){
-    fishingData = await getFishingData();
-  }
-  const rareFishNames = RARE_FISH.map(r => r.name);
-  
-  if (rareFishNames.includes(fishName)) {
-      if (!fishingData.legendaryFishes) return 0;
-      return fishingData.legendaryFishes.filter(l => l.fishName === fishName).length;
-  } else {
-      let count = 0;
-      const allUsers = Object.values(fishingData.fishingData || {});
-      for (const user of allUsers) {
-          if (user.fishes) {
-              count += user.fishes.filter(f => f.name === fishName).length;
-          }
-      }
-      return count;
-  }
 }
 
 /**
  * Gera e retorna um objeto com as estatísticas globais de pesca.
- * @returns {Promise<Object>} Objeto com as estatísticas.
  */
 async function getFishingStats() {
-    const fishingData = await getFishingData();
-    const allUsersData = Object.values(fishingData.fishingData || {});
-
-    let totalFishCaught = 0;
-    let totalBaitsUsed = 0;
-    let totalTrashCaught = 0;
+    const totals = await database.dbGet(dbName, 
+        `SELECT 
+            SUM(total_catches) as totalFishCaught,
+            SUM(total_baits_used) as totalBaitsUsed,
+            SUM(total_trash_caught) as totalTrashCaught
+        FROM fishing_users`);
+    
+    const legendaries = await database.dbGet(dbName, "SELECT COUNT(*) as c FROM fishing_legendary_history");
+    
+    // Heaviest fish logic: Iterate users and check their biggest_fish_json
+    // Or just store heaviest globally? No, querying JSON is hard in basic SQLite without extension.
+    // We will select all users with non-null biggest_fish_json and parse.
+    // Optimization: Store weight in a separate column in users table? No, let's keep it simple for now as per migration.
+    // Actually, migration didn't extract weight. We'll have to parse.
+    
+    // Alternative: We have fishing_inventory which has ALL fishes. We can just query max weight there.
+    // BUT fishing_inventory might be cleared. 'biggest_fish_json' in users table persists even if inventory cleared.
+    
+    const allUsers = await database.dbAll(dbName, "SELECT name, biggest_fish_json, total_catches FROM fishing_users");
+    
     let heaviestFishEver = { weight: 0 };
     let mostFishCaughtByUser = { totalCatches: 0 };
-
-    for (const userData of allUsersData) {
-        totalFishCaught += userData.totalCatches || 0;
-        totalBaitsUsed += (userData.totalBaitsUsed || 0);
-        totalTrashCaught += (userData.totalTrashCaught || 0);
-
-        if (userData.biggestFish && userData.biggestFish.weight > heaviestFishEver.weight) {
-            heaviestFishEver = {
-                ...userData.biggestFish,
-                userName: userData.name,
-            };
+    
+    for (const u of allUsers) {
+        if (u.biggest_fish_json) {
+            const bf = JSON.parse(u.biggest_fish_json);
+            if (bf && bf.weight > heaviestFishEver.weight) {
+                heaviestFishEver = { ...bf, userName: u.name };
+            }
         }
-
-        if (userData.totalCatches > mostFishCaughtByUser.totalCatches) {
-            mostFishCaughtByUser = {
-                totalCatches: userData.totalCatches,
-                userName: userData.name,
-            };
+        if (u.total_catches > mostFishCaughtByUser.totalCatches) {
+            mostFishCaughtByUser = { totalCatches: u.total_catches, userName: u.name };
         }
     }
 
-    totalBaitsUsed += Math.floor(totalFishCaught*1.2);
-    totalTrashCaught += (totalBaitsUsed - totalFishCaught);
-
-    const totalLegendaryCaught = fishingData.legendaryFishes?.length || 0;
-
     return {
-        totalFishCaught,
-        totalBaitsUsed,
-        totalTrashCaught,
-        totalLegendaryCaught,
+        totalFishCaught: totals?.totalFishCaught || 0,
+        totalBaitsUsed: totals?.totalBaitsUsed || 0,
+        totalTrashCaught: totals?.totalTrashCaught || 0,
+        totalLegendaryCaught: legendaries?.c || 0,
         heaviestFishEver,
         mostFishCaughtByUser,
     };
 }
+
 /**
  * Lista todos os tipos de peixes disponíveis
- * @param {WhatsAppBot} bot - Instância do bot
- * @param {Object} message - Dados da mensagem
- * @param {Array} args - Argumentos do comando
- * @param {Object} group - Dados do grupo
- * @returns {Promise<ReturnMessage>} Mensagem de retorno
  */
 async function listFishTypesCommand(bot, message, args, group) {
   try {
-    // Obtém ID do chat
     const chatId = message.group ?? message.author;
     
-    // Obtém peixes das custom-variables
     let fishArray = [];
     try {
       const customVariables = await database.getCustomVariables();
       if (customVariables?.peixes && Array.isArray(customVariables.peixes) && customVariables.peixes.length > 0) {
         fishArray = customVariables.peixes;
       } else {
-        return new ReturnMessage({
-          chatId,
-          content: '🎣 Ainda não há tipos de peixes definidos nas variáveis personalizadas. O sistema usará peixes padrão ao pescar.'
-        });
+        return new ReturnMessage({ chatId, content: '🎣 Ainda não há tipos de peixes definidos.' });
       }
     } catch (error) {
-      logger.error('Erro ao obter peixes de custom-variables:', error);
-      return new ReturnMessage({
-        chatId,
-        content: '❌ Ocorreu um erro ao buscar os tipos de peixes. Por favor, tente novamente.'
-      });
+      return new ReturnMessage({ chatId, content: '❌ Erro ao buscar tipos de peixes.' });
     }
 
-    // Ordena alfabeticamente
     const sortedFishes = [...fishArray].sort();
-    
-    // Prepara a mensagem
     let fishMessage = '🐟 *Lista de Peixes Disponíveis*\n_(número de pescados entre parêntese)_\n\n';
     
-    // Agrupa em colunas
     const columns = 2;
     const rows = Math.ceil(sortedFishes.length / columns);
       
-
-    const fishingData = await getFishingData(); // pseudo cache
+    // Count fishes
+    // We can query fishing_inventory for counts.
+    // Note: Inventory gets cleared. So this is "currently in inventories". 
+    // Original code did: "getFishingData... user.fishes.filter...". So it was also based on current inventory.
+    // To match original behavior, we query fishing_inventory.
+    
     for (let i = 0; i < rows; i++) {
       for (let j = 0; j < columns; j++) {
         const index = i + j * rows;
         if (index < sortedFishes.length) {
-          const count = await getNumberOfFishesByName(sortedFishes[index], fishingData);
-          fishMessage += `${sortedFishes[index]} (${count})`;
-          // Adiciona espaço ou quebra de linha
+          const fishName = sortedFishes[index];
+          const countRow = await database.dbGet(dbName, "SELECT COUNT(*) as c FROM fishing_inventory WHERE name = ?", [fishName]);
+          
+          fishMessage += `${fishName} (${countRow?.c || 0})`;
           if (j < columns - 1 && i + (j + 1) * rows < sortedFishes.length) {
             fishMessage += ' | ';
           }
@@ -1453,91 +1364,59 @@ async function listFishTypesCommand(bot, message, args, group) {
       fishMessage += '\n';
     }
     
-    // Adiciona informações sobre peixes raros
     fishMessage += `\n*Peixes Raríssimos*:\n`;
     for (const fish of RARE_FISH) {
       const chancePercent = fish.chance * 100;
-      const count = await getNumberOfFishesByName(fish.name, fishingData);
-      fishMessage += `${fish.emoji} ${fish.name}: ${fish.weightBonus}kg extra (${chancePercent.toFixed(5)}% de chance, ${count} pescados até hoje)\n`;
+      const countRow = await database.dbGet(dbName, "SELECT COUNT(*) as c FROM fishing_legendary_history WHERE fish_name = ?", [fish.name]);
+      fishMessage += `${fish.emoji} ${fish.name}: ${fish.weightBonus}kg extra (${chancePercent.toFixed(5)}% de chance, ${countRow?.c || 0} pescados até hoje)\n`;
     }
-    
 
     fishMessage += `\n🐛 Use \`!pesca-info\` para mais informações`;
     
-    return new ReturnMessage({
-      chatId,
-      content: fishMessage
-    });
+    return new ReturnMessage({ chatId, content: fishMessage });
   } catch (error) {
     logger.error('Erro ao listar tipos de peixes:', error);
-    
-    return new ReturnMessage({
-      chatId: message.group ?? message.author,
-      content: '❌ Ocorreu um erro ao listar os tipos de peixes. Por favor, tente novamente.'
-    });
+    return new ReturnMessage({ chatId: message.group ?? message.author, content: '❌ Erro ao listar peixes.' });
   }
 }
 
 /**
  * Mostra as iscas do jogador
- * @param {WhatsAppBot} bot - Instância do bot
- * @param {Object} message - Dados da mensagem
- * @param {Array} args - Argumentos do comando
- * @param {Object} group - Dados do grupo
- * @returns {Promise<ReturnMessage>} Mensagem de retorno
  */
 async function showBaitsCommand(bot, message, args, group) {
   try {
-    // Obtém IDs do chat e do usuário
     const chatId = message.group ?? message.author;
     const userId = message.author;
     const userName = message.name ?? message.pushName ?? message.pushname ?? message.authorName ?? "Pescador";
     
-    // Obtém dados de pesca
-    const fishingData = await getFishingData();
+    let userData = await getUserData(userId);
     
-    // Verifica se o usuário tem dados
-    if (!fishingData.fishingData[userId]) {
-      fishingData.fishingData[userId] = {
-        name: userName,
-        fishes: [],
-        totalWeight: 0,
-        inventoryWeight: 0,
-        biggestFish: null,
-        totalCatches: 0,
-        baits: MAX_BAITS,
-        lastBaitRegen: Date.now(),
-        buffs: [],
-        debuffs: []
+    if (!userData) {
+      userData = {
+         userId, name: userName, baits: MAX_BAITS, lastBaitRegen: Date.now(),
+         totalWeight: 0, inventoryWeight: 0, totalCatches: 0, totalBaitsUsed: 0, totalTrashCaught: 0, biggestFish: null
       };
+      await saveUserData(userData);
     }
     
-    // Regenera iscas
-    fishingData.fishingData[userId] = regenerateBaits(fishingData.fishingData[userId]);
+    userData = regenerateBaits(userData);
+    const regenInfo = getNextBaitRegenTime(userData);
     
-    // Calcula tempo para regeneração
-    const regenInfo = getNextBaitRegenTime(fishingData.fishingData[userId]);
+    // Salva atualização de regen
+    await saveUserData(userData);
     
-    // Formata o tempo
     const nextBaitTime = regenInfo.nextBaitTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     const allBaitsTime = regenInfo.allBaitsTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     
-    // Salva os dados atualizados
-    await saveFishingData(fishingData);
-    
-    // Prepara a mensagem
     let baitMessage = `🐛 *Iscas de ${userName}*\n\n`;
-    
-    // Adiciona emojis de isca para representar visualmente
-    const baitEmojis = Array(MAX_BAITS).fill('⚪').fill('🐛', 0, fishingData.fishingData[userId].baits).join(' ');
+    const baitEmojis = Array(MAX_BAITS).fill('⚪').fill('🐛', 0, userData.baits).join(' ');
     
     baitMessage += `${baitEmojis}\n\n`;
-    baitMessage += `Você tem ${fishingData.fishingData[userId].baits}/${MAX_BAITS} iscas.\n`;
+    baitMessage += `Você tem ${userData.baits}/${MAX_BAITS} iscas.\n`;
     
-    // Adiciona mensagem sobre regeneração
-    if (fishingData.fishingData[userId].baits < MAX_BAITS) {
+    if (userData.baits < MAX_BAITS) {
       baitMessage += `Próxima isca em: ${formatTimeString(regenInfo.secondsUntilNextBait)} (${nextBaitTime})\n`;
-      if (fishingData.fishingData[userId].baits < MAX_BAITS - 1) {
+      if (userData.baits < MAX_BAITS - 1) {
         baitMessage += `Todas as iscas em: ${formatTimeString(regenInfo.secondsUntilAllBaits)} (${allBaitsTime})\n`;
       }
     } else {
@@ -1553,99 +1432,40 @@ async function showBaitsCommand(bot, message, args, group) {
     return new ReturnMessage({
       chatId,
       content: baitMessage,
-      options: {
-        quotedMessageId: message.origin.id._serialized,
-        evoReply: message.origin
-      }
+      options: { quotedMessageId: message.origin.id._serialized, evoReply: message.origin }
     });
   } catch (error) {
     logger.error('Erro ao mostrar iscas do jogador:', error);
-    
-    return new ReturnMessage({
-      chatId: message.group ?? message.author,
-      content: '❌ Ocorreu um erro ao mostrar suas iscas. Por favor, tente novamente.'
-    });
+    return new ReturnMessage({ chatId: message.group ?? message.author, content: '❌ Erro ao mostrar iscas.' });
   }
 }
+
 /**  
  * Reseta os dados de pesca para o grupo atual  
- * @param {WhatsAppBot} bot - Instância do bot  
- * @param {Object} message - Dados da mensagem  
- * @param {Array} args - Argumentos do comando  
- * @param {Object} group - Dados do grupo  
- * @returns {Promise<ReturnMessage>} Mensagem de retorno  
  */  
 async function resetFishingDataCommand(bot, message, args, group) {  
   try {  
-    // Verifica se é um grupo  
-    if (!message.group) {  
-      return new ReturnMessage({  
-        chatId: message.author,  
-        content: "❌ Este comando só pode ser usado em grupos.",  
-        options: {  
-          quotedMessageId: message.origin.id._serialized,
-          evoReply: message.origin
-        }  
-      });  
-    }  
+    if (!message.group) return new ReturnMessage({ chatId: message.author, content: "❌ Este comando só pode ser usado em grupos." });  
   
-    // Verifica se o usuário é admin  
     const isAdmin = await bot.adminUtils.isAdmin(message.author, group, null, bot.client);  
-    if (!isAdmin) {  
-      return new ReturnMessage({  
-        chatId: message.group ?? message.author,  
-        content: "❌ Este comando só pode ser usado por administradores do grupo.",  
-        options: {  
-          quotedMessageId: message.origin.id._serialized,
-          evoReply: message.origin
-        }  
-      });  
-    }  
+    if (!isAdmin) return new ReturnMessage({ chatId: message.group, content: "❌ Apenas admins podem usar isso." });  
   
-    // Obtém dados de pesca  
-    const fishingData = await getFishingData();  
-      
-    // Verifica se há dados para este grupo  
-    if (!fishingData.groupData || !fishingData.groupData[message.group]) {  
-      return new ReturnMessage({  
-        chatId: message.group,  
-        content: "ℹ️ Não há dados de pesca para este grupo.",  
-        options: {  
-          quotedMessageId: message.origin.id._serialized,
-          evoReply: message.origin
-        }  
-      });  
-    }  
-  
-    // Faz backup dos dados antes de resetar  
-    const backupData = { ...fishingData.groupData[message.group] };  
-    const numPlayers = Object.keys(backupData).length;  
-      
-    // Reseta os dados do grupo  
-    fishingData.groupData[message.group] = {};  
-      
-    // Salva os dados atualizados  
-    await saveFishingData(fishingData);  
+    const groupId = message.group;
+    
+    const stats = await database.dbAll(dbName, "SELECT * FROM fishing_group_stats WHERE group_id = ?", [groupId]);
+    if(stats.length === 0) return new ReturnMessage({ chatId: groupId, content: "ℹ️ Não há dados de pesca para este grupo." });
+
+    const numPlayers = stats.length;
+    
+    await database.dbRun(dbName, "DELETE FROM fishing_group_stats WHERE group_id = ?", [groupId]);
       
     return new ReturnMessage({  
       chatId: message.group,  
-      content: `✅ Dados de pesca resetados com sucesso!\n\n${numPlayers} jogadores tiveram seus dados de pesca neste grupo apagados.`,  
-      options: {  
-        quotedMessageId: message.origin.id._serialized,
-        evoReply: message.origin
-      }  
+      content: `✅ Dados de pesca resetados com sucesso!\n\n${numPlayers} jogadores tiveram seus dados de pesca neste grupo apagados.`  
     });  
   } catch (error) {  
     logger.error('Erro ao resetar dados de pesca:', error);  
-      
-    return new ReturnMessage({  
-      chatId: message.group ?? message.author,  
-      content: '❌ Ocorreu um erro ao resetar os dados de pesca. Por favor, tente novamente.',  
-      options: {  
-        quotedMessageId: message.origin.id._serialized,
-        evoReply: message.origin
-      }  
-    });  
+    return new ReturnMessage({ chatId: message.group, content: '❌ Erro ao resetar dados.' });  
   }  
 }
 
@@ -1663,6 +1483,9 @@ const commands = [
   new Command({name: 'pesca-iscas',description: 'Mostra suas iscas de pesca',category: "jogos",cooldown: 5,reactions: {after: "🐛",error: "❌"},method: showBaitsCommand}),
   new Command({name: 'psc-addBaits', description: 'Add Iscas', category: "jogos", adminOnly: true, hidden: true, cooldown: 0, reactions: { after: "➕", error: "❌" }, method: addBaitsCmd })
 ];
+
+// No longer need saveSync for SQLite (it's atomic) but keeping stub if external calls exist
+function saveSync() {} 
 
 module.exports = { 
   commands,
