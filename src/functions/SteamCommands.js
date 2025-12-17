@@ -117,7 +117,7 @@ async function platinaCommand(bot, message, args, group) {
     
     if (error.response) {
       if (error.response.status === 404) {
-        errorMessage = '❌ Usuário não encontrado!';
+        errorMessage = '❌ Usuário não encontrado! Tente usar seu Steam ID';
       } else if (error.response.status === 401 || error.response.status === 403) {
         errorMessage = '❌ Erro de autenticação com a API. Verifique a API key.';
       } else {
