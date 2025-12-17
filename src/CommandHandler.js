@@ -755,7 +755,7 @@ class CommandHandler {
    */
   async executeFixedCommand(bot, message, command, args, group) {
     try {
-      this.logger.info(`[${bot.id}][${message.author ?? message.authorAlt}@${group.name}] Executando comando fixo`, { command, args });
+      this.logger.info(`[${bot.id}][${message.author ?? message.authorAlt}@${group?.name ?? "PV"}] Executando comando fixo`, { command, args });
 
       // Verifica se a categoria de comando não está mutada
       if (group && group.mutedCategories && Array.isArray(group.mutedCategories)) {  
@@ -804,8 +804,8 @@ class CommandHandler {
 
       // Comando exclusivo para alguns grupos, como APIs pagas
       if(command.exclusive){
-        if(!command.exclusive.includes(group.name)){
-          this.logger.debug(`Comando ${command.name} não está habilitado para este grupo ('${group.name}').`);
+        if(!command.exclusive.includes(group?.name ?? "----")){
+          this.logger.debug(`Comando ${command.name} não está habilitado para este grupo ('${group?.name ?? "PV"}').`);
           return;
         }
       }
