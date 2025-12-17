@@ -141,7 +141,7 @@ async function platinaCommand(bot, message, args, group) {
 // Comandos registrados
 const commands = [
   new Command({
-    name: 'platina',
+    name: 'steam-platinas',
     description: 'Consulta as platinas de um usuário da Steam',
     usage: '!platina <usuario/steamid>',
     category: "jogos",
