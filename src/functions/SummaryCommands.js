@@ -233,8 +233,8 @@ async function storeMessage(message, chatId) {
       // Tenta interpretar a imagem usando Vision AI
       if(message.content){
         const completionOptions = {
-          prompt: "Analise a foto e retorne apenas uma sucinta descrição (em pt-BR) do que vê na imagem no formato, máximo 200 caracteres: Imagem[xxxx xxxx xxx]",
-          systemContext: `Você é um bot especialista em interpretação de imagens.`,
+          prompt: "Analyze the picture and return a brief description ((in pt-BR, portuguese brazil)) in the following format ((try to stay below 200 characters)): Imagem[xxxx xxxx xxx]",
+          systemContext: `You are an expert bot in image processing and analysis`,
           image: message.content.data,
           debugPrompt: false
         };

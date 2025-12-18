@@ -258,4 +258,4 @@ const commands = [
 // Registra os comandos sendo exportados
 //logger.debug(`Exportando ${commands.length} comandos:`, commands.map(cmd => cmd.name));
 
-module.exports = { commands };
+//module.exports = { commands };

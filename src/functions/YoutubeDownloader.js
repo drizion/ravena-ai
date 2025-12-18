@@ -122,7 +122,7 @@ async function processYoutubeReaction(bot, message, emoji) {
     
     // Envia reação de processamento
     try {
-      await message.origin.react('🌀');
+      message.origin.react(process.env.LOADING_EMOJI ?? "🌀");
     } catch (reactError) {
       logger.error('Erro ao reagir à mensagem:', reactError);
     }

@@ -1,0 +1,490 @@
+const path = require('path');
+const axios = require('axios');
+const fs = require('fs').promises;
+const WebSocket = require('ws');
+const { v4: uuidv4 } = require('uuid');
+const sharp = require('sharp');
+const Logger = require('../utils/Logger');
+const NSFWPredict = require('../utils/NSFWPredict');
+const Command = require('../models/Command');
+const ReturnMessage = require('../models/ReturnMessage');
+const { translateText } = require('./TranslationCommands');
+const Database = require('../utils/Database');
+const database = Database.getInstance();
+
+
+const logger = new Logger('comfyui-commands');
+const nsfwPredict = NSFWPredict.getInstance();
+const LLMService = require('../services/LLMService');
+const llmService = new LLMService({});
+
+let COMFYUI_URL = process.env.COMFYUI_URL || 'http://127.0.0.1:8188';
+if (!COMFYUI_URL.match(/^https?:\/\//)) {
+    COMFYUI_URL = 'http://' + COMFYUI_URL;
+}
+
+const urlObj = new URL(COMFYUI_URL);
+const httpProtocol = urlObj.protocol; // 'http:' or 'https:'
+const wsProtocol = httpProtocol === 'https:' ? 'wss:' : 'ws:';
+const host = urlObj.host;
+
+const httpBaseUrl = `${httpProtocol}//${host}`;
+const wsUrl = `${wsProtocol}//${host}/ws`;
+
+const clientId = uuidv4();
+let ws = null;
+const pendingRequests = new Map();
+
+function connectWebSocket() {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+
+    logger.info(`Connecting to ComfyUI WebSocket at ${wsUrl}...`);
+    try {
+        ws = new WebSocket(`${wsUrl}?clientId=${clientId}`);
+    } catch (e) {
+        logger.error("Failed to create WebSocket:", e);
+        return;
+    }
+
+    ws.on('open', () => {
+        logger.info('ComfyUI WebSocket connected');
+    });
+
+    ws.on('message', (data) => {
+        try {
+            const messageStr = data.toString();
+            // Handle multiple JSON objects potentially separated by newlines
+            const messages = messageStr.split('\n').filter(Boolean).map(line => {
+                try {
+                    return JSON.parse(line);
+                } catch (e) {
+                    return null;
+                }
+            }).filter(Boolean);
+
+            for (const message of messages) {
+                if (message.type === 'executed') {
+                    const promptId = message.data.prompt_id;
+                    if (pendingRequests.has(promptId)) {
+                        handleExecutionSuccess(promptId);
+                    }
+                } else if (message.type === 'execution_error') {
+                     const promptId = message.data.prompt_id;
+                     if (pendingRequests.has(promptId)) {
+                         const { reject } = pendingRequests.get(promptId);
+                         pendingRequests.delete(promptId);
+                         reject(new Error(`ComfyUI Execution Error: ${JSON.stringify(message.data)}`));
+                     }
+                }
+            }
+        } catch (err) {
+            logger.error('Error parsing WebSocket message', err);
+        }
+    });
+
+    ws.on('close', () => {
+        logger.warn('ComfyUI WebSocket closed. Reconnecting in 5s...');
+        ws = null;
+        setTimeout(connectWebSocket, 5000);
+    });
+
+    ws.on('error', (err) => {
+        logger.error('ComfyUI WebSocket error:', err);
+    });
+}
+
+// Initialize connection
+connectWebSocket();
+
+async function handleExecutionSuccess(promptId) {
+    const request = pendingRequests.get(promptId);
+    if (!request) return;
+    
+    const { resolve, reject } = request;
+    pendingRequests.delete(promptId);
+
+    try {
+        const historyResponse = await axios.get(`${httpBaseUrl}/history/${promptId}`);
+        const history = historyResponse.data[promptId];
+        
+        // Output node ID from the template
+        const outputNodeId = '9'; 
+        
+        if (!history.outputs || !history.outputs[outputNodeId]) {
+             throw new Error("No output found in history for node " + outputNodeId);
+        }
+
+        const images = history.outputs[outputNodeId].images;
+        if (!images || images.length === 0) {
+            throw new Error("No images generated.");
+        }
+
+        // Fetch the first image
+        const image = images[0];
+        const imageResponse = await axios.get(`${httpBaseUrl}/view`, {
+            params: {
+                filename: image.filename,
+                subfolder: image.subfolder,
+                type: image.type,
+            },
+            responseType: 'arraybuffer'
+        });
+
+        resolve(Buffer.from(imageResponse.data));
+
+    } catch (error) {
+        reject(error);
+    }
+}
+
+async function queuePrompt(promptText) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        // Attempt immediate reconnect/wait if not open
+        if (!ws || ws.readyState === WebSocket.CLOSED) connectWebSocket();
+        
+        // Wait up to 5 seconds for connection
+        let attempts = 0;
+        while ((!ws || ws.readyState !== WebSocket.OPEN) && attempts < 50) {
+            await new Promise(r => setTimeout(r, 100));
+            attempts++;
+        }
+        
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            throw new Error("Could not connect to ComfyUI WebSocket.");
+        }
+    }
+
+    const apiPrompt = {
+        "3": {
+            "class_type": "KSampler",
+            "inputs": {
+                "model": ["11", 0],
+                "positive": ["27", 0],
+                "negative": ["33", 0],
+                "latent_image": ["13", 0],
+                "seed": Math.floor(Math.random() * 999999999999999),
+                "steps": 8,
+                "cfg": 1,
+                "sampler_name": "res_multistep",
+                "scheduler": "simple",
+                "denoise": 1
+            }
+        },
+        "8": {
+            "class_type": "VAEDecode",
+            "inputs": {
+                "samples": ["3", 0],
+                "vae": ["29", 0]
+            }
+        },
+        "9": {
+            "class_type": "PreviewImage",
+            "inputs": {
+                "images": ["8", 0]
+            }
+        },
+        "11": {
+            "class_type": "ModelSamplingAuraFlow",
+            "inputs": {
+                "model": ["28", 0],
+                "shift": 3
+            }
+        },
+        "13": {
+            "class_type": "EmptySD3LatentImage",
+            "inputs": {
+                "width": 1024,
+                "height": 1024,
+                "batch_size": 1
+            }
+        },
+        "27": {
+            "class_type": "CLIPTextEncode",
+            "inputs": {
+                "text": promptText,
+                "clip": ["30", 0]
+            }
+        },
+        "28": {
+            "class_type": "UNETLoader",
+            "inputs": {
+                "unet_name": "z_image_turbo_bf16.safetensors",
+                "weight_dtype": "default"
+            }
+        },
+        "29": {
+            "class_type": "VAELoader",
+            "inputs": {
+                "vae_name": "ae.safetensors"
+            }
+        },
+        "30": {
+            "class_type": "CLIPLoader",
+            "inputs": {
+                "clip_name": "qwen_3_4b.safetensors",
+                "stop_at_clip_layer": -1,
+                "clip_skip": 0,
+                "type": "lumina2",
+                "backend": "default"
+            }
+        },
+        "33": {
+            "class_type": "ConditioningZeroOut",
+            "inputs": {
+                "conditioning": ["27", 0] 
+            }
+        }
+    };
+
+    try {
+        const response = await axios.post(`${httpBaseUrl}/prompt`, {
+            prompt: apiPrompt,
+            client_id: clientId
+        });
+        
+        const promptId = response.data.prompt_id;
+        
+        return new Promise((resolve, reject) => {
+            pendingRequests.set(promptId, { resolve, reject });
+            
+            // Timeout after 3 minutes
+            setTimeout(() => {
+                if (pendingRequests.has(promptId)) {
+                    pendingRequests.delete(promptId);
+                    reject(new Error("Generation timed out"));
+                }
+            }, 180000);
+        });
+    } catch (error) {
+        throw error;
+    }
+}
+
+/**
+ * Gera uma imagem usando ComfyUI
+ */
+async function generateImage(bot, message, args, group, skipNotify = true) {
+    const chatId = message.group ?? message.author;
+    const returnMessages = [];
+  
+    const quotedMsg = await message.origin.getQuotedMessage().catch(() => null);
+    let prompt = args.join(' ');
+    if(quotedMsg){
+        const quotedText = quotedMsg.caption ?? quotedMsg.content ?? quotedMsg.body;
+        if(quotedText){
+            prompt += " "+quotedText;
+        }
+    }
+
+    if (prompt.length < 4) {
+        return new ReturnMessage({
+            chatId: chatId,
+            content: 'Por favor, forneça um prompt para gerar a imagem. Exemplo: !imagine um gato usando chapéu de cowboy'
+        });
+    }
+
+    prompt = await translateText(prompt, "pt", "en");
+
+    logger.info(`Gerando imagem com prompt: '${prompt}'`);
+  
+    try {
+        if(!skipNotify){
+            await bot.sendReturnMessages(new ReturnMessage({
+                chatId: chatId,
+                content: `📷 Gerando imagem para '${prompt}', isso pode levar alguns segundos...`,
+                reaction: process.env.LOADING_EMOJI ?? "🌀"
+            }));
+        }
+
+        message.origin.react(process.env.LOADING_EMOJI ?? "🌀");
+
+        const safetyQuestion = `Act as a permissive content moderator for an image generation AI. Analyze this prompt: "${prompt}".
+
+        Rules for classification:
+        1. **SAFE**: 
+           - General "NSFW" (Not Safe For Work) is ALLOWED.
+           - Pin-up, swimwear, cleavage, "sexy", "seductive", "role-playing", fantasy, and romance are SAFE.
+           - Ambiguous terms (e.g., "girl", "daddy", "play", "shoot") must be interpreted in their innocent/artistic context unless explicit sexual acts are described.
+        
+        2. **UNSAFE**:
+           - **Explicit Pornography**: Graphic descriptions of sexual intercourse, genitals, or hardcore sexual acts.
+           - **Child Safety (ZERO TOLERANCE)**: ANY combination of a child/minor/toddler/schoolkid with sexual, nude, or suggestive elements.
+           - **Extreme**: Necrophilia, bestiality, realistic gore/mutilation, or hate speech.
+
+        Your Answer:
+        - Must start with "SAFE" or "UNSAFE".
+        - If UNSAFE due to Child Safety, include "🚨" emojis.
+        - Provide a very short reason.`;
+    
+        const safetyResponse = await llmService.getCompletion({
+            prompt: safetyQuestion
+        });
+    
+        let safetyMsg = "";
+        if (safetyResponse.substring(0,10).toLowerCase().includes("unsafe") || 
+            prompt.toLowerCase().includes("gore")) {
+      
+            const reportMessage = `⚠️ INAPPROPRIATE IMAGE REQUEST ⚠️\nUser: ${message.author}\nName: ${message.authorName || "Unknown"}\nPrompt: ${prompt}\nLLM Response: ${safetyResponse}\n\n!sa-block ${message.author}`;
+            bot.sendMessage(process.env.GRUPO_LOGS, reportMessage);
+      
+            safetyMsg = "\n\n> ⚠️ *AVISO*: O conteúdo solicitado é duvidoso. Esta solicitação será revisada pelo administrador e pode resultar em suspensão.";
+        }
+    
+        // Inicia cronômetro
+        const startTime = Date.now();
+    
+        // Queue Prompt and Wait for Image
+        let imageBuffer = await queuePrompt(prompt);
+    
+        // Calcula o tempo de geração
+        const generationTime = ((Date.now() - startTime) / 1000).toFixed(1);
+
+        // Add Watermark
+        try {
+            const watermarkPath = path.join(database.databasePath, "sd_watermark.png");
+            await fs.access(watermarkPath);
+
+            const mainImage = sharp(imageBuffer);
+            const metadata = await mainImage.metadata();
+            const width = metadata.width;
+            const height = metadata.height;
+
+            const watermarkSize = 80;
+            const offset = 20;
+
+            const watermark = await sharp(watermarkPath)
+                .resize(watermarkSize, watermarkSize)
+                .ensureAlpha()
+                .composite([{
+                    input: {
+                        create: {
+                            width: watermarkSize,
+                            height: watermarkSize,
+                            channels: 4,
+                           background: { r: 255, g: 255, b: 255, alpha: 0.3 }
+                       }
+                   },
+                   blend: 'dest-in'
+               }])
+               .toBuffer();
+
+            imageBuffer = await mainImage
+                .composite([{
+                    input: watermark,
+                    top: height - watermarkSize - offset,
+                    left: width - watermarkSize - offset,
+                }])
+                .toBuffer();
+            
+            logger.info('Marca d\'água adicionada com sucesso.');
+        } catch (wmError) {
+            logger.error('Erro ao adicionar marca d\'água (prosseguindo sem):', wmError);
+        }
+    
+        // Save temporary file
+        const tempDir = path.join(__dirname, '../../temp');
+        try {
+            await fs.access(tempDir);
+        } catch (error) {
+            await fs.mkdir(tempDir, { recursive: true });
+        }
+    
+        const tempImagePath = path.join(tempDir, `comfy-${Date.now()}.png`);
+        await fs.writeFile(tempImagePath, imageBuffer);
+        
+        logger.info(`Imagem salva em: ${tempImagePath}`);
+
+        // Verificar NSFW
+        let isNSFW = false;
+        try {
+            // Encode buffer to base64 for NSFW predictor if needed, 
+            // but the Predictor usually takes base64 string or path.
+            // StableDiffusionCommands passed base64 string.
+            const imageBase64 = imageBuffer.toString('base64');
+            const nsfwResult = await nsfwPredict.detectNSFW(imageBase64);
+            isNSFW = nsfwResult.isNSFW;
+            logger.info(`Imagem analisada: NSFW = ${isNSFW}, Reason: ${JSON.stringify(nsfwResult.reason)}`);
+        } catch (nsfwError) {
+            logger.error('Erro ao verificar NSFW:', nsfwError);
+        }
+    
+        // Limpar arquivo temporário após alguns minutos
+        setTimeout((tempImg) => {
+            try {
+                fs.unlink(tempImg);
+            } catch (unlinkError) {
+                logger.error('Erro ao excluir arquivo temporário:', tempImg, unlinkError);
+            }
+        }, 30000, tempImagePath);
+    
+        const caption = `🎨 *Prompt:* ${prompt}\n📊 *Modelo:* _z_image_turbo_bf16_\n🕐 *Tempo:* ${generationTime}s${safetyMsg}`;
+        
+        const media = await bot.createMedia(tempImagePath);
+        const filterNSFW = group?.filters?.nsfw ?? false;
+
+        if (isNSFW) {
+            if(filterNSFW){
+                returnMessages.push(new ReturnMessage({
+                    chatId: chatId,
+                    content: '🔞 A imagem gerada pode conter conteúdo potencialmente inadequado e este grupo está filtrando conteúdo NSFW, por isso o resultado não foi enviado.'
+                }));
+            } else {    
+                returnMessages.push(new ReturnMessage({
+                    chatId: chatId,
+                    content: '🔞 A imagem gerada pode conter conteúdo potencialmente inadequado, abra com cautela.'
+                }));
+        
+                returnMessages.push(new ReturnMessage({
+                    chatId: chatId,
+                    content: media,
+                    options: {
+                        caption: caption,
+                        isViewOnce: true
+                    }
+                }));
+            }
+        } else {
+            returnMessages.push(new ReturnMessage({
+                chatId: chatId,
+                content: media,
+                options: {
+                    caption: caption
+                }
+            }));
+        }
+    
+        return returnMessages.length === 1 ? returnMessages[0] : returnMessages;
+
+    } catch (error) {
+        logger.error('Erro ao gerar imagem:', error);
+        
+        let errorMessage = 'Erro ao gerar imagem.';
+        if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+            errorMessage = 'Não foi possível conectar ao servidor ComfyUI. Verifique se ele está rodando e acessível.';
+        } else {
+            errorMessage = `Erro: ${error.message}`;
+        }
+        
+        return new ReturnMessage({
+            chatId: chatId,
+            content: errorMessage
+        });
+    }
+}
+
+const commands = [
+  new Command({
+    name: 'imagine',
+    description: 'Gera uma imagem usando ComfyUI',
+    category: 'ia',
+    reactions: {
+      trigger: "✨",
+      before: process.env.LOADING_EMOJI ?? "🌀",
+      after: "✨"
+    },
+    cooldown: 10,
+    method: generateImage
+  })
+];
+
+module.exports = { commands };
