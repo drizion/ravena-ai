@@ -695,9 +695,35 @@ async function applyBuffs(userData, fish) {
   return { fish: modifiedFish, buffMessages };
 }
 
-async function generateRareFishImage(bot, userName, fishName) {
+function getCurrentDateTime() {
+  const now = new Date();
+
+  // options define the format requirements
+  const options = {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false // Ensures 24-hour format
+  };
+
+  return new Intl.DateTimeFormat('en-GB', options).format(now).replace(',', '');
+}
+
+async function generateRareFishImage(bot, userName, fishName, fishWeight = 10000) {
   try {
-    const prompt = `${userName} fishing an epic enormous fish named '${fishName}' using only a wooden fishing rod`;
+
+    const dateString = getCurrentDateTime();
+
+    const prompt = `Close-up portrait of a normal everyday person named "${userName}"" fishing an epically rare monstrous creature (fantasy) fish known as "${fishName}"" using only a wooden fishing rod. Sweat and tears.
+Epic scenario, storm, huge boats, fish is extremely large, mythical. Fantastic.
+Lightly blurred background, bokeh. Water splashing
+Dynamic, action-ready close-up composition, medium depth-of-field, hyper-detailed photorealistic-anime hybrid style, epic survival and exploration atmosphere.
+Gothic, purple-ish atmosphere, cartoony
+
+((Write text in bottom of image centered, bold font, fantasy: ${fishName}, ${fishWeight.toFixed(2)}kg @ ${dateString}))`;
+
     if (!sdModule || !sdModule.commands || !sdModule.commands[0] || !sdModule.commands[0].method) return null;
     
     const mockMessage = { author: 'SYSTEM', authorName: 'Sistema', content: prompt, origin: { getQuotedMessage: () => Promise.resolve(null) } };
@@ -948,7 +974,7 @@ async function fishCommand(bot, message, args, group) {
 
     // Se for peixe raro, tentar gerar imagem e salvar no histórico
     if (caughtFishes.length === 1 && caughtFishes[0].isRare) {
-      let rareFishImage = await generateRareFishImage(bot, userName, caughtFishes[0].name);
+      let rareFishImage = await generateRareFishImage(bot, userName, caughtFishes[0].name, caughtFishes[0].weight);
 
       if(!rareFishImage){
         // Placeholder

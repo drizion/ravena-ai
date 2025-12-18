@@ -23,6 +23,8 @@ if (!COMFYUI_URL.match(/^https?:\/\//)) {
     COMFYUI_URL = 'http://' + COMFYUI_URL;
 }
 
+const aesthetic = "\n\n(Aesthetic: Gothic, purple-ish tinted atmosphere, cartoony)";
+
 const urlObj = new URL(COMFYUI_URL);
 const httpProtocol = urlObj.protocol; // 'http:' or 'https:'
 const wsProtocol = httpProtocol === 'https:' ? 'wss:' : 'ws:';
@@ -334,7 +336,7 @@ async function generateImage(bot, message, args, group, skipNotify = true) {
         const startTime = Date.now();
     
         // Queue Prompt and Wait for Image
-        let imageBuffer = await queuePrompt(prompt);
+        let imageBuffer = await queuePrompt(prompt + aesthetic);
     
         // Calcula o tempo de geração
         const generationTime = ((Date.now() - startTime) / 1000).toFixed(1);
