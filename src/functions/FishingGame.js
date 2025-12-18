@@ -6,7 +6,7 @@ const Logger = require('../utils/Logger');
 const Command = require('../models/Command');
 const Database = require('../utils/Database');
 const AdminUtils = require('../utils/AdminUtils');
-const sdModule = require('./StableDiffusionCommands');
+const sdModule = require('./ComfyUICommands');
 const ReturnMessage = require('../models/ReturnMessage');
 
 const logger = new Logger('fishing-game');
@@ -726,7 +726,15 @@ Gothic, purple-ish atmosphere, cartoony
 
     if (!sdModule || !sdModule.commands || !sdModule.commands[0] || !sdModule.commands[0].method) return null;
     
-    const mockMessage = { author: 'SYSTEM', authorName: 'Sistema', content: prompt, origin: { getQuotedMessage: () => Promise.resolve(null) } };
+    const mockMessage = { 
+      author: 'SYSTEM', 
+      authorName: 'Sistema', 
+      content: prompt, 
+      origin: { 
+        getQuotedMessage: () => Promise.resolve(null),
+        react: async () => {}
+      } 
+    };
     const result = await sdModule.commands[0].method(bot, mockMessage, prompt.split(' '), {filters: {nsfw: false}}, true);
     return (result && result.content && result.content.mimetype) ? result.content : null;
   } catch (error) {
