@@ -35,7 +35,10 @@ class StreamMonitor extends EventEmitter {
     this.setMaxListeners(totalBots);
 
     this.database = Database.getInstance();
-    this.monitoringDbPath = path.join(this.database.databasePath, "monitoramento.json");
+    //this.monitoringDbPath = path.join(this.database.databasePath, "monitoramento.json"); // Deprecated
+    this.dbNameMonitor = "stream_monitor";
+    this.dbNameYt = "ytchannels";
+
     this.channels = [];
     this.streamStatuses = {};
     this.twitchToken = null;
@@ -57,19 +60,24 @@ class StreamMonitor extends EventEmitter {
     
     // Flag para verificar se o monitoramento está ativo
     this.isMonitoring = false;
+    this.isReady = false;
 
     this.logger = new Logger('stream-monitor');
-    this.logger.info('Service StreamMonitor carregado (modo singleton)');
+    this.logger.info('Service StreamMonitor carregado (modo singleton - SQLite)');
     
-    // Initialize database file if it doesn't exist
-    this._initDatabase();
+    // Initialize database
+    this.initPromise = this._initDatabase();
     
-    // Subscribe to initial channels if provided
-    if (channels.length > 0) {
-      channels.forEach(channel => {
-        this.subscribe(channel.name, channel.source);
-      });
-    }
+    this.initPromise.then(() => {
+        this.isReady = true;
+        this.logger.info('StreamMonitor SQLite pronto.');
+        // Subscribe to initial channels if provided
+        if (channels.length > 0) {
+            channels.forEach(channel => {
+                this.subscribe(channel.name, channel.source);
+            });
+        }
+    });
     
     // Define esta instância como a instância singleton
     StreamMonitor.instance = this;
@@ -79,43 +87,178 @@ class StreamMonitor extends EventEmitter {
    * Initialize the monitoring database
    * @private
    */
-  _initDatabase() {
-    if (!fs.existsSync(this.monitoringDbPath)) {
-      fs.writeFileSync(this.monitoringDbPath, JSON.stringify({
-        channels: [],
-        lastKnownStatuses: {}
-      }, null, 2));
-    } else {
-      try {
-        const data = JSON.parse(fs.readFileSync(this.monitoringDbPath, 'utf8'));
-        this.channels = data.channels ?? [];
-        this.streamStatuses = data.lastKnownStatuses ?? {};
-      } catch (error) {
-        this.logger.error('Error reading monitoring database:', error);
-        // Create a new file if the existing one is corrupted
-        fs.writeFileSync(this.monitoringDbPath, JSON.stringify({
-          channels: [],
-          lastKnownStatuses: {}
-        }, null, 2));
-      }
+  async _initDatabase() {
+    try {
+        // Stream Monitor DB
+        await this.database.getSQLiteDb(this.dbNameMonitor, `
+            CREATE TABLE IF NOT EXISTS monitored_channels (
+                name TEXT NOT NULL,
+                platform TEXT NOT NULL,
+                subscribed_at TEXT,
+                PRIMARY KEY (name, platform)
+            );
+            CREATE TABLE IF NOT EXISTS stream_status (
+                platform TEXT NOT NULL,
+                channel_name TEXT NOT NULL,
+                is_live INTEGER DEFAULT 0,
+                title TEXT,
+                game TEXT,
+                thumbnail TEXT,
+                viewer_count INTEGER,
+                started_at TEXT,
+                last_checked TEXT,
+                last_video_id TEXT,
+                last_video_data TEXT,
+                PRIMARY KEY (platform, channel_name)
+            );
+        `);
+
+        // YouTube Cache DB
+        await this.database.getSQLiteDb(this.dbNameYt, `
+            CREATE TABLE IF NOT EXISTS channel_cache (
+                channel_handle TEXT PRIMARY KEY,
+                channel_id TEXT NOT NULL
+            );
+        `);
+
+        await this._loadStateFromDB();
+
+    } catch (error) {
+        this.logger.error('Error initializing database:', error);
     }
   }
 
   /**
-   * Save the current state to the database
+   * Load state from SQLite to memory
    * @private
    */
-  _saveDatabase() {
-    fs.writeFileSync(this.monitoringDbPath, JSON.stringify({
-      channels: this.channels,
-      lastKnownStatuses: this.streamStatuses
-    }, null, 2));
+  async _loadStateFromDB() {
+      try {
+        // Load channels
+        const channelRows = await this.database.dbAll(this.dbNameMonitor, "SELECT * FROM monitored_channels");
+        const loadedChannels = channelRows.map(r => ({ 
+            name: r.name, 
+            source: r.platform, 
+            subscribedAt: r.subscribed_at 
+        }));
+
+        // Merge with potentially already subscribed channels (memory)
+        for (const ch of loadedChannels) {
+            const exists = this.channels.find(c => c.name.toLowerCase() === ch.name.toLowerCase() && c.source === ch.source);
+            if (!exists) {
+                this.channels.push(ch);
+            }
+        }
+
+        // Load statuses
+        const statusRows = await this.database.dbAll(this.dbNameMonitor, "SELECT * FROM stream_status");
+        for(const row of statusRows) {
+            const key = `${row.platform}:${row.channel_name.toLowerCase()}`;
+            
+            // If already in memory (updated by early polls or subscribes), don't overwrite with old DB data
+            if (this.streamStatuses[key] && this.streamStatuses[key].lastChecked) {
+                continue;
+            }
+
+            let lastVideo = null;
+            if (row.last_video_data) {
+                try {
+                    lastVideo = JSON.parse(row.last_video_data);
+                } catch(e) {}
+            }
+
+            this.streamStatuses[key] = {
+                isLive: !!row.is_live,
+                title: row.title,
+                game: row.game,
+                thumbnail: row.thumbnail,
+                viewerCount: row.viewer_count,
+                startedAt: row.started_at,
+                lastChecked: row.last_checked,
+                lastVideo: lastVideo,
+                platform: row.platform,
+                channelName: row.channel_name
+            };
+        }
+        
+        this.logger.info(`Loaded ${this.channels.length} channels and ${statusRows.length} statuses from DB.`);
+      } catch (error) {
+          this.logger.error('Error loading state from DB:', error);
+      }
+  }
+
+  /**
+   * Save channel to DB
+   * @private
+   */
+  async _saveChannelToDB(channel) {
+      try {
+          await this.database.dbRun(this.dbNameMonitor, `
+              INSERT OR REPLACE INTO monitored_channels (name, platform, subscribed_at)
+              VALUES (?, ?, ?)
+          `, [channel.name, channel.source, channel.subscribedAt]);
+      } catch (error) {
+          this.logger.error(`Error saving channel ${channel.name} to DB:`, error);
+      }
+  }
+
+  /**
+   * Remove channel from DB
+   * @private
+   */
+  async _removeChannelFromDB(channelName, platform) {
+      try {
+          await this.database.dbRun(this.dbNameMonitor, `
+              DELETE FROM monitored_channels WHERE name = ? AND platform = ?
+          `, [channelName, platform]);
+          
+          await this.database.dbRun(this.dbNameMonitor, `
+              DELETE FROM stream_status WHERE channel_name = ? AND platform = ?
+          `, [channelName, platform]);
+      } catch (error) {
+          this.logger.error(`Error removing channel ${channelName} from DB:`, error);
+      }
+  }
+
+  /**
+   * Update stream status in DB
+   * @private
+   */
+  async _updateStatusInDB(key, status) {
+      try {
+          const [platform, channelName] = key.split(':');
+          const lastVideoData = status.lastVideo ? JSON.stringify(status.lastVideo) : null;
+          const lastVideoId = status.lastVideo ? status.lastVideo.id : null;
+
+          await this.database.dbRun(this.dbNameMonitor, `
+              INSERT OR REPLACE INTO stream_status 
+              (platform, channel_name, is_live, title, game, thumbnail, viewer_count, started_at, last_checked, last_video_id, last_video_data)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [
+              status.platform || platform, 
+              status.channelName || channelName, 
+              status.isLive ? 1 : 0, 
+              status.title, 
+              status.game, 
+              status.thumbnail, 
+              status.viewerCount, 
+              status.startedAt, 
+              status.lastChecked,
+              lastVideoId,
+              lastVideoData
+          ]);
+      } catch (error) {
+          this.logger.error(`Error updating status for ${key} in DB:`, error);
+      }
   }
 
   /**
    * Start monitoring all channels
    */
-  startMonitoring() {
+  async startMonitoring() {
+    // Wait for initialization
+    await this.initPromise;
+
     // Evita iniciar o monitoramento várias vezes
     if (this.isMonitoring) {
       this.logger.info('O monitoramento de streams já está ativo (ignorando chamada duplicada)');
@@ -185,11 +328,13 @@ class StreamMonitor extends EventEmitter {
     );
 
     if (!existingChannel) {
-      this.channels.push({
+      const newChannel = {
         name: channelName,
         source: normalizedSource,
         subscribedAt: new Date().toISOString()
-      });
+      };
+
+      this.channels.push(newChannel);
       
       // Initialize status for this channel
       const channelKey = `${normalizedSource}:${channelName.toLowerCase()}`;
@@ -197,11 +342,15 @@ class StreamMonitor extends EventEmitter {
         this.streamStatuses[channelKey] = {
           isLive: false,
           lastVideo: null,
-          lastChecked: null
+          lastChecked: null,
+          platform: normalizedSource,
+          channelName: channelName
         };
       }
       
-      this._saveDatabase();
+      this._saveChannelToDB(newChannel);
+      this._updateStatusInDB(channelKey, this.streamStatuses[channelKey]);
+      
       return true;
     }
     
@@ -229,7 +378,9 @@ class StreamMonitor extends EventEmitter {
       delete this.streamStatuses[channelKey];
     }
     
-    this._saveDatabase();
+    // Remove from DB
+    this._removeChannelFromDB(channelName, normalizedSource);
+    
     return this.channels.length < initialLength;
   }
 
@@ -579,7 +730,7 @@ class StreamMonitor extends EventEmitter {
         const liveStreamUserIds = liveStreams.map(stream => stream.user_id);
         
         // Update status for each channel and emit events for changes
-        userResponse.data.data.forEach(user => {
+        for(const user of userResponse.data.data) {
           const channelName = user.login;
           const channelKey = `twitch:${channelName.toLowerCase()}`;
           const isLiveNow = liveStreamUserIds.includes(user.id);
@@ -590,7 +741,9 @@ class StreamMonitor extends EventEmitter {
           if (!this.streamStatuses[channelKey]) {
             this.streamStatuses[channelKey] = {
               isLive: isLiveNow,
-              lastChecked: new Date().toISOString()
+              lastChecked: new Date().toISOString(),
+              platform: "twitch",
+              channelName: channelName
             };
           } else {
             this.streamStatuses[channelKey].isLive = isLiveNow;
@@ -630,7 +783,10 @@ class StreamMonitor extends EventEmitter {
               channelName: channelName
             });
           }
-        });
+          
+          // Update DB
+          await this._updateStatusInDB(channelKey, this.streamStatuses[channelKey]);
+        }
         
       } catch (error) {
         // If unauthorized, try to refresh token
@@ -655,8 +811,6 @@ class StreamMonitor extends EventEmitter {
         this._pollTwitchChannels(failedBatches.flat(1));
       }
     }
-    
-    this._saveDatabase();
   }
 
   /**
@@ -715,6 +869,8 @@ class StreamMonitor extends EventEmitter {
                     }
                     this.streamStatuses[channelKey].isLive = isLiveNow;
                     this.streamStatuses[channelKey].lastChecked = new Date().toISOString();
+                    this.streamStatuses[channelKey].platform = "kick";
+                    this.streamStatuses[channelKey].channelName = channel.name;
                     
                     // Add stream details if live
                     if (isLiveNow) {
@@ -722,9 +878,6 @@ class StreamMonitor extends EventEmitter {
                         this.streamStatuses[channelKey].title = stream.stream_title;
                         this.streamStatuses[channelKey].thumbnail = stream.thumbnail;
                         this.streamStatuses[channelKey].viewerCount = stream.viewer_count;
-                        this.streamStatuses[channelKey].startedAt = stream.start_time;
-                        this.streamStatuses[channelKey].platform = "kick";
-                        this.streamStatuses[channelKey].channelName = channel.name;
                         this.streamStatuses[channelKey].startedAt = stream.start_time;
                         this.streamStatuses[channelKey].game = channelData.category ? channelData.category.name : 'Unknown';
                     }
@@ -747,6 +900,9 @@ class StreamMonitor extends EventEmitter {
                             channelName: channel.name
                         });
                     }
+                    
+                    // Update DB
+                    await this._updateStatusInDB(channelKey, this.streamStatuses[channelKey]);
                 }
             } else {
               this.logger.warn(`[_pollKickChannels] Error? ${response.status}`);
@@ -764,8 +920,6 @@ class StreamMonitor extends EventEmitter {
         // Add a small delay between batches to avoid rate limiting
         await sleep(1000);
     }
-
-    this._saveDatabase();
   }
 
   extractChannelID(html) {
@@ -807,17 +961,17 @@ class StreamMonitor extends EventEmitter {
     let channel = ch.includes("/") ? ch.split("/").at(-1) : ch;
     channel = channel.replace("@", "");
 
-    const channelsIdCachePath = path.join(this.database.databasePath, "yt-channelsID-cache.json");
-
-    if (!fs.existsSync(channelsIdCachePath)) {
-      fs.writeFileSync(channelsIdCachePath, "{}");
-    }
-
-    const channelsIdCache = JSON.parse(fs.readFileSync(channelsIdCachePath, 'utf8')) ?? {};
-    
-    if(channelsIdCache[channel]){
-      //this.logger.debug(`[getYtChannelID][cache] ${channel} => ${channelsIdCache[channel]}`);
-      return channelsIdCache[channel];
+    // Check Cache DB
+    try {
+        const row = await this.database.dbGet(this.dbNameYt, `
+            SELECT channel_id FROM channel_cache WHERE channel_handle = ?
+        `, [channel]);
+        
+        if (row && row.channel_id) {
+            return row.channel_id;
+        }
+    } catch(err) {
+        this.logger.error(`[getYtChannelID] Error checking cache DB:`, err);
     }
 
     const chUrls = [`https://www.youtube.com/c/${channel}`, `https://www.youtube.com/@${channel}`];
@@ -830,8 +984,13 @@ class StreamMonitor extends EventEmitter {
 
         if(exID){
           //this.logger.debug(`[getYtChannelID] Extraido ID do canal '${channel}': ${exID}`);
-          channelsIdCache[channel] = exID;
-          fs.writeFileSync(channelsIdCachePath, JSON.stringify(channelsIdCache, null, "\t"), 'utf8');
+          
+          // Save to Cache DB
+          await this.database.dbRun(this.dbNameYt, `
+            INSERT OR REPLACE INTO channel_cache (channel_handle, channel_id)
+            VALUES (?, ?)
+          `, [channel, exID]);
+          
           return exID;
         }
 
@@ -893,7 +1052,9 @@ class StreamMonitor extends EventEmitter {
           this.streamStatuses[channelKey] = {
             isLive: false,
             lastVideo: null,
-            lastChecked: new Date().toISOString()
+            lastChecked: new Date().toISOString(),
+            platform: "youtube",
+            channelName: channel.name
           };
         }
         
@@ -977,6 +1138,10 @@ class StreamMonitor extends EventEmitter {
             }
           }
         }
+        
+        // Update DB
+        await this._updateStatusInDB(channelKey, this.streamStatuses[channelKey]);
+
       } catch (error) {
         // Verifica se é um erro 404 (canal não encontrado)
         if (error.response && error.response.status === 404) {
@@ -1033,8 +1198,6 @@ class StreamMonitor extends EventEmitter {
         }
       }
     }
-    
-    this._saveDatabase();
   }
 
   /**
