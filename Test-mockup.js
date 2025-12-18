@@ -396,7 +396,7 @@ async function runTests() {
     await new Promise(resolve => setTimeout(resolve, 5000));
     logger.info('sending');
 
-    await simulator.simulateTextMessage(testUser, testGroup, '!platina superk1ll3r');
+    await simulator.simulateTextMessage(testUser, testGroup, '!psn-platinas BobRiku');
 
     //logger.info('joining');    
     //await simulator.simulateGroupJoin(testGroup, testUser);
