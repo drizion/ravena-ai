@@ -154,7 +154,7 @@ class EventHandler {
 
       // Newsletter/Canais: Apenas pra detectar jrmunews, horóscopos, etc. 
       if (message.isNewsletter) {
-        this.logger.debug(`[processMessage] Recebido newsletter`, { message })
+        //this.logger.debug(`[processMessage] Recebido newsletter`, { message })
         try {
           const isNewsDetected = await MuNewsCommands.detectNews(message.content, message.from);
           if (isNewsDetected) {
@@ -435,7 +435,7 @@ class EventHandler {
 
     const textContent = (message.type === 'text' ? message.content : message.caption) ?? "";
 
-    if (textContent.includes("g-filtro")) {
+    if (textContent?.includes("g-filtro")) {
       return false; // Não filtrar comandos de filtro
     }
 
@@ -476,7 +476,35 @@ class EventHandler {
     if (filters.people && Array.isArray(filters.people) && filters.people.length > 0) {
       //this.logger.debug(`[filters][person] Filtrar? ${message.author}|${message.authorAlt} vs ${filters.people.join(", ")}`);
 
-      if(filters.people.some(person => message.author.includes(person) || message.authorAlt.includes(person))){
+      const numerosTestar = [message.author, message.authorAlt];
+
+      if (typeof bot.getLidFromPn === 'function' && typeof bot.getPnFromLid === 'function') {
+          numerosTestar.push(bot.getLidFromPn(message.author));
+          numerosTestar.push(bot.getLidFromPn(message.authorAlt));
+          numerosTestar.push(bot.getPnFromLid(message.author));
+          numerosTestar.push(bot.getPnFromLid(message.authorAlt));
+      }
+
+      const extrairFinalNumerico = (str) => {
+          if (!str) return null;
+          const apenasNumeros = String(str).split(/[@:]/)[0].replace(/\D/g, '');
+          return apenasNumeros.slice(-10);
+      };
+
+      // Criamos um conjunto (Set) com os finais dos números para testar (mais rápido para busca)
+      const finaisParaTestar = new Set(
+          numerosTestar
+              .map(extrairFinalNumerico)
+              .filter(n => n && n.length >= 10) // Garante que tem pelo menos 10 dígitos
+      );
+
+      // Verifica se algum elemento do filters.people (também limpo) coincide
+      const match = filters.people.some(person => {
+          const finalPerson = extrairFinalNumerico(person);
+          return finalPerson && finaisParaTestar.has(finalPerson);
+      });
+
+      if(match){
         this.logger.info(`Mensagem filtrada no grupo ${group.id} - de usuário banido: ${message.author}`);
 
         // Deleta a mensagem se possível - não bloqueia
