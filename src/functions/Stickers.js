@@ -222,6 +222,16 @@ async function makeSquareMedia(mediaBuffer, mimeType, cropType = 'center') {
       } else if (cropType === 'stretch') {
         // Para o modo de esticamento, redimensionamos diretamente para 400x400
         return await image.resize(400, 400, { fit: 'fill' }).toBuffer();
+      } else if (cropType === 'transparent') {
+        // Redimensiona para caber em 400x400 mantendo o aspecto e adiciona bordas transparentes
+        // Converte para webp para garantir suporte à transparência
+        return await image
+          .resize(400, 400, { 
+            fit: 'contain', 
+            background: { r: 0, g: 0, b: 0, alpha: 0 } 
+          })
+          .webp()
+          .toBuffer();
       }
       
       // Aplicar o corte e redimensionar para 400x400
@@ -248,6 +258,7 @@ async function makeSquareMedia(mediaBuffer, mimeType, cropType = 'center') {
       
       // Configurar os filtros baseados no tipo de corte
       let filterCommand = '';
+      let outputLabel = 'scaled';
       
       // Estratégia: primeiro determinar a área de corte e depois redimensionar para 400x400
       if (cropType === 'center') {
@@ -332,6 +343,32 @@ async function makeSquareMedia(mediaBuffer, mimeType, cropType = 'center') {
             outputs: 'scaled'
           }
         ];
+      } else if (cropType === 'transparent') {
+        // Ajustar vídeo para caber em 400x400 e preencher com preto (letterbox)
+        outputLabel = 'padded';
+        filterCommand = [
+          {
+            filter: 'scale',
+            options: {
+              w: 400,
+              h: 400,
+              force_original_aspect_ratio: 'decrease'
+            },
+            outputs: 'scaled'
+          },
+          {
+            filter: 'pad',
+            options: {
+              w: 400,
+              h: 400,
+              x: '(ow-iw)/2',
+              y: '(oh-ih)/2',
+              color: 'black'
+            },
+            inputs: 'scaled',
+            outputs: 'padded'
+          }
+        ];
       }
       
       // Usar arquivo intermediário em vez de pipe para evitar problemas de formato
@@ -343,7 +380,7 @@ async function makeSquareMedia(mediaBuffer, mimeType, cropType = 'center') {
             '-c:v libx264',
             '-preset medium',
           ])
-          .complexFilter(filterCommand, 'scaled')
+          .complexFilter(filterCommand, outputLabel)
           .output(outputPath)
           .on('start', (cmdline) => {
             logger.debug(`Comando ffmpeg: ${cmdline}`);
@@ -467,7 +504,13 @@ async function squareStickerCommand(bot, message, args, group, cropType) {
     
     // Salvar o buffer processado em um arquivo temporário
     await ensureTempDir();
-    const extension = mimeType.split('/')[1].replace('jpeg', 'jpg');
+    
+    // Determinar a extensão correta
+    let extension = mimeType.split('/')[1].replace('jpeg', 'jpg');
+    if (mimeType.startsWith('image/') && cropType === 'transparent') {
+      extension = 'webp';
+    }
+    
     const tempFileName = `processed-${Date.now()}.${extension}`;
     const tempFilePath = path.join(TEMP_DIR, tempFileName);
     
@@ -594,7 +637,10 @@ const commands = [
       after: "🖼",
       error: "❌"
     },
-    method: stickerCommand
+    method: async (bot, message, args, group) => {
+      // Agora usa o modo transparente como padrão
+      return await squareStickerCommand(bot, message, args, group, 'transparent');
+    }
   }),
   new Command({
     name: 'figurinha',
@@ -610,7 +656,10 @@ const commands = [
       after: "🖼",
       error: "❌"
     },
-    method: stickerCommand
+    method: async (bot, message, args, group) => {
+      // Agora usa o modo transparente como padrão
+      return await squareStickerCommand(bot, message, args, group, 'transparent');
+    }
   }),
   
   new Command({
@@ -628,8 +677,8 @@ const commands = [
       error: "❌"
     },
     method: async (bot, message, args, group) => {
-      // Chama o método stickerCommand diretamente
-      return await stickerCommand(bot, message, args, group);
+      // Agora usa o modo transparente como padrão
+      return await squareStickerCommand(bot, message, args, group, 'transparent');
     }
   }),
   new Command({
@@ -647,8 +696,8 @@ const commands = [
       error: "❌"
     },
     method: async (bot, message, args, group) => {
-      // Chama o método stickerCommand diretamente
-      return await stickerCommand(bot, message, args, group);
+      // Agora usa o modo transparente como padrão
+      return await squareStickerCommand(bot, message, args, group, 'transparent');
     }
   }),
   new Command({
