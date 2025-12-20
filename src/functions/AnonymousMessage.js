@@ -154,7 +154,8 @@ async function anonymousMessage(bot, message, args, group) {
     
     // Obtém a mensagem a ser enviada
     let anonymousText = args.slice(1).join(' ');
-    let anonimize = false; // Muito ruim
+
+    let anonimize = false; // Muito ruim, DESATIVADO
     if(args[1].toLowerCase() === "original"){ // Se a primeira palavra for 'original', não anonimiza com LLM
       anonimize = false;
       anonymousText = args.slice(2).join(' ');
