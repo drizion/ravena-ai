@@ -109,9 +109,19 @@ class StreamMonitor extends EventEmitter {
                 last_checked TEXT,
                 last_video_id TEXT,
                 last_video_data TEXT,
+                last_event_type TEXT,
+                last_event_time TEXT,
                 PRIMARY KEY (platform, channel_name)
             );
         `);
+        
+        // Ensure new columns exist (simple migration check)
+        try {
+            await this.database.dbRun(this.dbNameMonitor, "ALTER TABLE stream_status ADD COLUMN last_event_type TEXT");
+        } catch(e) {} // Column likely exists
+        try {
+            await this.database.dbRun(this.dbNameMonitor, "ALTER TABLE stream_status ADD COLUMN last_event_time TEXT");
+        } catch(e) {} // Column likely exists
 
         // YouTube Cache DB
         await this.database.getSQLiteDb(this.dbNameYt, `
@@ -167,6 +177,16 @@ class StreamMonitor extends EventEmitter {
                 } catch(e) {}
             }
 
+            // Failsafe: If live but no event history, assume notified at start
+            let lastEventType = row.last_event_type;
+            let lastEventTime = row.last_event_time;
+
+            if (!!row.is_live && !lastEventTime) {
+                lastEventType = 'streamOnline';
+                lastEventTime = row.started_at || new Date().toISOString();
+                this.logger.info(`[Failsafe] Assuming ${key} was already notified at ${lastEventTime}`);
+            }
+
             this.streamStatuses[key] = {
                 isLive: !!row.is_live,
                 title: row.title,
@@ -177,7 +197,9 @@ class StreamMonitor extends EventEmitter {
                 lastChecked: row.last_checked,
                 lastVideo: lastVideo,
                 platform: row.platform,
-                channelName: row.channel_name
+                channelName: row.channel_name,
+                lastEventType: lastEventType,
+                lastEventTime: lastEventTime
             };
         }
         
@@ -232,8 +254,8 @@ class StreamMonitor extends EventEmitter {
 
           await this.database.dbRun(this.dbNameMonitor, `
               INSERT OR REPLACE INTO stream_status 
-              (platform, channel_name, is_live, title, game, thumbnail, viewer_count, started_at, last_checked, last_video_id, last_video_data)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              (platform, channel_name, is_live, title, game, thumbnail, viewer_count, started_at, last_checked, last_video_id, last_video_data, last_event_type, last_event_time)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `, [
               status.platform || platform, 
               status.channelName || channelName, 
@@ -245,11 +267,52 @@ class StreamMonitor extends EventEmitter {
               status.startedAt, 
               status.lastChecked,
               lastVideoId,
-              lastVideoData
+              lastVideoData,
+              status.lastEventType,
+              status.lastEventTime
           ]);
       } catch (error) {
           this.logger.error(`Error updating status for ${key} in DB:`, error);
       }
+  }
+
+  /**
+   * Safely emit event avoiding duplicates
+   * @private
+   */
+  async _emitIfSafe(eventName, data) {
+      const channelKey = `${data.platform}:${data.channelName.toLowerCase()}`;
+      const status = this.streamStatuses[channelKey];
+      
+      if (!status) {
+          this.emit(eventName, data);
+          return;
+      }
+
+      // Strict alternation for stream status (Prevent duplicated On/Off notifications)
+      if (eventName === 'streamOnline' && status.lastEventType === 'streamOnline') {
+          this.logger.info(`[Failsafe] Suppressing duplicate ${eventName} for ${channelKey} (Strict alternation enforced)`);
+          return;
+      }
+      
+      if (eventName === 'streamOffline' && status.lastEventType === 'streamOffline') {
+           // We can be less verbose here as offline-after-offline is common if polling glitches
+           // this.logger.info(`[Failsafe] Suppressing duplicate ${eventName} for ${channelKey}`);
+           return;
+      }
+
+      // For 'newVideo', the caller (poll function) handles ID uniqueness check. 
+      // We pass it through here to ensure history is updated.
+
+      // Update history
+      status.lastEventType = eventName;
+      status.lastEventTime = new Date().toISOString();
+      
+      // Emit
+      this.emit(eventName, data);
+
+      // Persist the event history immediately
+      await this._updateStatusInDB(channelKey, status);
   }
 
   /**
@@ -349,7 +412,9 @@ class StreamMonitor extends EventEmitter {
       }
       
       this._saveChannelToDB(newChannel);
-      this._updateStatusInDB(channelKey, this.streamStatuses[channelKey]);
+      // Do not overwrite DB status with defaults here. 
+      // Let _loadStateFromDB populate it from history, or polling update it later.
+      // this._updateStatusInDB(channelKey, this.streamStatuses[channelKey]);
       
       return true;
     }
@@ -766,7 +831,7 @@ class StreamMonitor extends EventEmitter {
           
           // Emit events for status changes
           if (isLiveNow && !wasLive) {
-            this.emit('streamOnline', {
+            await this._emitIfSafe('streamOnline', {
               platform: 'twitch',
               channelName: channelName,
               title: liveStream.title,
@@ -778,7 +843,7 @@ class StreamMonitor extends EventEmitter {
               startedAt: liveStream.started_at
             });
           } else if (!isLiveNow && wasLive) {
-            this.emit('streamOffline', {
+            await this._emitIfSafe('streamOffline', {
               platform: 'twitch',
               channelName: channelName
             });
@@ -885,7 +950,7 @@ class StreamMonitor extends EventEmitter {
                     // Emit events for status changes
                     if (isLiveNow && !wasLive) {
                         const stream = channelData.stream;
-                        this.emit('streamOnline', {
+                        await this._emitIfSafe('streamOnline', {
                             platform: 'kick',
                             channelName: channelData.slug,
                             title: stream.stream_title,
@@ -895,7 +960,7 @@ class StreamMonitor extends EventEmitter {
                             startedAt: stream.start_time
                         });
                     } else if (!isLiveNow && wasLive) {
-                        this.emit('streamOffline', {
+                        await this._emitIfSafe('streamOffline', {
                             platform: 'kick',
                             channelName: channel.name
                         });
@@ -1087,7 +1152,7 @@ class StreamMonitor extends EventEmitter {
             
             if (!wasLive) {
               // Emit streamOnline event
-              this.emit('streamOnline', {
+              await this._emitIfSafe('streamOnline', {
                 platform: 'youtube',
                 channelName: channel.name,
                 title: latestEntry.title,
@@ -1100,14 +1165,14 @@ class StreamMonitor extends EventEmitter {
             // If it was live before but not now, emit offline event
             if (wasLive) {
               this.streamStatuses[channelKey].isLive = false;
-              this.emit('streamOffline', {
+              await this._emitIfSafe('streamOffline', {
                 platform: 'youtube',
                 channelName: channel.name
               });
             }
             
             // Emit new video event
-            this.emit('newVideo', {
+            await this._emitIfSafe('newVideo', {
               platform: 'youtube',
               channelName: channel.name,
               title: latestEntry.title,
@@ -1128,7 +1193,7 @@ class StreamMonitor extends EventEmitter {
               
               if (!isStillLive) {
                 this.streamStatuses[channelKey].isLive = false;
-                this.emit('streamOffline', {
+                await this._emitIfSafe('streamOffline', {
                   platform: 'youtube',
                   channelName: channel.name
                 });
@@ -1142,6 +1207,7 @@ class StreamMonitor extends EventEmitter {
         // Update DB
         await this._updateStatusInDB(channelKey, this.streamStatuses[channelKey]);
 
+
       } catch (error) {
         // Verifica se é um erro 404 (canal não encontrado)
         if (error.response && error.response.status === 404) {
@@ -1152,7 +1218,7 @@ class StreamMonitor extends EventEmitter {
             this.youtubeNotFounds[channel.name]++;
 
             this.logger.warn(`Canal do YouTube não encontrado (${this.youtubeNotFounds[channel.name]} vezes): '${channel.name}'.`);
-            if(this.youtubeNotFounds[channel.name] > 5){
+            if(this.youtubeNotFounds[channel.name] > 50){
               this.logger.warn(`Canal do YouTube não encontrado: '${channel.name}' muitas vezes. Removendo do monitoramento.`);
 
               // Remove o canal do monitoramento
