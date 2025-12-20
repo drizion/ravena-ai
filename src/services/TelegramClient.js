@@ -203,6 +203,15 @@ class TelegramClient {
   }
 
   /**
+   * Gets information about a member of a chat.
+   * @param {string|number} chatId - The chat ID.
+   * @param {string|number} userId - The user ID.
+   */
+  async getChatMember(chatId, userId) {
+    return this.bot.getChatMember(chatId, userId);
+  }
+
+  /**
    * Updates the group title.
    * @param {string|number} chatId - The chat ID.
    * @param {string} title - The new group title.

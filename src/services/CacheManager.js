@@ -14,6 +14,7 @@ class CacheManager {
     this.contactCache = [];
     this.chatCache = [];
     this.pushnameCache = [];
+    this.telegramNameCache = [];
 
     this.redisClient = null;
 
@@ -271,6 +272,53 @@ class CacheManager {
       }
     }
     return this.contactCache.find(c => c.number == id) || null;
+  }
+
+  async putTelegramNameInCache(userId, name) {
+    if (!userId || !name) return;
+    const redisKey = `tg_name:${userId}`;
+    const ttl = 86400; // 24 hours
+
+    if (this.redisClient) {
+      try {
+        await this.redisClient.set(redisKey, name, 'EX', ttl);
+        return;
+      } catch (err) {
+        this.logger.error(`CacheManager (putTelegramNameInCache): Error caching tg_name ${userId}: ${err.message}.`);
+      }
+    }
+    // In-memory fallback
+    const existingIndex = this.telegramNameCache.findIndex(i => i.id === userId);
+    if(existingIndex > -1) this.telegramNameCache.splice(existingIndex, 1);
+    
+    this.telegramNameCache.push({ id: userId, name, timestamp: Date.now() });
+    if (this.telegramNameCache.length > this.maxCacheSize) {
+      this.telegramNameCache.shift();
+    }
+  }
+
+  async getTelegramNameFromCache(userId) {
+    if (!userId) return null;
+    const redisKey = `tg_name:${userId}`;
+
+    if (this.redisClient) {
+      try {
+        const cachedName = await this.redisClient.get(redisKey);
+        if (cachedName) return cachedName;
+      } catch (err) {
+        this.logger.error(`CacheManager (getTelegramNameFromCache): Error retrieving tg_name ${userId}: ${err.message}.`);
+      }
+    }
+    // In-memory fallback
+    const item = this.telegramNameCache.find(i => i.id === userId);
+    if (item) {
+      // Check 24h TTL for in-memory
+      if (Date.now() - item.timestamp > 86400 * 1000) {
+        return null; 
+      }
+      return item.name;
+    }
+    return null;
   }
 
   /**

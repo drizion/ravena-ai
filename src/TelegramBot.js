@@ -15,9 +15,14 @@ const StreamSystem = require('./StreamSystem');
 const Database = require('./utils/Database');
 const LoadReport = require('./LoadReport');
 const Logger = require('./utils/Logger');
+const { promisify } = require('util');
 
 // Utils
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const writeFileAsync = promisify(fs.writeFile);
+const readFileAsync = promisify(fs.readFile);
+const unlinkAsync = promisify(fs.unlink);
+
 
 class WhatsAppBotTelegram {
   constructor(options) {
@@ -42,6 +47,8 @@ class WhatsAppBotTelegram {
     this.webhookPort = options.webhookPort || 9001;
     this.pollingInterval = null; // Para armazenar o ID do intervalo de polling
     this.isPolling = false;
+    this.linkAvisos = options.linkAvisos ?? process.env.LINK_GRUPO_AVISOS;
+    this.linkGrupao = options.linkGrupao ?? process.env.LINK_GRUPO_INTERACAO;
 
     // Opções do EVO ignoradas (mantidas para consistência de inicialização)
     this.vip = options.vip;
@@ -68,6 +75,11 @@ class WhatsAppBotTelegram {
     this.userAgent = options.userAgent;
     this.stabilityMonitor = options.stabilityMonitor;
 
+    this.skipGroupsPath = path.join(__dirname, '..', 'data', `skip-groups-${this.id}.json`);
+
+    this.streamIgnoreGroups = [];
+    this.skipGroupInfo = [];
+
 
     if (!this.telegramBotToken) {
       const errMsg = 'WhatsAppBotTelegram: telegramBotToken is required!';
@@ -89,8 +101,8 @@ class WhatsAppBotTelegram {
     this.loadReport = new LoadReport(this);
     // this.inviteSystem = new InviteSystem(this); // Ignorado no Telegram
     // this.reactionHandler = new ReactionsHandler(); // Ignorado no Telegram
-    //this.streamSystem = new StreamSystem(this);
-    //this.streamSystem.initialize();
+    this.streamSystem = new StreamSystem(this);
+    this.streamSystem.initialize();
     this.adminUtils = AdminUtils.getInstance();
 
     this.webhookApp = null;
@@ -193,6 +205,8 @@ class WhatsAppBotTelegram {
     } catch (error) {
       this.logger.error(`Error during Telegram bot initialization:`, error.stack);
       this._onInstanceDisconnected('INITIALIZATION_FAILURE');
+      this.isPolling = false;
+      setTimeout(() => this.initialize(), 30000);
     }
 
     return this;
@@ -432,9 +446,48 @@ class WhatsAppBotTelegram {
     });
   }
 
+  async resolveMentionName(userId, contextChatId) {
+    // 1. Try Cache
+    let name = await this.cacheManager.getTelegramNameFromCache(userId);
+    if (name) return name;
+
+    // 2. Try API
+    try {
+      // Prioritize fetching from the group if context is a group
+      if (contextChatId && String(contextChatId).startsWith('-')) {
+        try {
+          const member = await this.apiClient.getChatMember(contextChatId, userId);
+          if (member && member.user) {
+            name = member.user.first_name || member.user.username || userId; // First name is usually better for mentions
+            await this.cacheManager.putTelegramNameInCache(userId, name);
+            return name;
+          }
+        } catch (groupErr) {
+          // Ignore, user might not be in this group, try global getChat
+        }
+      }
+
+      // Fallback/Global fetch (works if bot has interacted with user)
+      const userChat = await this.apiClient.getChat(userId);
+      if (userChat) {
+        name = userChat.first_name || userChat.username || userId;
+        await this.cacheManager.putTelegramNameInCache(userId, name);
+        return name;
+      }
+
+    } catch (e) {
+      // this.logger.debug(`Failed to resolve name for ${userId}: ${e.message}`);
+    }
+
+    return userId; // Fallback to ID
+  }
+
   async sendMessage(chatId, content, options = {}) {
+    const ignored = chatId?.toString().includes?.("@") ?? false;
+
     chatId = parseInt(chatId);
-    this.logger.debug(`sendMessage to ${chatId}`);
+    this.logger.debug(`[sendMessage] to ${chatId}`, { ignored });
+    if(ignored) return;
     try {
       const isGroup = String(chatId).startsWith('-');
       this.loadReport.trackSentMessage(isGroup);
@@ -448,15 +501,35 @@ class WhatsAppBotTelegram {
         throw new Error('Not connected to Telegram');
       }
 
-      const tgOptions = {};
+      const tgOptions = { parse_mode: 'HTML' };
       if (options.quotedMsgId) {
         // O ID da mensagem no Telegram é apenas o número
         const messageId = options.quotedMsgId.split('_').pop();
         if (messageId) tgOptions.reply_to_message_id = messageId;
       }
 
+      // Resolve Mentions
+      const mentionMap = {};
+      if (options.mentions && Array.isArray(options.mentions)) {
+        await Promise.all(options.mentions.map(async (mentionedId) => {
+           const name = await this.resolveMentionName(mentionedId, chatId);
+           if (name) mentionMap[mentionedId] = name;
+        }));
+      }
+
+      // Format Content (Text)
+      if (typeof content === 'string') {
+        content = this._formatMessage(content, mentionMap);
+      }
+      
+      // Format Caption (Media)
+      if (options.caption) {
+        options.caption = this._formatMessage(options.caption, mentionMap);
+      }
+
       let response;
       if (typeof content === 'string') {
+        this.logger.debug(`[sendMessage] Text to '${chatId}'`, { content, options, tgOptions });
         response = await this.apiClient.sendMessage(chatId, content, tgOptions);
       } else if (content.isMessageMedia || (content.data && content.mimetype)) {
         const mediaBuffer = Buffer.from(content.data, 'base64');
@@ -555,35 +628,74 @@ class WhatsAppBotTelegram {
     return chunks.filter(chunk => chunk.length > 0);
   }
 
-  whatsappToTelegram(text) {
+  _formatMessage(text, mentionMap = {}) {
     if (typeof text !== 'string') return text;
 
-    return text
-      // Bold: *text* -> **text**
-      .replace(/\*(.+?)\*/g, '**$1**')
-      // Italic: _text_ -> __text__
-      .replace(/_(.+?)_/g, '__$1__')
-      // Strikethrough: ~text~ -> ~~text~~
-      .replace(/~(.+?)~/g, '~~$1~~');
+    // 1. Escape HTML special characters to prevent injection/breakage
+    let formatted = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    // 2. Handle Mentions
+    // Replaces @123456789 with <a href="tg://user?id=123456789">@Name</a>
+    if (Array.isArray(mentionMap)) {
+      // Legacy array support (just IDs)
+      for (const mentionId of mentionMap) {
+        const mentionRegex = new RegExp(`@${mentionId}\\b`, 'g');
+        formatted = formatted.replace(mentionRegex, `<a href="tg://user?id=${mentionId}">@${mentionId}</a>`);
+      }
+    } else if (typeof mentionMap === 'object') {
+       // Map support (ID -> Name)
+       for (const [id, name] of Object.entries(mentionMap)) {
+         const mentionRegex = new RegExp(`@${id}\\b`, 'g');
+         const displayName = name || id;
+         formatted = formatted.replace(mentionRegex, `<a href="tg://user?id=${id}">@${displayName}</a>`);
+       }
+    }
+
+    // 3. Convert WhatsApp Markup to Telegram HTML
+    formatted = formatted
+      // Bold: *text* -> <b>text</b>
+      .replace(/\*([^*\n]+?)\*/g, '<b>$1</b>')
+      // Italic: _text_ -> <i>text</i>
+      .replace(/_([^_]+?)_/g, '<i>$1</i>')
+      // Strikethrough: ~text~ -> <s>text</s>
+      .replace(/~([^~]+?)~/g, '<s>$1</s>')
+      // Monospace: ```text``` -> <pre>text</pre>
+      .replace(/```([\s\S]+?)```/g, '<pre>$1</pre>')
+      // Inline Code: `text` -> <code>text</code>
+      .replace(/`([^`]+?)`/g, '<code>$1</code>');
+
+    // 4. Convert trailing URL to "Link Direto"
+    const urlRegex = /(https?:\/\/[^\s<]+)\s*$/i;
+    formatted = formatted.replace(urlRegex, '<a href="$1">Link Direto</a>');
+
+    return formatted;
   }
 
   async sendReturnMessages(returnMessages) {
     if (!Array.isArray(returnMessages)) {
       returnMessages = [returnMessages];
     }
-    const okMessages = returnMessages.filter(msg => msg && msg.isValid && msg.isValid());
+    const okMessages = returnMessages.filter(msg => msg && msg.isValid && msg.isValid()); // Chats com @ são whatsapp, ignorar
     if (okMessages.length === 0) return [];
 
     // Use flatMap to process the array
     const MAX_LENGTH = 4000;
 
     const validMessages = okMessages.flatMap(msg => {
+      //const mentions = msg.options?.mentions || []; // Moved to sendMessage
+
       if((typeof msg.content === 'string' || msg.content instanceof String)){
 
-        // Converte markup
-        msg.content = this.whatsappToTelegram(msg.content);
+        // Removed early formatting to support direct sendMessage calls and avoid double formatting.
+        // Logic moved to sendMessage.
+        // msg.content = this._formatMessage(msg.content, mentions);
 
         // Se for texto, divide pra não ficar longo
+        const MAX_LENGTH = 3500; // Reduced to allow HTML tags expansion
+
         if (msg.content.length <= MAX_LENGTH) {
           return [msg];
         }
@@ -603,6 +715,7 @@ class WhatsAppBotTelegram {
     });
     
     const results = [];
+
     for (const message of validMessages) {
       if (message.delay > 0) await sleep(message.delay);
       
@@ -610,15 +723,16 @@ class WhatsAppBotTelegram {
         const result = await this.sendMessage(message.chatId, message.content, message.options);
         results.push(result);
 
-        if (message.reaction && result && result.id?._serialized) {
-          try {
-            const channel = await this.discordClient.channels.fetch(message.chatId);
-            const sentMessage = await channel.messages.fetch(result.id._serialized);
-            await sentMessage.react(message.reaction);
-          } catch (reactError) {
-            this.logger.error(`[sendReturnMessages] Erro enviando reaction "${message.reaction}" para ${result.id._serialized}:`, reactError);
-          }
-        }
+        // FIX REACTIONS
+        // if (message.reaction && result && result.id?._serialized) {
+        //   try {
+        //     const channel = await this.discordClient.channels.fetch(message.chatId);
+        //     const sentMessage = await channel.messages.fetch(result.id._serialized);
+        //     await sentMessage.react(message.reaction);
+        //   } catch (reactError) {
+        //     this.logger.error(`[sendReturnMessages] Erro enviando reaction "${message.reaction}" para ${result.id._serialized}:`, reactError);
+        //   }
+        // }
       } catch(sendError) {
         this.logger.error(`[sendReturnMessages] Falha enviando ReturnMessages para ${message.chatId}:`, sendError);
         results.push({ error: sendError, messageContent: message.content });
@@ -705,6 +819,60 @@ class WhatsAppBotTelegram {
     }
   }
 
+  async _loadSkipGroupInfo() {
+    try {
+        const data = await readFileAsync(this.skipGroupsPath, 'utf8');
+        const allSkips = JSON.parse(data);
+        this.skipGroupInfo = allSkips[this.id] ?? [];
+        this.logger.info(`[SkipGroups] Loaded ${this.skipGroupInfo.length} skipped groups for bot ${this.id}.`);
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            this.logger.info(`[SkipGroups] ${this.skipGroupsPath} not found. Initializing empty skip list.`);
+            this.skipGroupInfo = [];
+            await this._saveSkipGroupInfo();
+        } else {
+            this.logger.error(`[SkipGroups] Error loading skip groups file:`, error);
+        }
+    }
+  }
+
+  async _saveSkipGroupInfo() {
+      let allSkips = {};
+      try {
+          const data = await readFileAsync(this.skipGroupsPath, 'utf8');
+          allSkips = JSON.parse(data);
+      } catch (error) {
+          if (error.code !== 'ENOENT') {
+              this.logger.error(`[SkipGroups] Error reading skip groups file before saving:`, error);
+              return;
+          }
+      }
+      allSkips[this.id] = this.skipGroupInfo;
+      try {
+          await writeFileAsync(this.skipGroupsPath, JSON.stringify(allSkips, null, 2));
+          this.logger.info(`[SkipGroups] Saved ${this.skipGroupInfo.length} skipped groups for bot ${this.id}.`);
+      } catch (error) {
+          this.logger.error(`[SkipGroups] Error saving skip groups file:`, error);
+      }
+  }
+
+  async addSkipGroup(groupId) {
+      if (!this.skipGroupInfo.includes(groupId)) {
+          this.skipGroupInfo.push(groupId);
+          await this._saveSkipGroupInfo();
+          this.logger.info(`[SkipGroups] Added ${groupId} to skip list.`);
+      }
+  }
+
+  async removeSkipGroup(groupId) {
+      const initialLength = this.skipGroupInfo.length;
+      this.skipGroupInfo = this.skipGroupInfo.filter(id => id !== groupId);
+      if (this.skipGroupInfo.length < initialLength) {
+          await this._saveSkipGroupInfo();
+          this.logger.info(`[SkipGroups] Removed ${groupId} from skip list.`);
+      }
+  }
+
   async getContactDetails(contactId, prefetchedName = '') {
     // No Telegram, o "contato" é apenas o usuário. Não há um objeto separado como no WhatsApp.
     const contact = {
@@ -735,16 +903,16 @@ class WhatsAppBotTelegram {
       const allCommands = [...generalCommands];
 
       // Formata os comandos de gerenciamento
-      for (const key in managementCommands) {
-        const cmd = managementCommands[key];
-        // Telegram não aceita '-' no nome do comando, substituímos por '_'
-        const commandName = `g_${key.replace(/-/g, '_')}`.toLowerCase();
-        allCommands.push({
-          name: commandName,
-          description: cmd.description,
-          hidden: cmd.hidden
-        });
-      }
+      // for (const key in managementCommands) {
+      //   const cmd = managementCommands[key];
+      //   // Telegram não aceita '-' no nome do comando, substituímos por '_'
+      //   const commandName = `g_${key.replace(/-/g, '_')}`.toLowerCase();
+      //   allCommands.push({
+      //     name: commandName,
+      //     description: cmd.description,
+      //     hidden: cmd.hidden
+      //   });
+      // }
 
       // Filtra e formata para o padrão do Telegram
       const telegramCommands = allCommands
