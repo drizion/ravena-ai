@@ -3155,3 +3155,40 @@ Este erro aconteceu ao executar a função recoverMsgFromCache
 indicando que a prorpriedade Info possivelmente não está sendo incluída no cache.
 
 Analise e corrija
+
+---
+
+
+Let's update and modernize @src/services/StreamMonitor.js
+@src/StreamSystem.js uses this, so apply modifications  if necessary
+
+Files are both fully functional and working.
+
+However, since it is writing data to JSON files, concurrency happens and files get corrupted pretty often (also after restarting and not properly closing the file), thus resetting the data.
+Make this a more robust solution, using "sqlite" to store data.
+
+Througly analize the file and define a working schema that mimics the current implementation
+Modified file should be a 1:1 drop in replacement, so data manipulation from/to database methods should be implemented (for transparency)
+You can head/tail the current json to file to check the structure, if necessary
+
+You can find an example on how to get the sqlite and initialize the tables on file @src/functions/PintoGame.js
+Functions db.dbRun, db.dbAll and db.dbGet are available
+ 
+Server runs on ubuntu 24.
+This is the project folder. 
+
+JSON files to migrate to SQLite:
+- monitoramento.json (monitoramento table and db)
+- yt-channelsID-cache.json (ytchannels table and db)
+
+JSON files to ignore (working fine and easier to do maintenance):
+- twitch-token.json
+- kick-token.json
+- twitch-batch${bAt}-errors.json (just a debug)
+
+
+You should also create and run:
+1. Data migration script (verbose, might take some minutes to run, check the file size)
+2. Test script that invokes the file commands handler with a mock user
+
+Keep the portuguese (brazil) localization.

@@ -230,3 +230,8 @@ data/skip-groups*.json
 .gemini/settings.json
 /.Trash-1000
 *.db
+test-*
+debug-*
+migration-*
+cleanup-*
+/data/sqlites
