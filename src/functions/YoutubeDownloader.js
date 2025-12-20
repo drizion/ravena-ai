@@ -363,14 +363,14 @@ async function baixarMusicaYoutube(idVideo, dadosSolicitante, callback) {
  */
 async function ytCommand(bot, message, args, group) {
 
-  if (!message.group  && !bot.useTelegram) {
-    try {
-      await message.origin.react('🤷‍♂️');
-    } catch (reactError) {
-      logger.error('Erro ao reagir à mensagem:', reactError);
-    }
-    return false;
-  }
+  // if (!message.group  && !bot.useTelegram) {
+  //   try {
+  //     await message.origin.react('🤷‍♂️');
+  //   } catch (reactError) {
+  //     logger.error('Erro ao reagir à mensagem:', reactError);
+  //   }
+  //   return false;
+  // }
 
   const chatId = message.group ?? message.author;
   const returnMessages = [];
@@ -499,14 +499,14 @@ async function ytCommand(bot, message, args, group) {
  * @returns {Promise<ReturnMessage|Array<ReturnMessage>>} - ReturnMessage ou array de ReturnMessages
  */
 async function srCommand(bot, message, args, group) {
-  if (!message.group && !bot.useTelegram) {
-    try {
-      await message.origin.react('🤷‍♂️');
-    } catch (reactError) {
-      logger.error('Erro ao reagir à mensagem:', reactError);
-    }
-    return false;
-  }
+  // if (!message.group && !bot.useTelegram) {
+  //   try {
+  //     await message.origin.react('🤷‍♂️');
+  //   } catch (reactError) {
+  //     logger.error('Erro ao reagir à mensagem:', reactError);
+  //   }
+  //   return false;
+  // }
 
   const chatId = message.group ?? message.author;
   const returnMessages = [];
