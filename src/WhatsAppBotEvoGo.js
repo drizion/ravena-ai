@@ -115,6 +115,9 @@ class WhatsAppBotEvoGo {
     this.grupoLogs = options.grupoLogs ?? process.env.GRUPO_LOGS;
     this.grupoInvites = options.grupoInvites ?? process.env.GRUPO_INVITES;
     this.grupoAvisos = options.grupoAvisos ?? process.env.GRUPO_AVISOS;
+    this.linkAvisos = options.linkAvisos ?? process.env.LINK_GRUPO_AVISOS;
+    this.linkGrupao = options.linkGrupao ?? process.env.LINK_GRUPO_INTERACAO;
+
     this.joinSilencioso = false;
 
     this.userAgent = options.userAgent ?? process.env.USER_AGENT;
@@ -2141,7 +2144,7 @@ class WhatsAppBotEvoGo {
 
   getLidFromPn(PN, chat) {
     //this.logger.debug(`[getLidFromPn] `, {PN, chat});
-    if(chat.Participants){
+    if(chat?.Participants){
       return (chat?.Participants?.find(p => p.PhoneNumber.startsWith(PN))?.LID) ?? PN;
     } else {
       return (chat?.participants?.find(p => p.id?._serialized.startsWith(PN))?.phoneNumber) ?? PN;
@@ -2150,7 +2153,7 @@ class WhatsAppBotEvoGo {
 
   getPnFromLid(lid, chat) {
     //this.logger.debug(`[getPnFromLid] `, {lid, chat});
-    if(chat.Participants){
+    if(chat?.Participants){
       return (chat?.Participants?.find(p => p.LID.startsWith(lid) || p.JID.startsWith(lid))?.PhoneNumber) ?? lid;
     } else {
       return (chat?.participants?.find(p => p.id?._serialized.startsWith(lid))?.phoneNumber) ?? lid;

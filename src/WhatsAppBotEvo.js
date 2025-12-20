@@ -117,6 +117,8 @@ class WhatsAppBotEvo {
     this.grupoLogs = options.grupoLogs || process.env.GRUPO_LOGS;
     this.grupoInvites = options.grupoInvites || process.env.GRUPO_INVITES;
     this.grupoAvisos = options.grupoAvisos || process.env.GRUPO_AVISOS;
+    this.linkAvisos = options.linkAvisos ?? process.env.LINK_GRUPO_AVISOS;
+    this.linkGrupao = options.linkGrupao ?? process.env.LINK_GRUPO_INTERACAO;
 
     this.userAgent = options.userAgent || process.env.USER_AGENT;
 

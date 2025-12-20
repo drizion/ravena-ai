@@ -51,6 +51,8 @@ class WhatsAppBotDiscord {
     this.grupoLogs = options.grupoLogs; // Espera-se um Channel ID
     this.grupoAvisos = options.grupoAvisos; // Espera-se um Channel ID
     this.notificarDonate = options.notificarDonate;
+    this.linkAvisos = options.linkAvisos ?? process.env.LINK_GRUPO_AVISOS;
+    this.linkGrupao = options.linkGrupao ?? process.env.LINK_GRUPO_INTERACAO;
 
     this.version = "Discord";
     this.wwebversion = require('discord.js').version;

@@ -37,11 +37,11 @@ class AdminUtils {
    * @param {Object} client - Instância do cliente WhatsApp (opcional)
    * @returns {Promise<boolean>} - True se o usuário for admin
    */
-  async isAdmin(userId, group, chat = null, client = null) {
+  async isAdmin(userId, group, chat = null, client = null, debug = false) {
     try {
       const normalizedUserId = this._normalizeId(userId);
 
-      //this.logger.debug(`[isAdmin] `, {userId, group, chat});
+      if(debug) this.logger.debug(`[isAdmin] `, {userId, normalizedUserId, group, chat});
 
       // Se o ID normalizado for vazio, o usuário é inválido.
       if (!normalizedUserId) {
@@ -90,11 +90,14 @@ class AdminUtils {
           participantes = participantes.concat(chatInstance._rawEvoGroup.participants);
         }
 
+
         const participant = participantes.find(p => 
           [p.id?._serialized, p.id, p.phoneNumber].some(
             numero => this._normalizeId(numero) === normalizedUserId
           )
         );
+
+        if(debug) this.logger.debug(`[isAdmin][group] `, {normalizedUserId, botPart: participant, participantes});
 
         if (participant && (participant.isAdmin || participant.admin === 'admin')) {
           this.logger.debug(`Usuário ${normalizedUserId} é admin no WhatsApp para o grupo ${group.id}.`);

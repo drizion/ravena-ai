@@ -23,7 +23,7 @@ if (!COMFYUI_URL.match(/^https?:\/\//)) {
     COMFYUI_URL = 'http://' + COMFYUI_URL;
 }
 
-const aesthetic = "\n\n(Aesthetic: Gothic, purple-ish tinted atmosphere, cartoony)";
+const aesthetic = "\n\n(Aesthetic: Gothic, lightly purple-ish tinted atmosphere, cartoony)";
 
 const urlObj = new URL(COMFYUI_URL);
 const httpProtocol = urlObj.protocol; // 'http:' or 'https:'
@@ -477,7 +477,7 @@ async function generateImage(bot, message, args, group, skipNotify = true) {
 const commands = [
   new Command({
     name: 'imagine',
-    description: 'Gera uma imagem usando ComfyUI',
+    description: 'Gera uma imagem',
     category: 'ia',
     reactions: {
       trigger: "✨",

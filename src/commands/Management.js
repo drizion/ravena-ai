@@ -1526,7 +1526,7 @@ async setWelcomeMessage(bot, message, args, group) {
     try {
       const chat = await bot.client.getChatById(group.id);
       
-      return await this.adminUtils.isAdmin(bot.phoneNumber, group, chat, bot.client);
+      return await this.adminUtils.isAdmin(bot.phoneNumber, group, chat, bot.client, false);
     } catch (error) {
       this.logger.error(`Erro ao verificar se o bot é admin em ${group.id}:`, error);
       return false;

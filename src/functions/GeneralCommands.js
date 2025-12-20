@@ -461,12 +461,12 @@ const commands = [
   }), 
 
 
-  new Command({
-    name: 'diferenças',
-    description: 'Exibe as diferenças para a ravena antiga',
-    category: "geral",
-    method: diferencasCommand
-  }),
+  // new Command({
+  //   name: 'diferenças',
+  //   description: 'Exibe as diferenças para a ravena antiga',
+  //   category: "geral",
+  //   method: diferencasCommand
+  // }),
   
   new Command({
     name: 'grupao',

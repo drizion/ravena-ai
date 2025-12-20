@@ -755,7 +755,7 @@ class CommandHandler {
    */
   async executeFixedCommand(bot, message, command, args, group) {
     try {
-      this.logger.info(`[${bot.id}][${message.author ?? message.authorAlt}@${group?.name ?? "PV"}] Executando comando fixo`, { command, args });
+      this.logger.info(`[${bot.id}][${message.author ?? message.authorAlt}@${group?.name ?? "PV"}] Executando comando fixo '${command.name}'`, { args });
 
       // Verifica se a categoria de comando não está mutada
       if (group && group.mutedCategories && Array.isArray(group.mutedCategories)) {  
