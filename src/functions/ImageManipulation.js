@@ -177,6 +177,28 @@ function applyArtistic(inputPath, effect) {
     });
 }
 
+// Auxiliar para aplicar efeito "needs more jpeg"
+function applyJpeg(inputPath) {
+  const outputPath = inputPath.replace(/\.[^/.]+$/, '') + '_morejpeg.jpg';
+  
+  return sharp(inputPath)
+    .resize(100) // Reduz resolução drasticamente
+    .toBuffer()
+    .then(buffer => {
+      return sharp(buffer)
+        .resize(1024, null, { // Aumenta de volta sem interpolação suave (kernel nearest) para pixelização
+            kernel: sharp.kernel.nearest
+        }) 
+        .jpeg({ quality: 1 }) // Compressão JPEG extrema
+        .toFile(outputPath);
+    })
+    .then(() => outputPath)
+    .catch(error => {
+      logger.error('Erro ao aplicar efeito jpeg:', error);
+      throw error;
+    });
+}
+
 // Limpa arquivos temporários
 function cleanupTempFiles(files) {
   return Promise.all(
@@ -186,6 +208,72 @@ function cleanupTempFiles(files) {
       })
     )
   );
+}
+
+/**
+ * Aplica efeito "needs more jpeg"
+ * @param {WhatsAppBot} bot - Instância do bot
+ * @param {Object} message - Dados da mensagem
+ * @param {Array} args - Argumentos do comando
+ * @param {Object} group - Dados do grupo
+ * @returns {Promise<ReturnMessage|Array<ReturnMessage>>} - ReturnMessage ou array de ReturnMessage
+ */
+async function handleJpeg(bot, message, args, group) {
+  const chatId = message.group ?? message.author;
+  
+  try {
+    const media = await getMediaFromMessage(message);
+    if (!media) {
+      try {
+        await message.origin.react("❌");
+      } catch (reactError) {
+        logger.error('Erro ao aplicar reação de erro:', reactError);
+      }
+      
+      return new ReturnMessage({
+        chatId: chatId,
+        content: 'Por favor, forneça uma imagem ou responda a uma imagem com este comando.'
+      });
+    }
+    
+    const inputPath = await saveMediaToTemp(media);
+    logger.debug(`Imagem de entrada salva em ${inputPath}`);
+    
+    const filePaths = [inputPath];
+    
+    const jpegPath = await applyJpeg(inputPath);
+    logger.debug(`Efeito jpeg aplicado, salvo em ${jpegPath}`);
+    filePaths.push(jpegPath);
+    
+    const resultMedia = await bot.createMedia(jpegPath);
+    
+    cleanupTempFiles(filePaths).catch(error => {
+      logger.error('Erro ao limpar arquivos temporários:', error);
+    });
+    
+    return new ReturnMessage({
+      chatId: chatId,
+      content: resultMedia,
+      options: {
+        caption: 'Needs more JPEG!',
+        quotedMessageId: message.origin.id._serialized,
+        evoReply: message.origin
+      }
+    });
+  } catch (error) {
+    logger.error('Erro no comando morejpeg:', error);
+    
+    try {
+      await message.origin.react("❌");
+    } catch (reactError) {
+      logger.error('Erro ao aplicar reação de erro:', reactError);
+    }
+    
+    return new ReturnMessage({
+      chatId: chatId,
+      content: 'Erro ao processar imagem. Certifique-se de que a imagem é válida e tente novamente.'
+    });
+  }
 }
 
 /**
@@ -564,6 +652,19 @@ const commands = [
       error: "❌"
     },
     method: handleRemoveBg
+  }),
+  new Command({
+    name: 'morejpeg',
+    description: 'Aplica compressão JPEG extrema',
+    category: "midia",
+    group: "imageEffect",
+    needsMedia: true,
+    reactions: {
+      before: process.env.LOADING_EMOJI ?? "🌀",
+      after: "💩",
+      error: "❌"
+    },
+    method: handleJpeg
   })
 ];
 

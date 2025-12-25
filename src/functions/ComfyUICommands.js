@@ -341,46 +341,52 @@ async function generateImage(bot, message, args, group, skipNotify = true) {
         // Calcula o tempo de geração
         const generationTime = ((Date.now() - startTime) / 1000).toFixed(1);
 
-        // Add Watermark
+        // Add Watermark and compress to JPEG
         try {
             const watermarkPath = path.join(database.databasePath, "sd_watermark.png");
-            await fs.access(watermarkPath);
+            let img = sharp(imageBuffer);
+            
+            try {
+                await fs.access(watermarkPath);
+                const metadata = await img.metadata();
+                const width = metadata.width;
+                const height = metadata.height;
 
-            const mainImage = sharp(imageBuffer);
-            const metadata = await mainImage.metadata();
-            const width = metadata.width;
-            const height = metadata.height;
+                const watermarkSize = 80;
+                const offset = 20;
 
-            const watermarkSize = 80;
-            const offset = 20;
+                const watermark = await sharp(watermarkPath)
+                    .resize(watermarkSize, watermarkSize)
+                    .ensureAlpha()
+                    .composite([{
+                        input: {
+                            create: {
+                                width: watermarkSize,
+                                height: watermarkSize,
+                                channels: 4,
+                                background: { r: 255, g: 255, b: 255, alpha: 0.3 }
+                            }
+                        },
+                        blend: 'dest-in'
+                    }])
+                    .toBuffer();
 
-            const watermark = await sharp(watermarkPath)
-                .resize(watermarkSize, watermarkSize)
-                .ensureAlpha()
-                .composite([{
-                    input: {
-                        create: {
-                            width: watermarkSize,
-                            height: watermarkSize,
-                            channels: 4,
-                           background: { r: 255, g: 255, b: 255, alpha: 0.3 }
-                       }
-                   },
-                   blend: 'dest-in'
-               }])
-               .toBuffer();
-
-            imageBuffer = await mainImage
-                .composite([{
+                img = img.composite([{
                     input: watermark,
                     top: height - watermarkSize - offset,
                     left: width - watermarkSize - offset,
-                }])
-                .toBuffer();
-            
-            logger.info('Marca d\'água adicionada com sucesso.');
-        } catch (wmError) {
-            logger.error('Erro ao adicionar marca d\'água (prosseguindo sem):', wmError);
+                }]);
+                
+                logger.info('Marca d\'água adicionada com sucesso.');
+            } catch (wmError) {
+                if (wmError.code !== 'ENOENT') {
+                    logger.error('Erro ao adicionar marca d\'água:', wmError);
+                }
+            }
+
+            imageBuffer = await img.jpeg({ quality: 90 }).toBuffer();
+        } catch (error) {
+            logger.error('Erro ao processar imagem (watermark/jpeg):', error);
         }
     
         // Save temporary file
@@ -391,7 +397,7 @@ async function generateImage(bot, message, args, group, skipNotify = true) {
             await fs.mkdir(tempDir, { recursive: true });
         }
     
-        const tempImagePath = path.join(tempDir, `comfy-${Date.now()}.png`);
+        const tempImagePath = path.join(tempDir, `comfy-${Date.now()}.jpg`);
         await fs.writeFile(tempImagePath, imageBuffer);
         
         logger.info(`Imagem salva em: ${tempImagePath}`);

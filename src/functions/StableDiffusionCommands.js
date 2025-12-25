@@ -1,6 +1,7 @@
 ﻿const path = require('path');
 const axios = require('axios');
 const fs = require('fs').promises;
+const sharp = require('sharp');
 const Logger = require('../utils/Logger');
 const NSFWPredict = require('../utils/NSFWPredict');
 const Command = require('../models/Command');
@@ -151,10 +152,17 @@ async function generateImage(bot, message, args, group, skipNotify = false) {
     }
     
     const tempImagePath = path.join(tempDir, `sd-${Date.now()}.jpg`);
-    const imageBuffer = Buffer.from(imageBase64, 'base64');
+    let imageBuffer = Buffer.from(imageBase64, 'base64');
+    
+    try {
+      imageBuffer = await sharp(imageBuffer).jpeg({ quality: 90 }).toBuffer();
+    } catch (sharpError) {
+      logger.error('Erro ao comprimir imagem com sharp:', sharpError);
+    }
+
     await fs.writeFile(tempImagePath, imageBuffer);
     
-    logger.info(`Recebida resposta, savaldno imagem em: ${tempImagePath}`);
+    logger.info(`Recebida resposta, salvando imagem em: ${tempImagePath}`);
 
     // Verificar NSFW
     let isNSFW = false;
