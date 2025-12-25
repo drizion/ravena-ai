@@ -78,8 +78,8 @@ const MIN_FISH_WEIGHT = 1;
 const MAX_FISH_WEIGHT = 180; // Aumentado para 180kg
 const DIFFICULTY_THRESHOLD = 80; 
 const FISHING_COOLDOWN = 5;
-const MAX_BAITS = 7; // Aumentado para 7 iscas
-const BAIT_REGEN_TIME = 60 * 60; // Reduzido para 1 hora (60 min * 60 seg)
+const MAX_BAITS = 15; // Aumentado para 7 iscas
+const BAIT_REGEN_TIME = 60 * 60 * 0.5; // Reduzido para 1 hora (60 min * 60 seg)
 
 // Armazena os cooldowns de pesca (Cache em memória é aceitável para cooldowns de curto prazo)
 const fishingCooldowns = {};
@@ -206,9 +206,21 @@ const DOWNGRADES = [
   { name: "Olho Gordo", chance: 0.03, emoji: "🧿", effect: "weight_loss", value: -0.8, duration: 2, description: "O olho gordo dos invejosos reduziu 80% do peso dos seus próximos 2 peixes." }
 ];
 
+const DEFAULT_GLOBAL_FACTORS = {
+    trashChance: 0.5,
+    buffChance: 1.25,
+    debuffChance: 0.75,
+    rareFishChance: 1.1
+};
+
 // --- HELPER FUNCTIONS FOR DB ---
 
+async function getGlobalFactors() {
+    return { ...DEFAULT_GLOBAL_FACTORS };
+}
+
 async function getUserData(userId) {
+    logger.debug(`[fishing][getUserData] ${userId}`);
     const row = await database.dbGet(dbName, "SELECT * FROM fishing_users WHERE user_id = ?", [userId]);
     if (!row) return null;
 
@@ -336,12 +348,14 @@ async function clearInventory(userId) {
 /**
  * Obtém peixe aleatório do array de peixes com escala de dificuldade
  */
-async function getRandomFish(fishArray, isMultiCatch = false, userData = null) {
+async function getRandomFish(fishArray, isMultiCatch = false, userData = null, globalFactors = null) {
   // Verifica se o array tem peixes
   if (!fishArray || !Array.isArray(fishArray) || fishArray.length === 0) {
     const customVariables = await database.getCustomVariables();
     fishArray = customVariables.peixes ?? ["Lambari", "Traira"];
   }
+
+  if (!globalFactors) globalFactors = await getGlobalFactors();
   
   // Se for pescaria múltipla, não permite peixes raros
   if (!isMultiCatch) {
@@ -354,6 +368,9 @@ async function getRandomFish(fishArray, isMultiCatch = false, userData = null) {
                 currentChance += rareChanceBuff.value;
             }
         }
+
+      // Aplica fator global
+      currentChance *= globalFactors.rareFishChance;
 
       if (Math.random() < currentChance) {
         const baseWeight = parseFloat((Math.random() * (MAX_FISH_WEIGHT - MIN_FISH_WEIGHT) + MIN_FISH_WEIGHT).toFixed(2));
@@ -440,7 +457,7 @@ function regenerateBaits(userData) {
  */
 async function addBaits(userId, baitsNum) {
   userId = `${userId}`.replace(/\D/g, '');
-  userId = userId.split("@")[0] + "@c.us"; 
+  //userId = userId.split("@")[0] + "@c.us"; 
 
   let userData = await getUserData(userId);
 
@@ -520,14 +537,16 @@ function formatTimeString(seconds) {
   return timeString;
 }
 
-function checkRandomItem() {
-  if (Math.random() < 0.15) {
+function checkRandomItem(globalFactors) {
+  const factors = globalFactors || DEFAULT_GLOBAL_FACTORS;
+  
+  if (Math.random() < (0.15 * factors.trashChance)) {
     const trashIndex = Math.floor(Math.random() * TRASH_ITEMS.length);
     return { type: 'trash', ...TRASH_ITEMS[trashIndex] };
   }
   
   for (const upgrade of UPGRADES) {
-    if (Math.random() < upgrade.chance) {
+    if (Math.random() < (upgrade.chance * factors.buffChance)) {
       let itemData = { ...upgrade, type: 'upgrade' };
       if (upgrade.effect === 'extra_baits' || upgrade.effect === 'next_fish_bonus') {
         itemData.value = Math.floor(Math.random() * (upgrade.maxValue - upgrade.minValue + 1)) + upgrade.minValue;
@@ -537,7 +556,7 @@ function checkRandomItem() {
   }
   
   for (const downgrade of DOWNGRADES) {
-    if (Math.random() < downgrade.chance) {
+    if (Math.random() < (downgrade.chance * factors.debuffChance)) {
       let itemData = { ...downgrade, type: 'downgrade' };
       if (downgrade.effect === 'remove_baits') {
         itemData.value = Math.floor(Math.random() * (downgrade.maxValue - downgrade.minValue + 1)) + downgrade.minValue;
@@ -768,6 +787,9 @@ async function fishCommand(bot, message, args, group) {
     const userName = message.name ?? message.pushName ?? message.pushname ?? message.authorName ?? "Pescador";
     const groupId = message.group; 
     const mentionPessoa = [];
+
+    // Get global factors
+    const globalFactors = await getGlobalFactors();
     
     let userData = await getUserData(userId);
     
@@ -831,62 +853,83 @@ async function fishCommand(bot, message, args, group) {
     let randomItem = null;
     
     for (let i = 0; i < catchCount; i++) {
-      const fish = await getRandomFish(fishArray, i > 0, userData);
-      const buffResult = await applyBuffs(userData, fish);
-      const modifiedFish = buffResult.fish;
+      // Step 1: Check for Rare Fish immediately (rare fish overrides items)
+      // We peek at the potential fish type first.
+      const rareCheckFish = await getRandomFish(fishArray, i > 0, userData, globalFactors);
       
-      if (buffResult.buffMessages?.length > 0) effectMessage += `\n${buffResult.buffMessages.join('\n')}`;
-      
-      await addFishToInventory(userId, modifiedFish);
-      userData.fishes.push(modifiedFish);
-      userData.totalWeight = (userData.totalWeight || 0) + modifiedFish.weight;
-      userData.inventoryWeight = (userData.inventoryWeight || 0) + modifiedFish.weight;
-      userData.totalCatches = (userData.totalCatches ?? 0) + 1;
-      caughtFishes.push(modifiedFish);
-      
-      if (!userData.biggestFish || modifiedFish.weight > userData.biggestFish.weight) userData.biggestFish = modifiedFish;
-      
-      if (groupId) {
-        await updateGroupStats(groupId, userId, userName, modifiedFish.weight, true, modifiedFish);
-      }
-      
-      if (i === 0 && !modifiedFish.isRare) {
-        randomItem = checkRandomItem();
-        if (randomItem) {
-          const itemResult = await applyItemEffect(userData, randomItem);
-          userData = itemResult.userData;
-          effectMessage += itemResult.effectMessage;
-          
-          if (randomItem.type === 'trash') {
-            userData.totalTrashCaught = (userData.totalTrashCaught ?? 0) + 1;
-            const trashedFish = caughtFishes.pop();
-            // Need to remove from DB inventory since we added it above
-            // We need to fetch the last inserted ID or assume
-            const lastFish = userData.fishes.pop(); 
-            // In a real scenario we need the ID. 
-            // For now let's assume `addFishToInventory` works. 
-            // Better strategy: Don't add to DB until end of loop? No, item effect can clear inventory.
-            // Let's get the DB ID of the fish we just added. 
-            // Since we don't have it easily without a return from insert, 
-            // we will query the last fish added by user.
-            const fishRow = await database.dbGet(dbName, "SELECT id FROM fishing_inventory WHERE user_id = ? ORDER BY id DESC LIMIT 1", [userId]);
-            if(fishRow) await removeFishFromInventory(userId, fishRow.id);
+      let modifiedFish = null;
+      let isTrash = false;
 
-            userData.totalCatches--;
-            userData.totalWeight -= modifiedFish.weight;
-            userData.inventoryWeight -= modifiedFish.weight;
-            if (groupId) {
-                await updateGroupStats(groupId, userId, userName, modifiedFish.weight, false, null);
-            }
-            break;
+      if (rareCheckFish.isRare) {
+          // It's a rare fish! No items, just catch it.
+          modifiedFish = rareCheckFish;
+      } else {
+          // Not rare. Check for random items first.
+          // Only check for items on the first catch of a multi-catch (or always? Original logic was i===0)
+          if (i === 0) {
+              randomItem = checkRandomItem(globalFactors);
+              
+              if (randomItem) {
+                  const itemResult = await applyItemEffect(userData, randomItem);
+                  userData = itemResult.userData;
+                  effectMessage += itemResult.effectMessage;
+                  
+                  if (randomItem.type === 'trash') {
+                      userData.totalTrashCaught = (userData.totalTrashCaught ?? 0) + 1;
+                      isTrash = true;
+                      // Don't catch any fish this iteration
+                  } else if (randomItem.effect === 'lose_recent_fish') {
+                      // This effect steals the "recent" fish.
+                      // If we haven't caught one yet (i===0), it might steal from inventory or do nothing?
+                      // Original logic implied it stole the *current* catch.
+                      // If we are about to catch one, we can just say we caught it and lost it, or catch nothing.
+                      // Let's simulate: Catch fish -> Lost it.
+                      // So we proceed to catch, but mark it to be removed?
+                      // Actually, simpler: Just treat as "No fish caught" but show message.
+                      // "Maldito Gato! Ele roubou o peixe que você acabou de pegar!"
+                      // implies we DID catch something.
+                      // So we should generate the fish, but not add it to inventory (or add and remove).
+                      // Let's proceed to generate fish, but flag it.
+                  }
+              }
           }
-          if(randomItem.effect === 'lose_recent_fish'){
-             // Similar logic to trash, remove the fish we just caught
-             const stolenFish = caughtFishes.pop();
-             const lastFish = userData.fishes.pop();
+          
+          if (!isTrash) {
+              // Generate the normal fish if it wasn't trash
+              // (If we already generated a rare fish, we wouldn't be in this else block)
+              modifiedFish = rareCheckFish; // It was a normal fish
+          }
+      }
+
+      // If we have a fish to process (and it wasn't trash)
+      if (modifiedFish && !isTrash) {
+          const buffResult = await applyBuffs(userData, modifiedFish);
+          modifiedFish = buffResult.fish;
+          
+          if (buffResult.buffMessages?.length > 0) effectMessage += `\n${buffResult.buffMessages.join('\n')}`;
+          
+          // Add to inventory
+          await addFishToInventory(userId, modifiedFish);
+          userData.fishes.push(modifiedFish);
+          userData.totalWeight = (userData.totalWeight || 0) + modifiedFish.weight;
+          userData.inventoryWeight = (userData.inventoryWeight || 0) + modifiedFish.weight;
+          userData.totalCatches = (userData.totalCatches ?? 0) + 1;
+          caughtFishes.push(modifiedFish);
+          
+          if (!userData.biggestFish || modifiedFish.weight > userData.biggestFish.weight) userData.biggestFish = modifiedFish;
+          
+          if (groupId) {
+            await updateGroupStats(groupId, userId, userName, modifiedFish.weight, true, modifiedFish);
+          }
+
+          // Handle "lose_recent_fish" AFTER adding (so we have something to lose)
+          if (randomItem?.effect === 'lose_recent_fish' && i === 0) {
              const fishRow = await database.dbGet(dbName, "SELECT id FROM fishing_inventory WHERE user_id = ? ORDER BY id DESC LIMIT 1", [userId]);
              if(fishRow) await removeFishFromInventory(userId, fishRow.id);
              
+             // Remove from local data
+             userData.fishes.pop();
+             caughtFishes.pop();
              userData.totalCatches--;
              userData.totalWeight -= modifiedFish.weight;
              userData.inventoryWeight -= modifiedFish.weight;
@@ -894,7 +937,6 @@ async function fishCommand(bot, message, args, group) {
                 await updateGroupStats(groupId, userId, userName, modifiedFish.weight, false, null);
              }
           }
-        }
       }
     }
 
@@ -907,34 +949,47 @@ async function fishCommand(bot, message, args, group) {
     userData.totalBaitsUsed = (userData.totalBaitsUsed ?? 0) + 1;
     
     // Check inventory limit
-    if(userData.fishes.length > MAX_FISH_PER_USER){
-        // Find smallest fish
-        let smallestIndex = 0;
-        let smallestWeight = userData.fishes[0].weight;
+    while (userData.fishes.length > MAX_FISH_PER_USER) {
+        // Find smallest fish, prioritizing OLD fishes (not just caught)
+        let smallestIndex = -1;
+        let smallestWeight = Number.MAX_VALUE;
         
-        for(let i=1; i<userData.fishes.length; i++){
-            if(userData.fishes[i].weight < smallestWeight){
+        // First pass: try to find smallest among OLD fishes
+        for (let i = 0; i < userData.fishes.length; i++) {
+            if (caughtFishes.includes(userData.fishes[i])) continue; // Skip newly caught
+            
+            if (userData.fishes[i].weight < smallestWeight) {
                 smallestWeight = userData.fishes[i].weight;
                 smallestIndex = i;
             }
         }
         
+        // Second pass: if we didn't find any old fish (unlikely, unless we caught > MAX), check all
+        if (smallestIndex === -1) {
+            for (let i = 0; i < userData.fishes.length; i++) {
+                if (userData.fishes[i].weight < smallestWeight) {
+                    smallestWeight = userData.fishes[i].weight;
+                    smallestIndex = i;
+                }
+            }
+        }
+        
         const removed = userData.fishes[smallestIndex];
-        // Ensure we have dbId. Reload if necessary or use what we have.
-        // getUserData populates dbId. New fishes might not have it in local array unless we reload.
-        // Quick fix: Remove by timestamp/name fallback or reload.
-        // Reloading is safest.
-        if(!removed.dbId){
-             // Try to find it in DB.
+        
+        if (!removed.dbId) {
              const fishRow = await database.dbGet(dbName, "SELECT id FROM fishing_inventory WHERE user_id = ? AND weight = ? AND name = ? LIMIT 1", [userId, removed.weight, removed.name]);
-             if(fishRow) removed.dbId = fishRow.id;
+             if (fishRow) removed.dbId = fishRow.id;
         }
 
-        if(removed.dbId) {
+        if (removed.dbId) {
             await removeFishFromInventory(userId, removed.dbId);
             userData.fishes.splice(smallestIndex, 1);
             userData.inventoryWeight -= removed.weight;
-            effectMessage += `\n\n⚠️ Inventário cheio! O peixe *${removed.name}* (${removed.weight}kg) foi solto.`;
+            effectMessage += `\n\n⚠️ Inventário cheio! O peixe *${removed.name}* (${removed.weight.toFixed(2)}kg) foi solto.`;
+        } else {
+            // Safety fallback if DB sync failed, just remove from memory array to avoid infinite loop
+            userData.fishes.splice(smallestIndex, 1);
+            userData.inventoryWeight -= removed.weight;
         }
     }
 
@@ -1474,6 +1529,44 @@ async function showBaitsCommand(bot, message, args, group) {
   }
 }
 
+async function globalFactorsCommand(bot, message, args, group) {
+    if (!args || args.length === 0) {
+        // List factors
+        const factors = await getGlobalFactors();
+        let msg = "🌍 *Fatores Globais de Pesca* 🌍\n\n";
+        for (const [key, val] of Object.entries(factors)) {
+            msg += `• *${key}*: ${val}x\n`;
+        }
+        msg += "\nPara alterar: `!pesca-global <chave> <valor>`";
+        return new ReturnMessage({ chatId: message.group ?? message.author, content: msg });
+    }
+
+    // Edit factor (Admin only)
+    if (!await adminUtils.isSuperAdmin(message.author)) { 
+         return new ReturnMessage({ chatId: message.group ?? message.author, content: "❌ Apenas Super Admins podem alterar fatores globais." });
+    }
+    
+    const key = args[0];
+    const value = parseFloat(args[1]);
+    
+    if (isNaN(value)) {
+         return new ReturnMessage({ chatId: message.group ?? message.author, content: "❌ Valor inválido." });
+    }
+    
+    const validKeys = Object.keys(DEFAULT_GLOBAL_FACTORS);
+    if (!validKeys.includes(key)) {
+         return new ReturnMessage({ chatId: message.group ?? message.author, content: `❌ Chave inválida. Chaves válidas: ${validKeys.join(", ")}` });
+    }
+    
+    const customVariables = await database.getCustomVariables();
+    if (!customVariables.fishing_global_factors) customVariables.fishing_global_factors = {};
+    
+    customVariables.fishing_global_factors[key] = value;
+    await database.saveCustomVariables(customVariables);
+    
+    return new ReturnMessage({ chatId: message.group ?? message.author, content: `✅ Fator global *${key}* atualizado para *${value}x*.` });
+}
+
 /**  
  * Reseta os dados de pesca para o grupo atual  
  */  
@@ -1509,13 +1602,14 @@ const commands = [
   new Command({name: 'pesca', hidden: true, description: 'Pesque um peixe', category: "jogos", cooldown: 0, reactions: { before: "🎣", after: "🐟", error: "❌" }, method: fishCommand }),
   new Command({name: 'meus-pescados', description: 'Seus peixes', category: "jogos", cooldown: 5, reactions: { after: "🐠", error: "❌" }, method: myFishCommand }),
   new Command({name: 'pesca-ranking',description: 'Mostra o ranking de pescaria do grupo atual',category: "jogos",group: "pescrank",cooldown: 5,reactions: {after: "🏆",error: "❌"},method: fishingRankingCommand}),
-  new Command({name: 'pescados',hidden: true, description: 'Mostra o ranking de pescaria do grupo atual',category: "jogos",group: "pescrank",cooldown: 5,reactions: {after: "🐋",error: "❌"},method: fishingRankingCommand}),
+  new Command({name: 'pescados', hidden: true, description: 'Mostra o ranking de pescaria do grupo atual',category: "jogos",group: "pescrank",cooldown: 5,reactions: {after: "🐋",error: "❌"},method: fishingRankingCommand}),
   new Command({name: 'pesca-info',  description: 'Informações do jogo',  category: "jogos",  adminOnly: true,  cooldown: 60,  reactions: {  after: "📕",  error: "❌"  },  method: fishingInfoCommand  }),
   new Command({name: 'pesca-reset',  description: 'Reseta os dados de pesca para o grupo atual',  category: "jogos",  adminOnly: true,  cooldown: 10,  reactions: {  before: process.env.LOADING_EMOJI ?? "🌀",  after: "✅",  error: "❌"  },  method: resetFishingDataCommand  }),
   new Command({name: 'pesca-lendas',description: 'Mostra os peixes lendários que foram pescados',category: "jogos",cooldown: 10,reactions: {after: "🐉",error: "❌"},method: legendaryFishCommand}),
   new Command({name: 'pesca-peixes',description: 'Lista todos os tipos de peixes disponíveis',category: "jogos",cooldown: 5,reactions: {after: "📋",error: "❌"},method: listFishTypesCommand}),
   new Command({name: 'pesca-iscas',description: 'Mostra suas iscas de pesca',category: "jogos",cooldown: 5,reactions: {after: "🐛",error: "❌"},method: showBaitsCommand}),
-  new Command({name: 'psc-addBaits', description: 'Add Iscas', category: "jogos", adminOnly: true, hidden: true, cooldown: 0, reactions: { after: "➕", error: "❌" }, method: addBaitsCmd })
+  new Command({name: 'psc-addBaits', description: 'Add Iscas', category: "jogos", adminOnly: true, hidden: true, cooldown: 0, reactions: { after: "➕", error: "❌" }, method: addBaitsCmd }),
+  new Command({name: 'pesca-global', description: 'Fatores globais de pesca', category: "jogos", hidden: true,  adminOnly: true, cooldown: 5, reactions: { after: "🌍", error: "❌" }, method: globalFactorsCommand })
 ];
 
 // No longer need saveSync for SQLite (it's atomic) but keeping stub if external calls exist
