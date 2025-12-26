@@ -120,10 +120,10 @@ class Management {
         method: 'filterNSFW',
         description: 'Detecta e Apaga mensagens NSFW'
       },
-      'apelido': {
-        method: 'setUserNickname',
-        description: 'Define apelido de *outro membro* no grupo'
-      },
+      // 'apelido': {
+      //   method: 'setUserNickname',
+      //   description: 'Define apelido de *outro membro* no grupo'
+      // },
       'ignorar': {
         method: 'ignoreUser',
         description: 'O bot irá ignorar as mensagens desta pessoa'
@@ -174,7 +174,7 @@ class Management {
       },
       'setApelido': { 
         method: 'setUserNicknameAdmin',
-        description: 'Define um apelido para um usuário específico' 
+        description: 'Define apelido de *outro membro* no grupo (@marcar_pessoa)'
       },
       'twitch-canal': {
         method: 'toggleTwitchChannel',
