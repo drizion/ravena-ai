@@ -1057,12 +1057,12 @@ async function fishCommand(bot, message, args, group) {
       const notificacaoPeixeRaro = new ReturnMessage({
         content: rareFishImage,
         options: {
-          caption: `🏆 ${userName} capturou um(a) *${caughtFishes[0].name}* LENDÁRIO(A) de *${caughtFishes[0].weight.toFixed(2)} kg* no grupo "${groupName}"!`
+          caption: `🏆 *${userName}* capturou um(a) _*${caughtFishes[0].name}* LENDÁRIO(A)_ pesando *${caughtFishes[0].weight.toFixed(2)} kg* no grupo "${groupName}"!\n\n> ${bot.id}`
         }
       });
 
-      if (bot.grupoInteracao) {
-        notificacaoPeixeRaro.chatId = bot.grupoInteracao;
+      if (bot.grupoLogs) {
+        notificacaoPeixeRaro.chatId = bot.grupoLogs;
         const msgsEnviadas = await bot.sendReturnMessages(notificacaoPeixeRaro);
         if(msgsEnviadas[0] && msgsEnviadas[0].pin) msgsEnviadas[0].pin(260000);
       }
@@ -1072,6 +1072,14 @@ async function fishCommand(bot, message, args, group) {
         const msgsEnviadas = await bot.sendReturnMessages(notificacaoPeixeRaro);
         if(msgsEnviadas[0] && msgsEnviadas[0].pin) msgsEnviadas[0].pin(260000);
       }
+
+      if (bot.grupoAnuncios) {
+        notificacaoPeixeRaro.chatId = bot.grupoAnuncios;
+        const msgsEnviadas = await bot.sendReturnMessages(notificacaoPeixeRaro);
+        if(msgsEnviadas[0] && msgsEnviadas[0].pin) msgsEnviadas[0].pin(260000);
+      }
+
+
 
       return new ReturnMessage({
         chatId, content: rareFishImage,
