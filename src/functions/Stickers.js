@@ -378,7 +378,11 @@ async function makeSquareMedia(mediaBuffer, mimeType, cropType = 'center') {
             '-y',
             '-an',
             '-c:v libx264',
-            '-preset medium',
+            '-preset veryfast',
+            '-crf 32',
+            '-r 15',
+            '-t 7',
+            '-pix_fmt yuv420p'
           ])
           .complexFilter(filterCommand, outputLabel)
           .output(outputPath)
