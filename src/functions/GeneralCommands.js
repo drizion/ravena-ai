@@ -63,6 +63,27 @@ async function avisosCommand(bot, message, args, group){
   });
 }
 
+async function retrospectivaCommand(bot, message, args, group) {
+  const chatId = message.group ?? message.author;
+
+  try {
+    const retroPath = path.join(database.databasePath, 'textos', 'end-year.txt');
+    const retroContent = await fs.readFile(retroPath, 'utf8');
+
+    return new ReturnMessage({
+      chatId: chatId,
+      content: retroContent.trim()
+    });
+
+  } catch (error) {
+    logger.warn('Erro ao ler end-year.txt:', error);
+    return new ReturnMessage({
+      chatId: chatId,
+      content: `Retrospectiva indisponível ainda!`
+    });
+  }
+}
+
 async function ravPrivadaCommand(bot, message, args, group) {
   const chatId = message.group ?? message.author;
 
@@ -515,6 +536,17 @@ const commands = [
     },
     method: ravPrivadaCommand
   }),
+  new Command({
+    name: 'retrospectiva',
+    description: 'Retrospectiva 2025! 🥳',
+    category: "geral",
+    hidden: true,
+    reactions: {
+      before: "🍾"
+    },
+    method: retrospectivaCommand
+  }),
+
   new Command({
     name: 'comunitaria',
     description: 'Info Ravena Comunitaria',
