@@ -136,6 +136,7 @@ async function main() {
           grupoLogs: rBot.grupoLogs ?? process.env.GRUPO_LOGS,
           grupoInvites: rBot.grupoInvites ?? process.env.GRUPO_INVITES,
           grupoAvisos: rBot.grupoAvisos ?? process.env.GRUPO_AVISOS,
+          grupoAnuncios: rBot.grupoAnuncios ?? process.env.GRUPO_ANUNCIOS,
           grupoInteracao: rBot.grupoInteracao ?? process.env.GRUPO_INTERACAO,
           linkGrupao: rBot.linkGrupao ?? process.env.LINK_GRUPO_INTERACAO,
           linkAvisos: rBot.linkAvisos ?? process.env.LINK_GRUPO_AVISOS,
@@ -187,6 +188,7 @@ async function main() {
           grupoLogs: rBot.grupoLogs ?? process.env.GRUPO_LOGS,
           grupoInvites: rBot.grupoInvites ?? process.env.GRUPO_INVITES,
           grupoAvisos: rBot.grupoAvisos ?? process.env.GRUPO_AVISOS,
+          grupoAnuncios: rBot.grupoAnuncios ?? process.env.GRUPO_ANUNCIOS,
           grupoInteracao: rBot.grupoInteracao ?? process.env.GRUPO_INTERACAO,
           linkGrupao: rBot.linkGrupao ?? process.env.LINK_GRUPO_INTERACAO,
           linkAvisos: rBot.linkAvisos ?? process.env.LINK_GRUPO_AVISOS,
@@ -259,6 +261,7 @@ async function main() {
           grupoLogs: rBot.grupoLogs ?? process.env.GRUPO_LOGS,
           grupoInvites: rBot.grupoInvites ?? process.env.GRUPO_INVITES,
           grupoAvisos: rBot.grupoAvisos ?? process.env.GRUPO_AVISOS,
+          grupoAnuncios: rBot.grupoAnuncios ?? process.env.GRUPO_ANUNCIOS,
           grupoInteracao: rBot.grupoInteracao ?? process.env.GRUPO_INTERACAO,
           linkGrupao: rBot.linkGrupao ?? process.env.LINK_GRUPO_INTERACAO,
           linkAvisos: rBot.linkAvisos ?? process.env.LINK_GRUPO_AVISOS
