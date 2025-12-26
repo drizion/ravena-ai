@@ -608,7 +608,7 @@ class EventHandler {
    */
   async processGroupJoin(bot, data) {
     const groupId = data.group.id;
-    const isBotJoining = data.isBotJoining || data?.user?.id?.startsWith(bot.phoneNumber);
+    const isBotJoining = data?.isBotJoining || data?.group?.isBotJoining || data?.user?.id?.startsWith(bot.phoneNumber);
     if (bot.removeSkipGroup) {
         await bot.removeSkipGroup(groupId);
     }
@@ -616,9 +616,10 @@ class EventHandler {
 
     if(!isBotJoining){
       // Se não for o bot sendo adicionado, coloca pessoa numa lista pra ignorar o join e evitar spam no grupo      
-      if(this.recentlyJoined.includes(data.user.id)) return;
+      //if(this.recentlyJoined.includes(data.user.id)) return;
       this.recentlyJoined.push(data.user.id);
     }
+
     setTimeout((rtlyL,id) => {
       rtlyL = rtlyL.filter(rt => rt !== id);
     }, 60000, this.recentlyJoined, data.user.id);
@@ -797,6 +798,7 @@ class EventHandler {
       } else {
         // Caso 2: Outra pessoa entrou no grupo
         // Gera e envia mensagem de boas-vindas para o novo membro
+        this.logger.debug(`[groupJoin] Outra pessoa entrou, greetings?`, {greetings: group.greetings});
         if (group.greetings) {
           this.generateGreetingMessage(bot, group, data.user, chat).then(welcome => {
             if (welcome) {
@@ -822,7 +824,7 @@ class EventHandler {
   async processGroupLeave(bot, data) {
     //this.logger.info(`[processGroupLeave] `, { data });
 
-    if(this.recentlyLeft.includes(data.user.id)) return;
+    //if(this.recentlyLeft.includes(data.user.id)) return;
     this.recentlyLeft.push(data.user.id);
     setTimeout((rtlyL,id) => {
       rtlyL = rtlyL.filter(rt => rt !== id);
@@ -869,6 +871,7 @@ class EventHandler {
         }
       }
 
+      this.logger.debug(`[groupLeave] Outra pessoa sai, farewell? `, {farewells: group?.farewells});
       if (group && group.farewells && !isBotLeaving) {
         const farewell = await this.processFarewellMessage(group, data.user, bot);
         if (farewell) {

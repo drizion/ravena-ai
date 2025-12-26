@@ -92,7 +92,7 @@ class InviteSystem {
       const preConvite = await fs.readFile(invitesPrePath, 'utf8');
 
       // Pergunta o motivo para adicionar o bot
-      await this.bot.sendMessage(message.author, `${preConvite}\n\n${this.rndString()}`);
+      await this.bot.sendMessage(message.author, `${preConvite}\n\`${this.rndString()}\``);
       
       // Define um timeout para tratar o convite mesmo se o usuário não responder
       const timeoutId = setTimeout(() => {

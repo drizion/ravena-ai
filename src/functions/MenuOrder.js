@@ -29,6 +29,7 @@ const CATEGORY_EMOJIS = {
  * Os comandos não listados aparecem depois na ordem original
  */
 const COMMAND_ORDER = [
+	"avisos",
 	"status",
 	"cmd",
 	"cmd-grupo",
@@ -37,7 +38,6 @@ const COMMAND_ORDER = [
 	"doar",
 	"convite",
 	"grupao",
-	"avisos",
 	"codigo",
 	"atencao",
 	"ignorar",
@@ -134,7 +134,7 @@ const COMMAND_ORDER = [
 	"variaveis",
 	"setBemvindo",
 	"setDespedida",
-	"apelido",
+	"setApelido",
 	"ignorar",
 	"mute",
 	"pausar",
