@@ -194,7 +194,9 @@ class LoadReport {
         totalMessages: 0,
         totalPrivate: 0,
         totalGroup: 0,
-        byGroup: {}
+        byGroup: {},
+        firstReportTimestamp: null,
+        lastReportTimestamp: null
     };
 
     if(!reports || !Array.isArray(reports)) return stats;
@@ -208,6 +210,13 @@ class LoadReport {
         // Verifica se o relatório está dentro do intervalo
         // Consideramos se o fim do período do relatório está dentro do range solicitado
         if (report.period.end < startDate || report.period.start > endDate) return;
+
+        if (stats.firstReportTimestamp === null || report.period.start < stats.firstReportTimestamp) {
+            stats.firstReportTimestamp = report.period.start;
+        }
+        if (stats.lastReportTimestamp === null || report.period.end > stats.lastReportTimestamp) {
+            stats.lastReportTimestamp = report.period.end;
+        }
 
         stats.totalMessages += (report.messages.totalReceived + report.messages.totalSent);
         stats.totalPrivate += (report.messages.receivedPrivate + report.messages.sentPrivate);
@@ -260,9 +269,9 @@ class LoadReport {
       reports.push(report);
 
       // Limita o tamanho da coleção para evitar arquivos muito grandes
-      // Mantém apenas os últimos 90 dias de relatórios (aproximadamente)
-      const ninetyDaysAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
-      reports = reports.filter(r => r.timestamp && r.timestamp > ninetyDaysAgo);
+      // Mantém apenas os últimos 370 dias de relatórios (aproximadamente 1 ano)
+      const retentionPeriod = Date.now() - (370 * 24 * 60 * 60 * 1000);
+      reports = reports.filter(r => r.timestamp && r.timestamp > retentionPeriod);
 
       // Salva no banco de dados
       await this.database.saveLoadReports(reports);

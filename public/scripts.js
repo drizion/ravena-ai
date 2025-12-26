@@ -212,8 +212,10 @@ function renderBots(data) {
     }
     
     // Atualiza os filtros de bots para os gráficos
-    updateBotFilters(data.bots);
-    
+    // updateBotFilters(data.bots); // UI Hidden
+    if (selectedBots.length === 0) {
+        selectedBots = data.bots.map(bot => bot.id);
+    }
     // Calcula o total de mensagens/hora de todos os bots
     let totalMsgsHr = 0;
     data.bots.forEach(bot => {

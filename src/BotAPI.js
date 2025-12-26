@@ -1111,7 +1111,23 @@ class BotAPI {
             endDate: now,
             botId: bot.id
           });
-          return { key, total: stats.totalMessages };
+
+          let finalTotal = stats.totalMessages;
+
+          // Extrapolação para dados anuais se tivermos menos de 365 dias de dados
+          if (key === 'year' && stats.totalMessages > 0 && stats.firstReportTimestamp) {
+              const daysAvailable = (now - stats.firstReportTimestamp) / (24 * 60 * 60 * 1000);
+              
+              if (daysAvailable > 1 && daysAvailable < 365) {
+                  const avgPerDay = stats.totalMessages / daysAvailable;
+                  const missingDays = 365 - daysAvailable;
+                  const extrapolated = stats.totalMessages + (avgPerDay * missingDays * 1.0);
+                  finalTotal = Math.round(extrapolated);
+                  // this.logger.info(`[Stats] Extrapolated year for ${bot.id}: ${stats.totalMessages} in ${daysAvailable.toFixed(1)}d -> ${finalTotal}`);
+              }
+          }
+
+          return { key, total: finalTotal };
         });
 
         const results = await Promise.all(periodPromises);
@@ -1164,9 +1180,9 @@ class BotAPI {
       this.logger.info('Atualizando cache de dados analíticos...');
 
       // Obtém todos os relatórios de carga
-      // Pegamos dados dos últimos 365 dias para análise anual
+      // Pegamos dados dos últimos 370 dias para análise anual
       const yearStart = new Date();
-      yearStart.setDate(yearStart.getDate() - 365);
+      yearStart.setDate(yearStart.getDate() - 370);
 
       const reports = await this.database.getLoadReports(yearStart.getTime());
 
@@ -1432,26 +1448,102 @@ class BotAPI {
       // Função auxiliar para processar dados por período
       const processData = (periodKey) => {
         const periodData = this.analyticsCache[periodKey];
-        const seriesData = [];
+        
+        let combinedValues = null;
+        let dates = null;
 
-        // Para cada bot selecionado, adiciona uma série de dados
+        // Para cada bot selecionado, soma os dados
         selectedBots.forEach(botId => {
-          if (periodData[botId]) {
-            seriesData.push({
-              name: botId,
-              data: periodData[botId].values
-            });
+          if (periodData[botId] && periodData[botId].values) {
+             const values = periodData[botId].values;
+             
+             // Pega as datas do primeiro bot que tiver (são normalizadas no updateAnalyticsCache)
+             if (periodKey === 'yearly' && !dates && periodData[botId].dates) {
+                 dates = periodData[botId].dates;
+             }
+
+             if (!combinedValues) {
+                 combinedValues = [...values];
+             } else {
+                 for(let i=0; i<combinedValues.length; i++) {
+                     combinedValues[i] += values[i] || 0;
+                 }
+             }
           }
         });
+
+        // Nomes das séries baseados no periodo
+        let seriesName = 'Total';
+        switch(periodKey) {
+            case 'daily': seriesName = 'Média Msgs/Hora'; break;
+            case 'weekly': seriesName = 'Média Msgs/Dia'; break;
+            case 'monthly': seriesName = 'Msgs no mês'; break;
+            case 'yearly': seriesName = 'Msgs no ano'; break;
+        }
+
+        // Processamento específico para o gráfico anual (current year + aggregation)
+        if (periodKey === 'yearly' && dates && combinedValues) {
+            const currentYear = new Date().getFullYear();
+            const filteredDates = [];
+            const filteredValues = [];
+            
+            // Filtra apenas o ano atual
+            for(let i=0; i<dates.length; i++) {
+                if (dates[i].startsWith(currentYear)) {
+                    filteredDates.push(dates[i]);
+                    filteredValues.push(combinedValues[i]);
+                }
+            }
+
+            // Agregação (Agrupa a cada X dias para reduzir pontos)
+            // Se tivermos muitos pontos (ex: > 60), agrupa. 
+            // Como é ano corrente, pode ter até 365. Vamos tentar manter uns ~24-30 pontos.
+            // 365 / 30 ~= 12 dias. Vamos usar blocos de 10 dias, ou quinzenal.
+            // O usuário pediu algo como '01/01 - 05/02'
+            
+            const aggregatedDates = [];
+            const aggregatedValues = [];
+            const chunkSize = 7; // Agrupa por semana
+
+            for (let i = 0; i < filteredDates.length; i += chunkSize) {
+                const chunkDates = filteredDates.slice(i, i + chunkSize);
+                const chunkValues = filteredValues.slice(i, i + chunkSize);
+
+                // Soma os valores do chunk
+                const sum = chunkValues.reduce((a, b) => a + b, 0);
+                
+                // Cria label 'DD/MM - DD/MM'
+                const formatDate = (dateStr) => {
+                    const parts = dateStr.split('-'); // YYYY-MM-DD
+                    return `${parts[2]}/${parts[1]}`;
+                };
+                
+                const startLabel = formatDate(chunkDates[0]);
+                const endLabel = formatDate(chunkDates[chunkDates.length - 1]);
+                
+                // Se for apenas 1 dia no chunk (ex: ultimo)
+                const label = (startLabel === endLabel) ? startLabel : `${startLabel} - ${endLabel}`;
+
+                aggregatedDates.push(label);
+                aggregatedValues.push(sum);
+            }
+
+            dates = aggregatedDates;
+            combinedValues = aggregatedValues;
+        }
+
+        const seriesData = [{
+            name: seriesName,
+            data: combinedValues || []
+        }];
 
         // Retorna os dados formatados para o período
         return {
           hours: periodKey === 'daily' ? Array.from({ length: 24 }, (_, i) => i) : null,
           days: periodKey === 'weekly' ? ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'] :
             periodKey === 'monthly' ? Array.from({ length: 31 }, (_, i) => i + 1) : null,
-          dates: periodKey === 'yearly' ? (periodData.dates ?? []) : null,
-          values: periodKey === 'daily' ?
-            (selectedBots.length === 1 ? periodData[selectedBots[0]]?.values ?? [] : []) : null,
+          dates: periodKey === 'yearly' ? (dates ?? []) : null,
+          values: null, 
           series: seriesData
         };
       };
@@ -1511,6 +1603,14 @@ class BotAPI {
       }
 
       // Notifica o grupo de avisos
+      if (bot.grupoAnuncios && !ignorar) {
+        try {
+          const sentMsg = await bot.sendMessage(bot.grupoAnuncios, donationMsg, { marcarTodos: true });
+        } catch(e){
+          this.logger.error(`Erro ao enviar notificação de doação para grupoAnuncios (${bot.grupoAnuncios})`)
+        }
+      }
+      
       if (bot.grupoAvisos && !ignorar) {
         try {
           const sentMsg = await bot.sendMessage(bot.grupoAvisos, donationMsg, { marcarTodos: true });
