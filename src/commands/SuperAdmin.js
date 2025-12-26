@@ -25,6 +25,7 @@ class SuperAdmin {
 
     // Mapeamento de comando para método
     this.commandMap = {
+      'retrospectiva': {'method': 'endYearMsg', 'description': 'Retrospectiva'},
       'testeMsg': {'method': 'testeMsg', 'description': 'Testar Retorno msg'},
       'sendMsg': { 'method': 'sendMsg', 'description': 'Envia mensagem para chatId' },
       'joinGrupo': { 'method': 'joinGroup', 'description': 'Entra em um grupo via link de convite' },
@@ -199,6 +200,42 @@ ${listGroups}`;
 
     } catch (error) {
       this.logger.error('Erro no comando botStats:', error);
+
+      return new ReturnMessage({
+        chatId: message.group ?? message.author,
+        content: '❌ Erro ao processar comando.'
+      });
+    }
+  }
+
+
+  async endYearMsg(bot, message, args) {
+    const chatId = message.group ?? message.author;
+    try {
+      if (!this.isSuperAdmin(message.author)) return;
+
+      const filePath = path.join(this.dataPath, 'textos', 'end-year.txt');
+      const fileContent = await fs.readFile(filePath, 'utf8');
+
+      bot.sendReturnMessages(new ReturnMessage({
+        chatId: chatId,
+        content: fileContent
+      }));
+
+      bot.sendReturnMessages(new ReturnMessage({
+        chatId: bot.grupoAvisos,
+        content: fileContent
+      }));
+
+      bot.sendReturnMessages(new ReturnMessage({
+        chatId: bot.grupoAnuncios,
+        content: fileContent
+      }));
+
+
+
+    } catch (error) {
+      this.logger.error('Erro no comando endYearMsg:', error);
 
       return new ReturnMessage({
         chatId: message.group ?? message.author,
@@ -818,6 +855,7 @@ ${listGroups}`;
       // Adicionar grupos especiais se estiverem definidos
       if (bot.grupoInteracao) specialGroups.push(bot.grupoInteracao);
       if (bot.grupoAvisos) specialGroups.push(bot.grupoAvisos);
+      if (bot.grupoAnuncios) specialGroups.push(bot.grupoAnuncios);
 
       try {
         // Tenta remover o contato de grupos especiais primeiro
@@ -1566,6 +1604,7 @@ ${listGroups}`;
       // Adicionar grupos especiais se estiverem definidos
       if (bot.grupoInteracao) specialGroups.push(bot.grupoInteracao);
       if (bot.grupoAvisos) specialGroups.push(bot.grupoAvisos);
+      if (bot.grupoAnuncios) specialGroups.push(bot.grupoAnuncios);
 
       // Resultados do bloqueio
       const results = [];
@@ -1688,6 +1727,7 @@ ${listGroups}`;
       // Adicionar grupos especiais se estiverem definidos
       if (bot.grupoInteracao) specialGroups.push(bot.grupoInteracao);
       if (bot.grupoAvisos) specialGroups.push(bot.grupoAvisos);
+      if (bot.grupoAnuncios) specialGroups.push(bot.grupoAnuncios);
 
       this.logger.info(`Grupos especiais configurados: ${specialGroups.join(', ')}`);
 
@@ -2194,6 +2234,7 @@ ${listGroups}`;
       // Adicionar grupos especiais se estiverem definidos
       if (bot.grupoInteracao) specialGroups.push(bot.grupoInteracao);
       if (bot.grupoAvisos) specialGroups.push(bot.grupoAvisos);
+      if (bot.grupoAnuncios) specialGroups.push(bot.grupoAnuncios);
 
       this.logger.info(`Grupos especiais configurados: ${specialGroups.join(', ')}`);
 
