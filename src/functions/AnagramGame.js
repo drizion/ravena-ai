@@ -17,15 +17,36 @@ const LLMService = require('../services/LLMService');
 const llmService = new LLMService({apiTimeout: 30000});
 const logger = new Logger('anagrama-game');
 const database = Database.getInstance();
+const dbName = "anagrama";
+
+// --- Configurações do Banco de Dados ---
+database.getSQLiteDb(dbName, `
+CREATE TABLE IF NOT EXISTS anagram_groups (
+  group_id TEXT PRIMARY KEY,
+  record_round INTEGER DEFAULT 0,
+  total_tries INTEGER DEFAULT 0,
+  total_tips_used INTEGER DEFAULT 0,
+  last_updated INTEGER
+);
+CREATE TABLE IF NOT EXISTS anagram_scores (
+  group_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  user_name TEXT,
+  points INTEGER DEFAULT 0,
+  tries INTEGER DEFAULT 0,
+  correct_guesses INTEGER DEFAULT 0,
+  tips_used INTEGER DEFAULT 0,
+  last_updated INTEGER,
+  PRIMARY KEY (group_id, user_id)
+);
+`);
 
 // --- Configurações do Jogo ---
 const GAME_DURATION_SECONDS = 60;
 const HINTS_PER_ROUND = 3;
 const SKIPS_PER_ROUND = 3;
-const DEBOUNCE_SAVE_MS = 5000; // Salva 5s após a última alteração
 
 // --- Caminhos ---
-const ANAGRAMA_DATA_PATH = path.join(database.databasePath, 'anagrama.json');
 const ANAGRAMA_LETTERS_PATH = path.join(database.databasePath, 'anagrama', 'letters');
 const ANAGRAMA_WORDS_PATH = path.join(database.databasePath, 'anagrama', 'words');
 
@@ -35,7 +56,6 @@ const ANAGRAMA_WORDS_PATH = path.join(database.databasePath, 'anagrama', 'words'
  * @type {Object<string, import('./AnagramGame').GameSession>}
  */
 let activeGames = {};
-let anagramaData = { groups: {} }; // Buffer de dados em memória
 
 /**
  * @typedef {Object} GameSession
@@ -47,30 +67,6 @@ let anagramaData = { groups: {} }; // Buffer de dados em memória
  * @property {NodeJS.Timeout} timer
  * @property {boolean[]} revealedLetters
  */
-
-
-// --- Funções de Utilitário ---
-
-/**
- * Cria uma função "debounced", que atrasa a execução de `func` até que `wait` milissegundos
- * tenham se passado desde a última vez que foi invocada.
- * @param {Function} func A função para "debounce".
- * @param {number} wait O número de milissegundos para atrasar.
- * @returns {Function} A nova função "debounced".
- */
-function debounce(func, wait) {
-  let timeout;
-  const debounced = (...args) => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func.apply(this, args), wait);
-  };
-  // Permite forçar o salvamento imediato se necessário (ex: ao desligar)
-  debounced.flush = () => {
-    clearTimeout(timeout);
-    func();
-  };
-  return debounced;
-}
 
 /**
  * Lê palavras de um arquivo de texto.
@@ -93,40 +89,96 @@ function readWordsFromFile(language) {
 
 const WORD_LIST = readWordsFromFile('portuguese');
 
-// --- Gerenciamento de Dados ---
+// --- Gerenciamento de Dados (SQLite) ---
 
-/**
- * Salva os dados do anagrama no arquivo.
- * Esta função é envolvida por um debounce para otimização.
- */
-const saveToFile = async () => {
+async function getGroupData(groupId) {
   try {
-    const tempPath = `${ANAGRAMA_DATA_PATH}.temp`;
-    await fs.writeFile(tempPath, JSON.stringify(anagramaData, null, 2));
-    await fs.rename(tempPath, ANAGRAMA_DATA_PATH);
-    logger.debug('Dados do anagrama salvos no arquivo.');
+    const row = await database.dbGet(dbName, 'SELECT * FROM anagram_groups WHERE group_id = ?', [groupId]);
+    return row || { record_round: 0, total_tries: 0, total_tips_used: 0 };
   } catch (error) {
-    logger.error('Erro ao salvar dados do anagrama:', error);
+    logger.error('Erro ao buscar dados do grupo:', error);
+    return { record_round: 0, total_tries: 0, total_tips_used: 0 };
   }
-};
+}
 
-// Cria a versão debounced da função de salvar.
-const saveAnagramaData = debounce(saveToFile, DEBOUNCE_SAVE_MS);
-
-/**
- * Carrega os dados do anagrama do arquivo JSON para a memória.
- */
-async function loadAnagramaData() {
+async function updateGroupRecord(groupId, round) {
+  const timestamp = Date.now();
   try {
-    const data = await fs.readFile(ANAGRAMA_DATA_PATH, 'utf8');
-    anagramaData = JSON.parse(data);
+    await database.dbRun(dbName, `
+      INSERT INTO anagram_groups (group_id, record_round, last_updated)
+      VALUES (?, ?, ?)
+      ON CONFLICT(group_id) DO UPDATE SET 
+        record_round = MAX(record_round, excluded.record_round),
+        last_updated = excluded.last_updated
+    `, [groupId, round, timestamp]);
   } catch (error) {
-    if (error.code === 'ENOENT') {
-      logger.info('Arquivo de dados não encontrado, criando um novo.');
-      await saveAnagramaData(); // Salva a estrutura padrão inicial
-    } else {
-      logger.error('Erro ao carregar dados do anagrama:', error);
-    }
+    logger.error('Erro ao atualizar recorde do grupo:', error);
+  }
+}
+
+async function incrementGroupStats(groupId, stat, amount = 1) {
+  const timestamp = Date.now();
+  try {
+    // stat deve ser 'total_tries' ou 'total_tips_used'
+    if (!['total_tries', 'total_tips_used'].includes(stat)) return;
+    
+    await database.dbRun(dbName, `
+      INSERT INTO anagram_groups (group_id, ${stat}, last_updated)
+      VALUES (?, ?, ?)
+      ON CONFLICT(group_id) DO UPDATE SET 
+        ${stat} = ${stat} + ?,
+        last_updated = ?
+    `, [groupId, amount, timestamp, amount, timestamp]);
+  } catch (error) {
+    logger.error(`Erro ao incrementar estatística do grupo ${stat}:`, error);
+  }
+}
+
+async function updateUserStats(groupId, userId, userName, updates) {
+  const timestamp = Date.now();
+  try {
+    // updates: { points: 1, tries: 1, correct_guesses: 1, tips_used: 1 }
+    // Constroi a query dinamicamente baseada nos campos fornecidos
+    const fields = ['points', 'tries', 'correct_guesses', 'tips_used'];
+    const updateParts = [];
+    const values = []; // Initialized empty for UPDATE params
+    
+    // Preparação para o INSERT
+    const insertFields = ['group_id', 'user_id', 'user_name', 'last_updated'];
+    const insertPlaceholders = ['?', '?', '?', '?'];
+    const insertValues = [groupId, userId, userName, timestamp];
+
+    fields.forEach(field => {
+      if (updates[field]) {
+        insertFields.push(field);
+        insertPlaceholders.push('?');
+        insertValues.push(updates[field]);
+        
+        updateParts.push(`${field} = ${field} + ?`);
+        values.push(updates[field]);
+      }
+    });
+
+    // Adiciona user_name e last_updated no update
+    updateParts.push(`user_name = ?`);
+    values.push(userName);
+    updateParts.push(`last_updated = ?`);
+    values.push(timestamp);
+
+    if (updateParts.length === 2) return; // Só user_name e last_updated, nada a incrementar
+
+    const sql = `
+      INSERT INTO anagram_scores (${insertFields.join(', ')})
+      VALUES (${insertPlaceholders.join(', ')})
+      ON CONFLICT(group_id, user_id) DO UPDATE SET
+        ${updateParts.join(', ')}
+    `;
+
+    // Concatena os valores para o INSERT com os valores para o UPDATE
+    await database.dbRun(dbName, sql, [...insertValues, ...values]);
+
+  } catch (error) {
+    logger.error('Erro ao atualizar estatísticas do usuário:', error);
   }
 }
 
@@ -145,7 +197,7 @@ function scrambleWord(word) {
       [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     scrambled = arr.join('');
-  } while (scrambled === word); // Garante que a palavra embaralhada seja diferente da original
+  } while (scrambled === word && word.length > 1); 
   return scrambled;
 }
 
@@ -171,7 +223,6 @@ async function generateImageText(word, level, record) {
   for (const char of word) {
     let letter = char.toLowerCase();
     if (letter === " ") letter = "space";
-    // Usar path.join é uma boa prática para compatibilidade
     const imagePath = path.join(ANAGRAMA_LETTERS_PATH, `${letter}.png`);
 
     if (fsSync.existsSync(imagePath)) {
@@ -183,7 +234,8 @@ async function generateImageText(word, level, record) {
 
   // Configurações de texto para Nível e Recorde
   const fontSize = 40;
-  context.font = `${fontSize}px "Arial"`;
+  // Correção para negrito e fonte
+  context.font = `bold ${fontSize}px "Arial"`;
   context.textAlign = "center";
   context.lineWidth = 5;
   context.strokeStyle = 'black';
@@ -215,21 +267,32 @@ async function endGame(bot, groupId, reason) {
   clearTimeout(game.timer);
   delete activeGames[groupId];
 
-  const groupData = anagramaData.groups[groupId] ?? { recordRound: 0, scores: {} };
+  const groupData = await getGroupData(groupId);
   let messageContent = '';
 
   if (reason === 'time_up') {
-    const newRecord = game.round > (groupData.recordRound ?? 0);
+    const newRecord = game.round > groupData.record_round;
     if (newRecord) {
-      groupData.recordRound = game.round;
-      anagramaData.groups[groupId] = groupData;
-      saveAnagramaData();
+      await updateGroupRecord(groupId, game.round);
     }
 
-    const sortedPlayers = Object.values(groupData.scores ?? {}).sort((a, b) => b.points - a.points);
+    // Busca ranking da sessão (ou geral? O original mostrava ranking dos que pontuaram)
+    // Como agora é DB, vamos buscar os top pontuadores do grupo geral, 
+    // ou idealmente, apenas os que jogaram agora. Mas o original mantinha "sessionRanking"
+    // baseado em activeGames? Não, era baseado em `anagramaData.groups[groupId].scores`.
+    // O original acumulava scores. Então vamos mostrar o ranking geral atualizado.
+    
+    const sortedPlayers = await database.dbAll(dbName, `
+      SELECT user_name as name, points 
+      FROM anagram_scores 
+      WHERE group_id = ? 
+      ORDER BY points DESC 
+      LIMIT 10
+    `, [groupId]);
+
     const sessionRanking = sortedPlayers.length > 0
-      ? generateRankingText(sortedPlayers, `\n🏆 *Ranking da Partida*\n\n`)
-      : "Ninguém pontuou nessa partida.";
+      ? generateRankingText(sortedPlayers, `\n🏆 *Ranking do Grupo*\n\n`)
+      : "Ninguém pontuou ainda.";
 
     messageContent = `⏰ O tempo acabou! A palavra era *"${game.word}"*.\n\nVocês chegaram à *rodada ${game.round}*!\n${sessionRanking}`;
     if (newRecord) {
@@ -255,8 +318,14 @@ async function startNewRound(bot, message, group, isFirstRound = true) {
   clearTimeout(game.timer);
 
   const word = WORD_LIST[Math.floor(Math.random() * WORD_LIST.length)];
-  console.log(word)
+  console.log(`[Anagrama] Grupo: ${groupId}, Palavra: ${word}`);
   const scrambledWord = scrambleWord(word);
+
+  // Calcula dicas permitidas: Base + 1 a cada 3 rodadas completas (iniciando do zero ou 1?)
+  // "Every 3 rounds, give the user 1 additional Tip"
+  // Interpretado como: Limite aumenta em 1 a cada 3 níveis alcançados.
+  const extraHints = Math.floor((game.round - 1) / 3);
+  const maxHints = HINTS_PER_ROUND + extraHints;
 
   // Atualiza o estado da sessão
   Object.assign(game, {
@@ -265,13 +334,25 @@ async function startNewRound(bot, message, group, isFirstRound = true) {
     revealedLetters: new Array(word.length).fill(false),
     timer: setTimeout(() => endGame(bot, groupId, 'time_up'), GAME_DURATION_SECONDS * 1000),
     roundEnded: false,
+    maxHints: maxHints // Armazena o limite atual
   });
+  
+  // Reseta hintsUsed e skipsUsed se for rodada nova?
+  // O original não resetava? 
+  // O original em startNewRound:
+  // if (isFirstRound) ... hintsLeft = HINTS_PER_ROUND - game.hintsUsed
+  // game.hintsUsed era inicializado em startGameCommand com 0.
+  // E NÃO ERA RESETADO em startNewRound no código original!
+  // Isso significa que as dicas eram por JOGO?
+  // "hintsLeft = HINTS_PER_ROUND - game.hintsUsed"
+  // Se não resetar, é por jogo inteiro.
+  // Vou manter a lógica original de ser por jogo, mas com o limite aumentando.
 
-  const groupData = anagramaData.groups[groupId];
+  const groupData = await getGroupData(groupId);
   const buffer = await generateImageText(
     scrambledWord,
     `⭐ Rodada ${game.round}`,
-    `🏆 Recorde: ${groupData?.recordRound ?? 0}`
+    `🏆 Recorde: ${groupData.record_round}`
   );
 
   const media = new MessageMedia('image/png', buffer.toString('base64'));
@@ -282,7 +363,7 @@ async function startNewRound(bot, message, group, isFirstRound = true) {
   }));
 
   if (isFirstRound) {
-    const hintsLeft = HINTS_PER_ROUND - game.hintsUsed;
+    const hintsLeft = game.maxHints - game.hintsUsed;
     const skipsLeft = SKIPS_PER_ROUND - game.skipsUsed;
     let startMessage = `Use *!ana <palpite>* para responder.\n`;
     startMessage += `Você tem ${GAME_DURATION_SECONDS} segundos!\n\n`;
@@ -291,8 +372,6 @@ async function startNewRound(bot, message, group, isFirstRound = true) {
   }
 }
 
-
-
 /**
  * Gera o texto do ranking.
  * @param {Array<Object>} users Array de jogadores com nome e pontos.
@@ -300,7 +379,7 @@ async function startNewRound(bot, message, group, isFirstRound = true) {
  * @returns {string}
  */
 function generateRankingText(users, customText) {
-  const sortedUsers = users.sort((a, b) => b.points - a.points).slice(0, 15);
+  const sortedUsers = users; // Já deve vir ordenado do banco
   let rankingText = `${customText ?? "🏆 *Ranking do Grupo*\n\n"}`;
   const emojis = ['🥇', '🥈', '🥉', '🏅', '🎖'];
 
@@ -333,6 +412,7 @@ async function startGameCommand(bot, message, args, group) {
     round: 1,
     hintsUsed: 0,
     skipsUsed: 0,
+    maxHints: HINTS_PER_ROUND
   };
 
   startNewRound(bot, message, group, true);
@@ -352,32 +432,31 @@ async function guessCommand(bot, message, args, group) {
       options: { quotedMessageId: message.origin.id._serialized }
     });
   }
+  
+  const userId = message.author;
+  const userName = message.authorName ?? "Jogador";
+
+  // Registra a tentativa no banco (para stats)
+  await incrementGroupStats(groupId, 'total_tries', 1);
+  await updateUserStats(groupId, userId, userName, { tries: 1 });
 
   if (guess === game.word.toLowerCase()) {
     if (game.roundEnded) return null;
     game.roundEnded = true;
 
-    const userId = message.author;
-    const userName = message.authorName ?? "Jogador";
+    // Atualiza a pontuação e acertos
+    await updateUserStats(groupId, userId, userName, { points: 1, correct_guesses: 1 });
 
-    // Atualiza a pontuação
-    const groupScores = anagramaData.groups[groupId]?.scores ?? {};
-    if (!groupScores[userId]) {
-      groupScores[userId] = { name: userName, points: 0 };
-    }
-    groupScores[userId].points += 1;
-    groupScores[userId].name = userName; // Sempre atualiza o nome
-
-    if (!anagramaData.groups[groupId]) {
-      anagramaData.groups[groupId] = { scores: {}, recordRound: 0 };
-    }
-    anagramaData.groups[groupId].scores = groupScores;
-    saveAnagramaData();
-
-    // A LÓGICA DE AVANÇO FICA AQUI AGORA
-    const successMessage = `🎉 *${userName} acertou!* Pontuação: *${groupScores[userId].points}*`;
+    const successMessage = `🎉 *${userName} acertou!*`;
 
     game.round++; // Incrementa a rodada SÓ no acerto
+
+    // Verifica se ganhou dica extra (apenas informativo, a lógica está no startNewRound)
+    // "Every 3 rounds" -> se completou 3, 6, 9...
+    // Se acabou de completar a rodada 3 (agora indo para 4), ganhou +1?
+    // A logica no startNewRound usa (round-1)/3.
+    // Rodada 1 -> 0 extra. Rodada 4 -> 1 extra.
+    // Então ao completar a 3, indo para 4, ganha 1.
 
     bot.sendReturnMessages(new ReturnMessage({
       chatId: message.group,
@@ -397,6 +476,9 @@ async function guessCommand(bot, message, args, group) {
     let reaction = '🥶'; // Frio
     if (similarity > 0.80) reaction = '🔥'; // Quente
     else if (similarity > 0.50) reaction = '🥵'; // Morno
+    
+    // Opcional: Reagir à mensagem (se o bot suportar)
+    // bot.react(message.origin, reaction); 
   }
   return null;
 }
@@ -405,7 +487,9 @@ async function hintCommand(bot, message) {
   const groupId = message.group;
   const game = activeGames[groupId];
   if (!game) return new ReturnMessage({ chatId: groupId, content: 'Não há um jogo em andamento.' });
-  if (game.hintsUsed >= HINTS_PER_ROUND) return new ReturnMessage({ chatId: groupId, content: '> As dicas para esta rodada já acabaram!' });
+  
+  // Usa o limite dinâmico calculado no início da rodada
+  if (game.hintsUsed >= game.maxHints) return new ReturnMessage({ chatId: groupId, content: '> As dicas para esta partida já acabaram!' });
 
   const unrevealedIndices = game.revealedLetters.map((revealed, i) => revealed ? null : i).filter(i => i !== null);
   if (unrevealedIndices.length <= 2) return new ReturnMessage({ chatId: groupId, content: '> A palavra já está muito revelada!' });
@@ -414,20 +498,28 @@ async function hintCommand(bot, message) {
   game.revealedLetters[randomIndex] = true;
   game.hintsUsed++;
 
+  // Registra uso de dica no banco
+  const userId = message.author;
+  const userName = message.authorName ?? "Jogador";
+  await incrementGroupStats(groupId, 'total_tips_used', 1);
+  await updateUserStats(groupId, userId, userName, { tips_used: 1 });
+
   const hintDisplay = game.word.split('').map((char, i) => game.revealedLetters[i] ? ` ${char.toUpperCase()} ` : ' __ ').join('');
-  const hintsLeft = HINTS_PER_ROUND - game.hintsUsed;
+  const hintsLeft = game.maxHints - game.hintsUsed;
 
   let dicaIA = "";
-
-  const respostaIA = await llmService.getCompletion({prompt: `O usuário requisitou uma dica, responda ((apenas)) com: sinônimo ou frase que ajude.\n\nPalavra: ${game.word}`, systemContext: "Você é um robo que está controlando um jogo de Anagrama"});
-
-  if(!respostaIA.toLowerCase().includes("erro")){
-    dicaIA = `\nℹ️ *Dica:* _${respostaIA}_\n`
+  try {
+    const respostaIA = await llmService.getCompletion({prompt: `O usuário requisitou uma dica, responda ((apenas)) com: sinônimo ou frase que ajude.\n\nPalavra: ${game.word}`, systemContext: "Você é um robo que está controlando um jogo de Anagrama"});
+    if(respostaIA && !respostaIA.toLowerCase().includes("erro")){
+        dicaIA = `\nℹ️ *Dica:* _${respostaIA}_\n`
+    }
+  } catch(e) {
+    logger.error("Erro na dica IA", e);
   }
 
   return new ReturnMessage({
     chatId: groupId,
-    content: `📝 ${hintDisplay}\n${dicaIA}\n> 💡 Você tem mais ${hintsLeft} dica(s).`
+    content: `📝 ${hintDisplay}\n${dicaIA}\n> 💡 Você tem mais ${hintsLeft} dica(s) nesta partida.`
   });
 }
 
@@ -443,8 +535,6 @@ async function skipCommand(bot, message, args, group) {
   const skipsLeft = SKIPS_PER_ROUND - game.skipsUsed;
   const skippedWord = game.word;
 
-  // A LÓGICA DE TROCAR A PALAVRA FICA AQUI
-  // Note que game.round NÃO é incrementado
   bot.sendReturnMessages(new ReturnMessage({
     chatId: groupId,
     content: `⏭️ A palavra *"${skippedWord}"* foi pulada!\n\n> 🐇 Pulos restantes: ${skipsLeft}\n\n🔄 Carregando nova palavra para a *rodada ${game.round}*...`
@@ -462,22 +552,40 @@ async function rankingCommand(bot, message) {
   const groupId = message.group;
   if (!groupId) return new ReturnMessage({ chatId: message.author, content: '> O ranking só pode ser visto em grupos.' });
 
-  const groupData = anagramaData.groups[groupId];
-  if (!groupData ?? (!groupData.scores || !groupData.recordRound)) {
-    return new ReturnMessage({ chatId: groupId, content: '🏆 Ainda não há dados de Anagrama para este grupo. Comece a jogar com `!anagrama`!' });
+  try {
+    const groupData = await getGroupData(groupId);
+    
+    const topPlayers = await database.dbAll(dbName, `
+      SELECT user_name as name, points 
+      FROM anagram_scores 
+      WHERE group_id = ? 
+      ORDER BY points DESC 
+      LIMIT 15
+    `, [groupId]);
+
+    if (topPlayers.length === 0 && !groupData.record_round) {
+      return new ReturnMessage({ chatId: groupId, content: '🏆 Ainda não há dados de Anagrama para este grupo. Comece a jogar com `!anagrama`!' });
+    }
+
+    let rankingMessage = '';
+
+    if (topPlayers.length === 0) {
+      rankingMessage += '📊 *Ainda não há jogadores no ranking.*';
+    } else {
+      rankingMessage += generateRankingText(topPlayers);
+    }
+    rankingMessage += `\n📈 *Recorde do Grupo:* ${groupData.record_round} rodadas`;
+    
+    // Adiciona stats extras se houver (opcional)
+    if (groupData.total_tries > 0) {
+        rankingMessage += `\n🎯 *Total de Tentativas do Grupo:* ${groupData.total_tries}`;
+    }
+
+    return new ReturnMessage({ chatId: groupId, content: rankingMessage });
+  } catch (error) {
+    logger.error('Erro no comando ranking:', error);
+    return new ReturnMessage({ chatId: groupId, content: '❌ Erro ao buscar ranking.' });
   }
-
-  let rankingMessage = '';
-  const players = Object.values(groupData.scores ?? {});
-
-  if (players.length === 0) {
-    rankingMessage += '📊 *Ainda não há jogadores no ranking.*';
-  } else {
-    rankingMessage += generateRankingText(players);
-  }
-  rankingMessage += `\n📈 *Recorde do Grupo:* ${groupData.recordRound ?? 0} rodadas`;
-
-  return new ReturnMessage({ chatId: groupId, content: rankingMessage });
 }
 
 async function resetCommand(bot, message, args, group) {
@@ -490,23 +598,17 @@ async function resetCommand(bot, message, args, group) {
     endGame(bot, groupId, 'reset');
   }
 
-  if (anagramaData.groups[groupId]) {
-    delete anagramaData.groups[groupId];
-    saveAnagramaData(); // Salva a remoção
+  try {
+    // Reseta dados do banco
+    await database.dbRun(dbName, 'DELETE FROM anagram_groups WHERE group_id = ?', [groupId]);
+    await database.dbRun(dbName, 'DELETE FROM anagram_scores WHERE group_id = ?', [groupId]);
+    
     return new ReturnMessage({ chatId: groupId, content: '✅ O ranking e recorde do Anagrama para este grupo foram resetados!' });
-  } else {
-    return new ReturnMessage({ chatId: groupId, content: 'ℹ️ Não há dados de Anagrama para este grupo para serem resetados.' });
+  } catch (error) {
+    logger.error('Erro ao resetar dados:', error);
+    return new ReturnMessage({ chatId: groupId, content: '❌ Erro ao resetar dados do grupo.' });
   }
 }
-
-// Inicializa os dados ao carregar o módulo
-loadAnagramaData();
-
-// Garante que os dados pendentes sejam salvos ao encerrar
-process.on('exit', () => {
-  logger.info('Salvando dados do anagrama antes de encerrar...');
-  saveAnagramaData.flush(); // Força a execução da função debounced, se houver uma pendente
-});
 
 // --- Definição dos Comandos ---
 const commands = [
@@ -581,6 +683,5 @@ const commands = [
 ];
 
 module.exports = {
-  commands,
-  forceSaveAnagramaData: saveAnagramaData.flush
+  commands
 };
