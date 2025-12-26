@@ -60,6 +60,7 @@ class WhatsAppBot {
     this.grupoLogs = options.grupoLogs || process.env.GRUPO_LOGS;
     this.grupoInvites = options.grupoInvites || process.env.GRUPO_INVITES;
     this.grupoAvisos = options.grupoAvisos || process.env.GRUPO_AVISOS;
+    this.grupoAnuncios = options.grupoAnuncios || process.env.GRUPO_ANUNCIOS;
     this.grupoInteracao = options.grupoInteracao || process.env.GRUPO_INTERACAO;
     this.grupoEstabilidade = options.grupoEstabilidade || process.env.GRUPO_ESTABILIDADE;
     this.linkGrupao = options.linkGrupao || process.env.LINK_GRUPO_INTERACAO;
@@ -107,6 +108,7 @@ class WhatsAppBot {
       grupoLogs: this.grupoLogs,
       grupoInvites: this.grupoInvites,
       grupoAvisos: this.grupoAvisos,
+      grupoAnuncios: this.grupoAnuncios,
       grupoInteracao: this.grupoInteracao,
       grupoEstabilidade: this.grupoEstabilidade
     });
@@ -371,7 +373,7 @@ class WhatsAppBot {
 
       try {
         // Verifica se a mensagem é de um grupo a ser ignorado
-        if (message.from === this.grupoLogs || message.from === this.grupoInvites || message.from === this.grupoEstabilidade) {
+        if (message.from === this.grupoLogs || message.from === this.grupoAnuncios || message.from === this.grupoInvites || message.from === this.grupoEstabilidade) {
           //this.logger.debug(`Ignorando mensagem do grupo de logs/invites/estabilidade: ${message.from}`);
           return; // Ignora o processamento adicional
         }

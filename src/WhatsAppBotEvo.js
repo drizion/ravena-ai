@@ -117,6 +117,7 @@ class WhatsAppBotEvo {
     this.grupoLogs = options.grupoLogs || process.env.GRUPO_LOGS;
     this.grupoInvites = options.grupoInvites || process.env.GRUPO_INVITES;
     this.grupoAvisos = options.grupoAvisos || process.env.GRUPO_AVISOS;
+    this.grupoAnuncios = options.grupoAnuncios || process.env.GRUPO_ANUNCIOS;
     this.linkAvisos = options.linkAvisos ?? process.env.LINK_GRUPO_AVISOS;
     this.linkGrupao = options.linkGrupao ?? process.env.LINK_GRUPO_INTERACAO;
 
@@ -846,6 +847,7 @@ class WhatsAppBotEvo {
       grupoLogs: this.grupoLogs,
       grupoInvites: this.grupoInvites,
       grupoAvisos: this.grupoAvisos,
+      grupoAnuncios: this.grupoAnuncios,
       grupoInteracao: this.grupoInteracao,
       grupoEstabilidade: this.grupoEstabilidade
     });
@@ -1075,7 +1077,7 @@ class WhatsAppBotEvo {
           if (incomingMessageData && incomingMessageData.key) {
             // Basic filtering (from original bot)
             const chatToFilter = incomingMessageData.key.remoteJid;
-            if (chatToFilter === this.grupoLogs || chatToFilter === this.grupoInvites || chatToFilter === this.grupoEstabilidade) {
+            if (chatToFilter === this.grupoLogs || message.from === this.grupoAnuncios || chatToFilter === this.grupoInvites || chatToFilter === this.grupoEstabilidade) {
               this.logger.debug(`[${this.id}] Ignoring message from system group: ${chatToFilter}`);
               break;
             }
