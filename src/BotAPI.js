@@ -31,6 +31,9 @@ class BotAPI {
     this.apiUser = process.env.BOTAPI_USER ?? 'admin';
     this.apiPassword = process.env.BOTAPI_PASSWORD ?? 'senha12345';
 
+    // Estado da UPS
+    this.lastUpsStatus = null;
+
     // Cache para os dados analíticos processados
     this.analyticsCache = {
       lastUpdate: 0,         // Timestamp da última atualização
@@ -356,6 +359,55 @@ class BotAPI {
         res.send('ok');
       } catch (error) {
         this.logger.error('Erro ao processar webhook de doação:', error);
+        res.status(500).send('error');
+      }
+    });
+
+    // UPS Power Change Endpoint
+    this.app.post('/UPS/powerChange', async (req, res) => {
+      try {
+        const { status, data } = req.body;
+        this.logger.info(`UPS power change: ${status}`);
+        
+        if (this.lastUpsStatus === status) {
+          return res.send('ok - status unchanged');
+        }
+        
+        let message = "";
+        if (status === "OB") {
+          message = "🚨⚡️ *URGENTE*: _queda de energia_ ⚡️🚨\nO servidor está atualmente sendo suportado pelo Nobreak. Se a energia não retornar em alguns segundos, todos os serviços serão desligados por segurança";
+        } else if (status === "OL") {
+          message = "⚡️✅ *Energia restabelecida*: _podemos relaxar (por enquanto)_";
+        } else {
+          return res.send('ok - ignored status');
+        }
+
+        this.lastUpsStatus = status;
+        await this.notifyPowerStatus(message);
+        res.send('ok');
+      } catch (error) {
+        this.logger.error('Error processing UPS powerChange:', error);
+        res.status(500).send('error');
+      }
+    });
+
+    // UPS Power Critical Endpoint
+    this.app.post('/UPS/powerCritical', async (req, res) => {
+      try {
+        const { status, level, data } = req.body;
+        this.logger.info(`UPS power CRITICAL: ${level}%`);
+        
+        if (this.lastUpsStatus === "CRITICAL") {
+           return res.send('ok - status unchanged');
+        }
+
+        const message = "🚨⚡️🚨 *URGENTE*: _desligamento_ 🚨⚡️🚨\nA energia não retornou, então o servidor será desligado agora - voltando apenas de forma manual.";
+        
+        this.lastUpsStatus = "CRITICAL";
+        await this.notifyPowerStatus(message);
+        res.send('ok');
+      } catch (error) {
+        this.logger.error('Error processing UPS powerCritical:', error);
         res.status(500).send('error');
       }
     });
@@ -1047,6 +1099,22 @@ class BotAPI {
       });
     });
 
+    // Dashboard: Restart Evolution GO API
+    this.app.post('/api/restart-evogo', authenticateBasic, (req, res) => {
+      this.logger.info('Received request to restart Evolution GO API via API.');
+      exec('/home/moothz/daily-evogo-restart.sh', (error, stdout, stderr) => {
+        if (error) {
+          this.logger.error(`Error restarting Evolution GO API: ${error.message}`);
+          return res.status(500).json({ status: 'error', message: `Failed to restart Evolution GO API: ${error.message}` });
+        }
+        if (stderr) {
+          this.logger.warn(`Evolution GO API restart command stderr: ${stderr}`);
+        }
+        this.logger.info(`Evolution GO API restart command stdout: ${stdout}`);
+        res.json({ status: 'ok', message: 'Evolution GO API restart command issued.', output: stdout });
+      });
+    });
+
     // Dashboard: Stream logs
     this.app.get('/api/logs', authenticateBasic, (req, res) => {
       this.logger.info('Starting log stream to dashboard.');
@@ -1562,6 +1630,35 @@ class BotAPI {
         message: 'Erro ao filtrar dados analíticos',
         timestamp: Date.now()
       };
+    }
+  }
+
+  /**
+   * Notifica grupos sobre status de energia
+   * @param {string} message - Mensagem a ser enviada
+   */
+  async notifyPowerStatus(message) {
+    const bot = this.bots.find(b => b.notificarDonate) ?? this.bots.find(b => b.isConnected && !b.privado) ?? this.bots[0];
+    
+    if (!bot) {
+      this.logger.warn('No bot available to send power notification');
+      return;
+    }
+
+    if (bot.grupoAnuncios) {
+      try {
+        await bot.sendMessage(bot.grupoAnuncios, message, { marcarTodos: true });
+      } catch (e) {
+        this.logger.error(`Erro ao enviar notificação de energia para grupoAnuncios (${bot.grupoAnuncios})`);
+      }
+    }
+    
+    if (bot.grupoAvisos) {
+      try {
+        await bot.sendMessage(bot.grupoAvisos, message, { marcarTodos: true });
+      } catch (error) {
+        this.logger.error(`Erro ao enviar notificação de energia para grupoAvisos (${bot.grupoAvisos}):`, error);
+      }
     }
   }
 

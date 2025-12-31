@@ -85,9 +85,9 @@ function connectWebSocket() {
     });
 
     ws.on('close', () => {
-        logger.warn('ComfyUI WebSocket closed. Reconnecting in 5s...');
+        logger.warn('ComfyUI WebSocket closed. Reconnecting in 60s...');
         ws = null;
-        setTimeout(connectWebSocket, 5000);
+        setTimeout(connectWebSocket, 60000);
     });
 
     ws.on('error', (err) => {

@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveBtn = document.getElementById('saveBtn');
     const restartBotBtn = document.getElementById('restartBotBtn');
     const restartEvoBtn = document.getElementById('restartEvoBtn');
+    const restartEvoGoBtn = document.getElementById('restartEvoGoBtn');
     const logsBtn = document.getElementById('logsBtn');
     const logOverlay = document.getElementById('logOverlay');
     const logContent = document.getElementById('logContent');
@@ -214,6 +215,13 @@ document.addEventListener('DOMContentLoaded', () => {
     restartEvoBtn.addEventListener('click', () => {
         if (!confirm('Tem certeza que deseja reiniciar a Evolution API?')) return;
         fetch('/api/restart-evo', { method: 'POST' })
+            .then(handleSimpleApiResponse)
+            .catch(handleApiError);
+    });
+
+    restartEvoGoBtn.addEventListener('click', () => {
+        if (!confirm('Tem certeza que deseja reiniciar a Evolution GO?')) return;
+        fetch('/api/restart-evogo', { method: 'POST' })
             .then(handleSimpleApiResponse)
             .catch(handleApiError);
     });
