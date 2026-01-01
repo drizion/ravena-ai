@@ -168,7 +168,7 @@ async function conviteCommand(bot, message, args, group) {
         content: `${headerConvite}${footerConvite}\n\n${bot.rndString()}`
     })];
 
-    if(posConvite.length > 5){
+    if(false && posConvite.length > 5){
       todas.push(new ReturnMessage({
         chatId: chatId,
         content: posConvite, 

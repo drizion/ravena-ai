@@ -29,12 +29,13 @@ const CATEGORY_EMOJIS = {
  * Os comandos não listados aparecem depois na ordem original
  */
 const COMMAND_ORDER = [
-	"avisos",
-	"status",
+	"retrospectiva",
 	"cmd",
 	"cmd-grupo",
 	"cmd-gerenciamento",
 	"cmd-g",
+	"avisos",
+	"status",
 	"doar",
 	"convite",
 	"grupao",
