@@ -70,16 +70,48 @@ database.getSQLiteDb(dbName, `
         remaining_uses INTEGER,
         original_name TEXT
     );
+    -- Tabelas de Histórico para Reset Anual
+    CREATE TABLE IF NOT EXISTS fishing_users_history (
+        user_id TEXT,
+        name TEXT,
+        total_weight REAL,
+        total_catches INTEGER,
+        total_baits_used INTEGER,
+        total_trash_caught INTEGER,
+        year INTEGER,
+        PRIMARY KEY (user_id, year)
+    );
+    CREATE TABLE IF NOT EXISTS fishing_group_stats_history (
+        group_id TEXT,
+        user_id TEXT,
+        name TEXT,
+        total_weight REAL,
+        total_catches INTEGER,
+        biggest_fish_json TEXT,
+        year INTEGER,
+        PRIMARY KEY (group_id, user_id, year)
+    );
 `);
 
+// Ensure Schema Changes and Initializations
+(async () => {
+    try {
+        // Migration: Add year column to legendary history
+        await database.dbRun(dbName, "ALTER TABLE fishing_legendary_history ADD COLUMN year INTEGER");
+    } catch (e) { 
+        // Ignore if column already exists
+    }
+})();
+
+
 // --- CONSTANTES DO JOGO ---
-const MAX_FISH_PER_USER = 25;
-const MIN_FISH_WEIGHT = 1;
-const MAX_FISH_WEIGHT = 180; // Aumentado para 180kg
 const DIFFICULTY_THRESHOLD = 80; 
 const FISHING_COOLDOWN = 5;
-const MAX_BAITS = 15; // Aumentado para 7 iscas
-const BAIT_REGEN_TIME = 60 * 60 * 0.5; // Reduzido para 1 hora (60 min * 60 seg)
+let MIN_FISH_WEIGHT = 1;
+let MAX_FISH_WEIGHT = 30; 
+let MAX_FISH_PER_USER = 10;
+let MAX_BAITS = 5; 
+let BAIT_REGEN_TIME = 60 * 60 * 1; 
 
 // Armazena os cooldowns de pesca (Cache em memória é aceitável para cooldowns de curto prazo)
 const fishingCooldowns = {};
@@ -180,17 +212,21 @@ const TRASH_ITEMS = [
 
 // Upgrades para pesca
 const UPGRADES = [
+  // { name: "Sonar Portátil", chance: 0.02, emoji: "📡", effect: "guaranteed_weight", minValue: 40, maxValue: 100, description: "Garante que o próximo peixe tenha entre 40kg e 70kg." },
+  // { name: "Minhocão", chance: 0.05, emoji: "🐛", effect: "next_fish_bonus", minValue: 10, maxValue: 80, description: "Adiciona um bônus de 10 a 80kg ao próximo peixe." },
   { name: "Chapéu de Pescador", chance: 0.05, emoji: "👒", effect: "weight_boost", value: 0.2, duration: 3, description: "Aumenta o peso dos próximos 3 peixes em 20%." },
-  { name: "Minhocão", chance: 0.05, emoji: "🐛", effect: "next_fish_bonus", minValue: 10, maxValue: 80, description: "Adiciona um bônus de 10 a 80kg ao próximo peixe." },
   { name: "Carretel", chance: 0.02, emoji: "🧵", effect: "weight_boost", value: 0.75, duration: 3, description: "Aumenta o peso dos próximos 3 peixes em 75%." },
   { name: "Pacote de Iscas", chance: 0.1, emoji: "🎁", effect: "extra_baits", minValue: 1, maxValue: 3, description: "Ganha de 1 a 3 iscas extras." },
   { name: "Amuleto do Pescador", chance: 0.01, emoji: "🧿", effect: "rare_chance_boost", value: 0.0005, duration: 10, description: "Aumenta a chance de encontrar peixes raros nas próximas 10 pescarias." },
   //{ name: "Licença de Pesca Premium", chance: 0.03, emoji: "📜", effect: "cooldown_reduction", value: 0.5, duration: 5, description: "Reduz o tempo de espera para pescar em 50% nas próximas 5 pescarias." },
-  { name: "Sonar Portátil", chance: 0.02, emoji: "📡", effect: "guaranteed_weight", minValue: 40, maxValue: 100, description: "Garante que o próximo peixe tenha entre 40kg e 70kg." },
   { name: "Balança Adulterada", chance: 0.01, emoji: "⚖️", effect: "weight_boost", value: 1.5, duration: 1, description: "Aumenta o peso do próximo peixe em 150%!" },
   { name: "Isca de Diamante", chance: 0.005, emoji: "💎", effect: "rare_chance_boost", value: 0.002, duration: 5, description: "Aumenta drasticamente a chance de raros por 5 pescarias." },
   //{ name: "Energético de Pescador", chance: 0.02, emoji: "⚡", effect: "cooldown_reduction", value: 0.9, duration: 2, description: "Reduz o tempo de espera em 90% nas próximas 2 pescarias." },
-  { name: "Anzol de Titânio", chance: 0.025, emoji: "🔩", effect: "bait_on_trash", duration: 10, description: "Evita a perda de isca ao pescar lixo pelas próximas 10 vezes. Mais durável que o enferrujado!" }
+  { name: "Anzol de Titânio", chance: 0.025, emoji: "🔩", effect: "bait_on_trash", duration: 10, description: "Evita a perda de isca ao pescar lixo pelas próximas 10 vezes." },
+
+  { name: "Bolso de Pesca", chance: 0.0008, emoji: "👖", effect: "inventory_slot", value: 1, description: "Aumenta seu inventário em 1." },
+  { name: "Calça de Pesca", chance: 0.0004, emoji: "👖", effect: "inventory_slot", value: 2, description: "Aumenta seu inventário em 2." },
+  { name: "Mochilão", chance: 0.00001, emoji: "🎒", effect: "inventory_slot", value: 4, description: "Aumenta seu inventário em 4." }
 ];
 
 // Downgrades para pesca
@@ -207,10 +243,11 @@ const DOWNGRADES = [
 ];
 
 const DEFAULT_GLOBAL_FACTORS = {
-    trashChance: 0.5,
-    buffChance: 1.25,
-    debuffChance: 0.75,
-    rareFishChance: 1.1
+    trashChance: 1.0,
+    buffChance: 1.0,
+    debuffChance: 0.8,
+    rareFishChance: 0.8,
+    weightFactor: 1.0
 };
 
 // --- HELPER FUNCTIONS FOR DB ---
@@ -352,10 +389,12 @@ async function getRandomFish(fishArray, isMultiCatch = false, userData = null, g
   // Verifica se o array tem peixes
   if (!fishArray || !Array.isArray(fishArray) || fishArray.length === 0) {
     const customVariables = await database.getCustomVariables();
-    fishArray = customVariables.peixes ?? ["Lambari", "Traira"];
+    
+    fishArray = customVariables.peixes;
   }
 
   if (!globalFactors) globalFactors = await getGlobalFactors();
+  const weightFactor = globalFactors.weightFactor || 1.0;
   
   // Se for pescaria múltipla, não permite peixes raros
   if (!isMultiCatch) {
@@ -380,7 +419,7 @@ async function getRandomFish(fishArray, isMultiCatch = false, userData = null, g
           name: rareFish.name,
           weight: totalWeight,
           timestamp: Date.now(),
-          chance: rareFish.chance,
+          chance: currentChance,
           isRare: true,
           emoji: rareFish.emoji,
           baseWeight: baseWeight,
@@ -415,6 +454,11 @@ async function getRandomFish(fishArray, isMultiCatch = false, userData = null, g
     const exponent = 3; 
     const difficultyFactor = 1 - Math.pow(randomValue, exponent);
     weight = parseFloat((DIFFICULTY_THRESHOLD + (difficultyFactor * difficultyRange)).toFixed(2));
+  }
+
+  // Apply Global Weight Factor
+  if (weightFactor !== 1.0) {
+      weight = parseFloat((weight * weightFactor).toFixed(2));
   }
   
   return {
@@ -777,6 +821,18 @@ async function consumeDoubleCatchBuff(userData) {
   return userData;
 }
 
+function getMaxInventory(userData) {
+    let limit = MAX_FISH_PER_USER;
+    if (userData.buffs) {
+        userData.buffs.forEach(b => {
+            if (b.type === 'inventory_slot' && b.remainingUses > 0) {
+                limit += b.value;
+            }
+        });
+    }
+    return limit;
+}
+
 /**
  * Pescar um peixe
  */
@@ -786,7 +842,7 @@ async function fishCommand(bot, message, args, group) {
     const userId = message.author;
     const userName = message.name ?? message.pushName ?? message.pushname ?? message.authorName ?? "Pescador";
     const groupId = message.group; 
-    const mentionPessoa = [];
+    const mentionPessoa = message.mentions ?? message.origin?.mentionedIds ?? [];
 
     // Get global factors
     const globalFactors = await getGlobalFactors();
@@ -840,9 +896,7 @@ async function fishCommand(bot, message, args, group) {
     let fishArray = ["Lambari", "Tilápia"];
     try {
       const customVariables = await database.getCustomVariables();
-      if (customVariables?.peixes && Array.isArray(customVariables.peixes) && customVariables.peixes.length > 0) {
-        fishArray = customVariables.peixes;
-      }
+      fishArray = customVariables.peixes;
     } catch (error) {}
 
     let catchCount = hasDoubleCatchBuff(userData) ? 2 : 1;
@@ -890,6 +944,17 @@ async function fishCommand(bot, message, args, group) {
                       // implies we DID catch something.
                       // So we should generate the fish, but not add it to inventory (or add and remove).
                       // Let's proceed to generate fish, but flag it.
+                  } else if (randomItem.effect === 'inventory_slot') {
+                      // New upgrade logic handling
+                      const buff = { 
+                          type: randomItem.effect, 
+                          value: randomItem.value, 
+                          remainingUses: 999999,
+                          originalName: randomItem.name,
+                          minValue: 0, maxValue: 0
+                      };
+                      await addBuff(userData.userId, buff, false);
+                      effectMessage += `\n\n${randomItem.emoji} Você equipou ${randomItem.name}! Espaço extra: +${randomItem.value}`;
                   }
               }
           }
@@ -949,7 +1014,9 @@ async function fishCommand(bot, message, args, group) {
     userData.totalBaitsUsed = (userData.totalBaitsUsed ?? 0) + 1;
     
     // Check inventory limit
-    while (userData.fishes.length > MAX_FISH_PER_USER) {
+    const currentMaxInventory = getMaxInventory(userData);
+
+    while (userData.fishes.length > currentMaxInventory) {
         // Find smallest fish, prioritizing OLD fishes (not just caught)
         let smallestIndex = -1;
         let smallestWeight = Number.MAX_VALUE;
@@ -999,7 +1066,7 @@ async function fishCommand(bot, message, args, group) {
     // Montar mensagem
     let extraMsg = "";
     if(args[0]?.match(/^@\d\d/g)){ 
-      mentionPessoa.push(args[0].replace("@",""));
+      mentionPessoa.push(args[0]);
       extraMsg = `, segurando firme na vara de ${args[0]}, `;
     }
   
@@ -1019,7 +1086,7 @@ async function fishCommand(bot, message, args, group) {
     } else {
       const fish = caughtFishes[0];
       if (fish.isRare) {
-        fishMessage = `🏆 INCRÍVEL! _${userName}_ capturou um(a) _raríssimo_ *${fish.name}* de _${fish.weight.toFixed(2)} kg_! (${fish.emoji} ${fish.chance*100}% de chance)`;
+        fishMessage = `🏆 INCRÍVEL! _${userName}_ capturou um(a) _raríssimo_ *${fish.name}* de _${fish.weight.toFixed(2)} kg_! (${fish.emoji} ${fish.chance*100*DEFAULT_GLOBAL_FACTORS.rareFishChance}% de chance)`;
       } else {
         fishMessage = `🎣 ${userName} ${extraMsg}pescou um *${fish.name}* de _${fish.weight.toFixed(2)} kg_!`;
       }
@@ -1048,10 +1115,11 @@ async function fishCommand(bot, message, args, group) {
       const savedImageName = await saveRareFishImage(rareFishImage, userId, caughtFishes[0].name);
       
       // Save Legendary to DB
+      const currentYear = new Date().getFullYear();
       await database.dbRun(dbName, `INSERT INTO fishing_legendary_history 
-        (fish_name, weight, user_id, user_name, group_id, group_name, timestamp, image_name)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [caughtFishes[0].name, caughtFishes[0].weight, userId, userName, groupId || null, group ? group.name : "chat privado", Date.now(), savedImageName]);
+        (fish_name, weight, user_id, user_name, group_id, group_name, timestamp, image_name, year)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [caughtFishes[0].name, caughtFishes[0].weight, userId, userName, groupId || null, group ? group.name : "chat privado", Date.now(), savedImageName, currentYear]);
 
       const groupName = group ? group.name : "chat privado";
       const notificacaoPeixeRaro = new ReturnMessage({
@@ -1140,7 +1208,7 @@ async function myFishCommand(bot, message, args, group) {
         fishMessage += `\n*Debuffs*: ${userData.debuffs.length} ativos\n`;
       }
       
-      if (fishes.length >= MAX_FISH_PER_USER) {
+      if (fishes.length >= getMaxInventory(userData)) {
         fishMessage += `\n⚠️ Inventário cheio! O menor peixe será solto na próxima pescaria.`;
       }
     }
@@ -1158,23 +1226,39 @@ async function myFishCommand(bot, message, args, group) {
 async function legendaryFishCommand(bot, message, args, group) {
   try {
     const chatId = message.group ?? message.author;
+    let yearFilter = null;
+    if (args && args[0] && args[0].match(/^\d{4}$/)) {
+        yearFilter = parseInt(args[0]);
+    }
     
-    const legendaryFishes = await database.dbAll(dbName, "SELECT * FROM fishing_legendary_history ORDER BY timestamp DESC");
+    let query = "SELECT * FROM fishing_legendary_history";
+    let params = [];
+    if (yearFilter) {
+        query += " WHERE year = ?";
+        params.push(yearFilter);
+    }
+    query += " ORDER BY timestamp DESC";
+
+    const legendaryFishes = await database.dbAll(dbName, query, params);
     
     if (legendaryFishes.length === 0) {
       return new ReturnMessage({
         chatId,
-        content: '🐉 Ainda não foram pescados peixes lendários. Continue pescando e você pode ser o primeiro a encontrar um!'
+        content: `🐉 Ainda não foram pescados peixes lendários${yearFilter ? ` em ${yearFilter}` : ''}.`
       });
     }
     
     const rareFishListItems = await Promise.all(RARE_FISH.map(async f => {
-        const count = legendaryFishes.filter(l => l.fish_name === f.name).length;
-        return `\t${f.emoji} ${f.name} _(${f.weightBonus}kg, ${count} pescados até hoje)_`;
+        let countQuery = "SELECT COUNT(*) as c FROM fishing_legendary_history WHERE fish_name = ?";
+        let countParams = [f.name];
+        if (yearFilter) { countQuery += " AND year = ?"; countParams.push(yearFilter); }
+
+        const countRow = await database.dbGet(dbName, countQuery, countParams);
+        return `\t${f.emoji} ${f.name} _(${f.weightBonus}kg, ${countRow?.c || 0} pescados${yearFilter ? ` em ${yearFilter}` : ''})_`;
     }));
     const rareFishList = rareFishListItems.join("\n");
 
-    let textMessage = `🌊 *Lista de Peixes Lendários* 🎣\n${rareFishList}\n\n🏆 *REGISTRO DE PEIXES LENDÁRIOS* 🎖️\n\n`;
+    let textMessage = `🌊 *Lista de Peixes Lendários${yearFilter ? ` (${yearFilter})` : ''}* 🎣\n${rareFishList}\n\n🏆 *REGISTRO DE PEIXES LENDÁRIOS* 🎖️\n\n`;
     
     for (let i = 0; i < legendaryFishes.length; i++) {
       const legendary = legendaryFishes[i];
@@ -1207,7 +1291,7 @@ async function legendaryFishCommand(bot, message, args, group) {
             messages.push(new ReturnMessage({
               chatId,
               content: media,
-              options: { caption: `🏆 *Peixe Lendário*\n\n*${legendary.fish_name}* de ${legendary.weight.toFixed(2)} kg\nPescado por: ${legendary.user_name}\nLocal: ${legendary.group_name ?? 'misterioso'}\nData: ${date}` },
+              options: { caption: `🏆 *Peixe Lendário${yearFilter ? ` (${yearFilter})` : ''}*\n\n*${legendary.fish_name}* de ${legendary.weight.toFixed(2)} kg\nPescado por: ${legendary.user_name}\nLocal: ${legendary.group_name ?? 'misterioso'}\nData: ${date}` },
               delay: messages.length * 1000 
             }));
           } catch (imageError) { continue; }
@@ -1235,10 +1319,33 @@ async function fishingRankingCommand(bot, message, args, group) {
       return new ReturnMessage({ chatId, content: '🎣 Este comando só funciona em grupos.' });
     }
     
-    const groupStats = await database.dbAll(dbName, "SELECT * FROM fishing_group_stats WHERE group_id = ?", [groupId]);
+    let yearArg = null;
+    let rankingType = 'biggest'; 
+    
+    // Parse args
+    for (const arg of args) {
+        if (arg.match(/^\d{4}$/)) yearArg = parseInt(arg);
+        else if (arg.toLowerCase() === 'quantidade') rankingType = 'count';
+        else if (arg.toLowerCase() === 'pesado') rankingType = 'weight';
+    }
+
+    let tableName = "fishing_group_stats";
+    let params = [groupId];
+    let titleSuffix = "";
+
+    if (yearArg && yearArg < 2026) {
+         tableName = "fishing_group_stats_history";
+         params.push(yearArg);
+         titleSuffix = ` (${yearArg})`;
+    }
+    
+    let query = `SELECT * FROM ${tableName} WHERE group_id = ?`;
+    if (yearArg && yearArg < 2026) query += " AND year = ?";
+
+    const groupStats = await database.dbAll(dbName, query, params);
     
     if (groupStats.length === 0) {
-      return new ReturnMessage({ chatId, content: '🎣 Ainda não há dados de pescaria neste grupo.' });
+      return new ReturnMessage({ chatId, content: `🎣 Ainda não há dados de pescaria neste grupo${titleSuffix}.` });
     }
     
     const players = groupStats.map(s => ({
@@ -1249,13 +1356,6 @@ async function fishingRankingCommand(bot, message, args, group) {
         biggestFish: JSON.parse(s.biggest_fish_json || 'null')
     }));
     
-    let rankingType = 'biggest'; 
-    if (args.length > 0) {
-      const arg = args[0].toLowerCase();
-      if (arg === 'quantidade') rankingType = 'count';
-      else if (arg === 'pesado') rankingType = 'weight';
-    }
-    
     if (rankingType === 'weight') players.sort((a, b) => b.totalWeight - a.totalWeight);
     else if (rankingType === 'count') players.sort((a, b) => b.totalCatches - a.totalCatches);
     else players.sort((a, b) => {
@@ -1265,7 +1365,7 @@ async function fishingRankingCommand(bot, message, args, group) {
       });
     
     let rankingTitle = rankingType === 'weight' ? 'Peso Total' : (rankingType === 'count' ? 'Quantidade Total' : 'Maior Peixe');
-    let rankingMessage = `🏆 *Ranking de Pescaria deste Grupo* (${rankingTitle})\n\n`;
+    let rankingMessage = `🏆 *Ranking de Pescaria deste Grupo${titleSuffix}* (${rankingTitle})\n\n`;
     
     const topPlayers = players.slice(0, 10);
     topPlayers.forEach((player, index) => {
@@ -1289,6 +1389,7 @@ async function fishingRankingCommand(bot, message, args, group) {
     if (rankingType !== 'biggest') rankingMessage += `\n- !pesca-ranking (sem argumentos)`;
     if (rankingType !== 'weight') rankingMessage += `\n- !pesca-ranking pesado`;
     if (rankingType !== 'count') rankingMessage += `\n- !pesca-ranking quantidade`;
+    if (!yearArg) rankingMessage += `\n- !pesca-ranking 2025`;
     
     return new ReturnMessage({ chatId, content: rankingMessage });
   } catch (error) {
@@ -1330,7 +1431,7 @@ async function fishingInfoCommand(bot, message) {
         for (const fish of RARE_FISH) {
             // Count from DB
             const countRow = await database.dbGet(dbName, "SELECT COUNT(*) as c FROM fishing_legendary_history WHERE fish_name = ?", [fish.name]);
-            infoMessage += `  ${fish.emoji} *${fish.name}*: \`${(fish.chance * 100).toFixed(4 )}%\` de chance, ${countRow?.c || 0} pescados até hoje\n`;
+            infoMessage += `  ${fish.emoji} *${fish.name}*: \`${(fish.chance * 100 * DEFAULT_GLOBAL_FACTORS.rareFishChance).toFixed(4 )}%\` de chance, ${countRow?.c || 0} pescados até hoje\n`;
         }
         infoMessage += "\n";
 
@@ -1463,7 +1564,7 @@ async function listFishTypesCommand(bot, message, args, group) {
     
     fishMessage += `\n*Peixes Raríssimos*:\n`;
     for (const fish of RARE_FISH) {
-      const chancePercent = fish.chance * 100;
+      const chancePercent = fish.chance * 100 * DEFAULT_GLOBAL_FACTORS.rareFishChance;
       const countRow = await database.dbGet(dbName, "SELECT COUNT(*) as c FROM fishing_legendary_history WHERE fish_name = ?", [fish.name]);
       fishMessage += `${fish.emoji} ${fish.name}: ${fish.weightBonus}kg extra (${chancePercent.toFixed(5)}% de chance, ${countRow?.c || 0} pescados até hoje)\n`;
     }
@@ -1566,11 +1667,7 @@ async function globalFactorsCommand(bot, message, args, group) {
          return new ReturnMessage({ chatId: message.group ?? message.author, content: `❌ Chave inválida. Chaves válidas: ${validKeys.join(", ")}` });
     }
     
-    const customVariables = await database.getCustomVariables();
-    if (!customVariables.fishing_global_factors) customVariables.fishing_global_factors = {};
-    
-    customVariables.fishing_global_factors[key] = value;
-    await database.saveCustomVariables(customVariables);
+    DEFAULT_GLOBAL_FACTORS[key] = value;
     
     return new ReturnMessage({ chatId: message.group ?? message.author, content: `✅ Fator global *${key}* atualizado para *${value}x*.` });
 }
@@ -1604,7 +1701,6 @@ async function resetFishingDataCommand(bot, message, args, group) {
   }  
 }
 
-// Exportação
 const commands = [
   new Command({name: 'pescar', description: 'Pesque um peixe', category: "jogos", cooldown: 0, reactions: { before: "🎣", after: "🐟", error: "❌" }, method: fishCommand }),
   new Command({name: 'pesca', hidden: true, description: 'Pesque um peixe', category: "jogos", cooldown: 0, reactions: { before: "🎣", after: "🐟", error: "❌" }, method: fishCommand }),
