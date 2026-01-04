@@ -37,9 +37,17 @@ class Management {
         method: 'setWelcomeMessage',
         description: 'Mensagem quando alguém entra no grupo. Você pode usar as variáveis {pessoa} e {tituloGrupo}, além de todas as variáveis disponíveis em !g-variaveis, assim como no !g-addCmd'
       },
+      'delBoasvindas': {
+        method: 'deleteWelcomeMessage',
+        description: 'Remove um tipo de mídia específico da mensagem de boas-vindas (text, image, audio, video, sticker)'
+      },
       'setDespedida': {
         method: 'setFarewellMessage',
         description: 'Mensagem quando alguém sai do grupo'
+      },
+      'delDespedida': {
+        method: 'deleteFarewellMessage',
+        description: 'Remove um tipo de mídia específico da mensagem de despedida (text, image, audio, video, sticker)'
       },
 
       // Controles de comandos personalizados
@@ -965,69 +973,167 @@ async setWelcomeMessage(bot, message, args, group) {
   
   // Verifica se a mensagem é uma resposta a outra mensagem
   const quotedMsg = await message.origin.getQuotedMessage().catch(() => null);
-  const quotedText = quotedMsg?.caption ?? quotedMsg?.content ?? quotedMsg?.body ?? false;
+  
+  // Inicializa objeto de greetings se não existir
+  if (!group.greetings) {
+    group.greetings = {};
+  }
 
-  // Se tiver mensagem citada, usa o corpo dela
-  if (quotedMsg && quotedText) {
-    // Atualiza mensagem de boas-vindas do grupo
-    if (!group.greetings) {
-      group.greetings = {};
+  // Se tiver mensagem citada
+  if (quotedMsg) {
+    let type = "text";
+    let content = quotedMsg.caption ?? quotedMsg.content ?? quotedMsg.body ?? "";
+
+    if (quotedMsg.hasMedia) {
+      try {
+        const media = await quotedMsg.downloadMedia({keep: true});
+        let mediaType = media.mimetype.split('/')[0]; // 'image', 'audio', 'video', etc.
+
+        if(quotedMsg.type.toLowerCase() == "sticker"){
+          mediaType = "sticker";
+        }
+        if(quotedMsg.type.toLowerCase() == "voice"){
+          mediaType = "audio";
+        }
+
+        // Gera nome de arquivo com extensão apropriada
+        let fileExt = media.mimetype.split('/')[1];
+        if(fileExt.includes(";")){
+          fileExt = fileExt.split(";")[0];
+        }
+        const fileName = `${Date.now()}-${Math.floor(Math.random() * 1000)}.${fileExt}`;
+        
+        // Cria diretório de mídia se não existir
+        const mediaDir = path.join(this.dataPath, 'media');
+        await fs.mkdir(mediaDir, { recursive: true });
+        
+        // Salva arquivo de mídia
+        const filePath = path.join(mediaDir, fileName);
+        await fs.writeFile(filePath, Buffer.from(media.data, 'base64'));
+        
+        this.logger.info(`[setWelcome] Mídia salva: ${filePath} (${mediaType})`);
+        
+        // Define o objeto de mídia
+        group.greetings[mediaType] = {
+          file: fileName,
+          caption: content // legenda original
+        };
+
+        // Se a legenda tiver texto, atualiza também o texto principal?
+        // A lógica do usuário pede para usar variáveis na caption.
+        // Vamos manter o texto separado do objeto de mídia para flexibilidade,
+        // mas o handler de envio deve decidir qual texto usar.
+        // Se definirmos group.greetings.text aqui, sobrescreve o anterior.
+        // Se a caption não for vazia, vamos definir como texto principal também?
+        // Ou vamos manter separado?
+        // "images, videos: make sure to get the caption too, variables such as {pessoa} should be replaced in the caption just like text greetings"
+        // Então a caption da imagem É o greeting de texto associado à imagem.
+        
+      } catch (error) {
+        this.logger.error('Erro ao salvar mídia para boas-vindas:', error);
+        return new ReturnMessage({
+          chatId: group.id,
+          content: 'Erro ao salvar mídia para boas-vindas.'
+        });
+      }
+    } else {
+        // É apenas texto citado
+        group.greetings.text = content;
     }
-    group.greetings.text = quotedText;
+
     await this.database.saveGroup(group);
     
     return new ReturnMessage({
       chatId: group.id,
-      content: `Mensagem de boas-vindas atualizada para: ${quotedText}`
+      content: `Mensagem/Mídia de boas-vindas atualizada!`
     });
   } 
-  // Se tiver argumentos, usa o corpo da mensagem completa
+  // Se tiver argumentos (e não for resposta), assume que é texto
   else if (message.origin && message.origin.body) {
     // Extrai o texto após o comando
     const prefixo = group.prefix ?? '!';
     const comandoCompleto = `${prefixo}g-setBoasvindas`;
-    const texto = message.origin.body.substring(message.origin.body.indexOf(comandoCompleto) + comandoCompleto.length).trim();
+    let texto = "";
     
-    // Se não tem texto, desativa a mensagem de boas-vindas
+    if (message.origin.body.includes(comandoCompleto)) {
+        texto = message.origin.body.substring(message.origin.body.indexOf(comandoCompleto) + comandoCompleto.length).trim();
+    } else {
+        texto = args.join(" ");
+    }
+    
+    // Se não tem texto, avisa
     if (!texto) {
-      if (group.greetings) {
-        delete group.greetings.text;
-      }
-      await this.database.saveGroup(group);
-      
+      const activeTypes = Object.keys(group.greetings).filter(k => group.greetings[k]);
       return new ReturnMessage({
         chatId: group.id,
-        content: 'Mensagem de boas-vindas desativada.'
+        content: `Mídias ativas: ${activeTypes.join(", ")}\n\nPara definir texto: !g-setBoasvindas <texto>\nPara mídia: Responda a uma mídia com o comando.`
       });
     }
     
-    // Atualiza mensagem de boas-vindas do grupo
-    if (!group.greetings) {
-      group.greetings = {};
-    }
     group.greetings.text = texto;
     await this.database.saveGroup(group);
     
     return new ReturnMessage({
       chatId: group.id,
-      content: `Mensagem de boas-vindas atualizada para: ${texto}`
+      content: `Texto de boas-vindas atualizado para: ${texto}`
     });
   }
   else {
-    // Se não tem argumentos nem mensagem citada, mostra a mensagem atual ou instrui como usar
-    if (group.greetings && group.greetings.text) {
       return new ReturnMessage({
         chatId: group.id,
-        content: `Mensagem de boas-vindas atual: ${group.greetings.text}\n\nPara alterar, use:\n!g-setBoasvindas Nova mensagem\nou responda a uma mensagem com !g-setBoasvindas`
+        content: 'Use !g-setBoasvindas <texto> ou responda a uma mídia com o comando.'
       });
-    } else {
-      return new ReturnMessage({
-        chatId: group.id,
-        content: 'Não há mensagem de boas-vindas definida. Para definir, use:\n!g-setBoasvindas Bem-vindo ao grupo {tituloGrupo} (id {nomeGrupo}), {pessoa}!\nou responda a uma mensagem com !g-setBoasvindas'
-      });
-    }
   }
 }
+
+  /**
+   * Remove um tipo de mídia da mensagem de boas-vindas
+   * @param {WhatsAppBot} bot - Instância do bot
+   * @param {Object} message - Dados da mensagem
+   * @param {Array} args - Argumentos do comando
+   * @param {Object} group - Dados do grupo
+   * @returns {Promise<ReturnMessage>} Mensagem de retorno
+   */
+  async deleteWelcomeMessage(bot, message, args, group) {
+    if (!group) {
+        return new ReturnMessage({
+          chatId: message.author,
+          content: 'Este comando só pode ser usado em grupos.'
+        });
+    }
+
+    if (!group.greetings) {
+        return new ReturnMessage({
+          chatId: group.id,
+          content: 'Nenhuma mensagem de boas-vindas configurada.'
+        });
+    }
+
+    const type = args[0]?.toLowerCase();
+    const allowedTypes = ['text', 'image', 'video', 'audio', 'sticker'];
+
+    if (!type || !allowedTypes.includes(type)) {
+        const activeTypes = Object.keys(group.greetings).filter(k => group.greetings[k]);
+        return new ReturnMessage({
+            chatId: group.id,
+            content: `Especifique o tipo para remover: ${allowedTypes.join(', ')}\n\nTipos ativos atualmente: ${activeTypes.join(', ') || 'Nenhum'}`
+        });
+    }
+
+    if (group.greetings[type]) {
+        delete group.greetings[type];
+        await this.database.saveGroup(group);
+        return new ReturnMessage({
+            chatId: group.id,
+            content: `Boas-vindas do tipo '${type}' removido com sucesso.`
+        });
+    } else {
+        return new ReturnMessage({
+            chatId: group.id,
+            content: `Não há boas-vindas do tipo '${type}' configurado.`
+        });
+    }
+  }
 
   /**
    * Define mensagem de despedida para um grupo
@@ -1047,67 +1153,154 @@ async setWelcomeMessage(bot, message, args, group) {
     
     // Verifica se a mensagem é uma resposta a outra mensagem
     const quotedMsg = await message.origin.getQuotedMessage().catch(() => null);
-    const quotedText = quotedMsg?.caption ?? quotedMsg?.content ?? quotedMsg?.body ?? false;
     
-    // Se tiver mensagem citada, usa o corpo dela
-    if (quotedMsg && quotedText) {
-      // Atualiza mensagem de despedida do grupo
-      if (!group.farewells) {
-        group.farewells = {};
+    // Inicializa objeto de farewells se não existir
+    if (!group.farewells) {
+      group.farewells = {};
+    }
+  
+    // Se tiver mensagem citada
+    if (quotedMsg) {
+      let content = quotedMsg.caption ?? quotedMsg.content ?? quotedMsg.body ?? "";
+  
+      if (quotedMsg.hasMedia) {
+        try {
+          const media = await quotedMsg.downloadMedia({keep: true});
+          let mediaType = media.mimetype.split('/')[0]; // 'image', 'audio', 'video', etc.
+  
+          if(quotedMsg.type.toLowerCase() == "sticker"){
+            mediaType = "sticker";
+          }
+          if(quotedMsg.type.toLowerCase() == "voice"){
+            mediaType = "audio";
+          }
+  
+          // Gera nome de arquivo com extensão apropriada
+          let fileExt = media.mimetype.split('/')[1];
+          if(fileExt.includes(";")){
+            fileExt = fileExt.split(";")[0];
+          }
+          const fileName = `${Date.now()}-${Math.floor(Math.random() * 1000)}.${fileExt}`;
+          
+          // Cria diretório de mídia se não existir
+          const mediaDir = path.join(this.dataPath, 'media');
+          await fs.mkdir(mediaDir, { recursive: true });
+          
+          // Salva arquivo de mídia
+          const filePath = path.join(mediaDir, fileName);
+          await fs.writeFile(filePath, Buffer.from(media.data, 'base64'));
+          
+          this.logger.info(`[setFarewell] Mídia salva: ${filePath} (${mediaType})`);
+          
+          // Define o objeto de mídia
+          group.farewells[mediaType] = {
+            file: fileName,
+            caption: content // legenda original
+          };
+          
+        } catch (error) {
+          this.logger.error('Erro ao salvar mídia para despedida:', error);
+          return new ReturnMessage({
+            chatId: group.id,
+            content: 'Erro ao salvar mídia para despedida.'
+          });
+        }
+      } else {
+          // É apenas texto citado
+          group.farewells.text = content;
       }
-      group.farewells.text = quotedText;
+  
       await this.database.saveGroup(group);
       
       return new ReturnMessage({
         chatId: group.id,
-        content: `Mensagem de despedida atualizada para: ${quotedText}`
+        content: `Mensagem/Mídia de despedida atualizada!`
       });
     } 
-    // Se tiver argumentos, usa o corpo da mensagem completa
+    // Se tiver argumentos (e não for resposta), assume que é texto
     else if (message.origin && message.origin.body) {
       // Extrai o texto após o comando
       const prefixo = group.prefix ?? '!';
       const comandoCompleto = `${prefixo}g-setDespedida`;
-      const texto = message.origin.body.substring(message.origin.body.indexOf(comandoCompleto) + comandoCompleto.length).trim();
+      let texto = "";
       
-      // Se não tem texto, desativa a mensagem de despedida
+      if (message.origin.body.includes(comandoCompleto)) {
+          texto = message.origin.body.substring(message.origin.body.indexOf(comandoCompleto) + comandoCompleto.length).trim();
+      } else {
+          texto = args.join(" ");
+      }
+      
+      // Se não tem texto, avisa
       if (!texto) {
-        if (group.farewells) {
-          delete group.farewells.text;
-        }
-        await this.database.saveGroup(group);
-        
+        const activeTypes = Object.keys(group.farewells).filter(k => group.farewells[k]);
         return new ReturnMessage({
           chatId: group.id,
-          content: 'Mensagem de despedida desativada.'
+          content: `Mídias ativas: ${activeTypes.join(", ")}\n\nPara definir texto: !g-setDespedida <texto>\nPara mídia: Responda a uma mídia com o comando.`
         });
       }
       
-      // Atualiza mensagem de despedida do grupo
-      if (!group.farewells) {
-        group.farewells = {};
-      }
       group.farewells.text = texto;
       await this.database.saveGroup(group);
       
       return new ReturnMessage({
         chatId: group.id,
-        content: `Mensagem de despedida atualizada para: ${texto}`
+        content: `Texto de despedida atualizado para: ${texto}`
       });
     }
     else {
-      // Se não tem argumentos nem mensagem citada, mostra a mensagem atual ou instrui como usar
-      if (group.farewells && group.farewells.text) {
         return new ReturnMessage({
           chatId: group.id,
-          content: `Mensagem de despedida atual: ${group.farewells.text}\n\nPara alterar, use:\n!g-setDespedida Nova mensagem\nou responda a uma mensagem com !g-setDespedida`
+          content: 'Use !g-setDespedida <texto> ou responda a uma mídia com o comando.'
         });
-      } else {
+    }
+  }
+
+  /**
+   * Remove um tipo de mídia da mensagem de despedida
+   * @param {WhatsAppBot} bot - Instância do bot
+   * @param {Object} message - Dados da mensagem
+   * @param {Array} args - Argumentos do comando
+   * @param {Object} group - Dados do grupo
+   * @returns {Promise<ReturnMessage>} Mensagem de retorno
+   */
+  async deleteFarewellMessage(bot, message, args, group) {
+    if (!group) {
+        return new ReturnMessage({
+          chatId: message.author,
+          content: 'Este comando só pode ser usado em grupos.'
+        });
+    }
+
+    if (!group.farewells) {
         return new ReturnMessage({
           chatId: group.id,
-          content: 'Não há mensagem de despedida definida. Para definir, use:\n!g-setDespedida Adeus, {pessoa}!\nou responda a uma mensagem com !g-setDespedida'
+          content: 'Nenhuma mensagem de despedida configurada.'
         });
-      }
+    }
+
+    const type = args[0]?.toLowerCase();
+    const allowedTypes = ['text', 'image', 'video', 'audio', 'sticker'];
+
+    if (!type || !allowedTypes.includes(type)) {
+        const activeTypes = Object.keys(group.farewells).filter(k => group.farewells[k]);
+        return new ReturnMessage({
+            chatId: group.id,
+            content: `Especifique o tipo para remover: ${allowedTypes.join(', ')}\n\nTipos ativos atualmente: ${activeTypes.join(', ') || 'Nenhum'}`
+        });
+    }
+
+    if (group.farewells[type]) {
+        delete group.farewells[type];
+        await this.database.saveGroup(group);
+        return new ReturnMessage({
+            chatId: group.id,
+            content: `Despedida do tipo '${type}' removido com sucesso.`
+        });
+    } else {
+        return new ReturnMessage({
+            chatId: group.id,
+            content: `Não há despedida do tipo '${type}' configurado.`
+        });
     }
   }
   

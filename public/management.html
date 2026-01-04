@@ -70,12 +70,23 @@
     </div>
     
     <div class="form-group">
-    <label for="group-greet-message" title="Mensagem de boas-vindas para novos membros">Mensagem de Boas-vindas:</label>
-    <textarea id="group-greet-message" rows="3"></textarea>
+        <label title="Mensagem de boas-vindas para novos membros">Mensagem de Boas-vindas:</label>
+        <div id="greetings-container" class="media-list">
+            <!-- Media items will be added dynamically here -->
+        </div>
+        <button type="button" id="add-greeting-media" class="btn btn-secondary btn-sm" style="margin-top: 10px;">
+            <i class="fas fa-plus"></i> Adicionar Mídia/Texto
+        </button>
     </div>
+    
     <div class="form-group">
-    <label for="group-farewell-message" title="Mensagem de despedidas pra quem sai/é removido do grupo">Mensagem de Despedidas:</label>
-    <textarea id="group-farewell-message" rows="3"></textarea>
+        <label title="Mensagem de despedidas pra quem sai/é removido do grupo">Mensagem de Despedidas:</label>
+        <div id="farewells-container" class="media-list">
+            <!-- Media items will be added dynamically here -->
+        </div>
+        <button type="button" id="add-farewell-media" class="btn btn-secondary btn-sm" style="margin-top: 10px;">
+            <i class="fas fa-plus"></i> Adicionar Mídia/Texto
+        </button>
     </div>
 
     </div>
@@ -222,7 +233,7 @@
     <span class="close-modal">&times;</span>
     </div>
     <div class="modal-body">
-    <div class="form-group">
+    <div class="form-group" id="media-platform-group">
     <label for="media-platform">Plataforma:</label>
     <select id="media-platform">
     <option value="twitch">Twitch</option>
@@ -230,7 +241,7 @@
     <option value="kick">Kick</option>
     </select>
     </div>
-    <div class="form-group">
+    <div class="form-group" id="media-channel-group">
     <label for="media-channel">Canal:</label>
     <input type="text" id="media-channel" placeholder="Nome do canal">
     </div>
@@ -251,11 +262,15 @@
     <div class="form-group hidden" id="media-file-group">
     <label for="media-file">Arquivo (max 5MB):</label>
     <input type="file" id="media-file" accept="image/*,video/*,audio/*">
+    <div class="checkbox-group" style="margin-top: 10px;">
+        <input type="checkbox" id="send-as-sticker">
+        <label for="send-as-sticker" title="Converte a imagem/vídeo para sticker ao salvar">Enviar como Sticker</label>
+    </div>
     <div id="media-preview-container" class="hidden">
     <img id="media-preview" class="media-preview">
     </div>
     </div>
-    <div class="form-group">
+    <div class="form-group" id="media-event-group">
     <label for="media-event">Evento:</label>
     <select id="media-event">
     <option value="on">Online/Novo Vídeo</option>

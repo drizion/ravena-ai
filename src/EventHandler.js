@@ -806,11 +806,16 @@ class EventHandler {
         // Gera e envia mensagem de boas-vindas para o novo membro
         this.logger.debug(`[groupJoin] Outra pessoa entrou, greetings?`, {greetings: group.greetings});
         if (group.greetings) {
-          this.generateGreetingMessage(bot, group, data.user, chat).then(welcome => {
-            if (welcome) {
-              bot.sendMessage(group.id, welcome.message, { mentions: welcome.mentions }).catch(error => {
-                this.logger.error('Erro ao enviar mensagem de boas-vindas:', error);
-              });
+          this.generateGreetingMessage(bot, group, data.user, chat).then(welcomes => {
+            if (welcomes && Array.isArray(welcomes)) {
+              for (const welcome of welcomes) {
+                  const options = welcome.options ?? {};
+                  if(welcome.mentions) options.mentions = welcome.mentions;
+                  
+                  bot.sendMessage(group.id, welcome.message, options).catch(error => {
+                    this.logger.error('Erro ao enviar mensagem de boas-vindas:', error);
+                  });
+              }
             }
           }).catch(error => {
             this.logger.error('Erro ao gerar mensagem de saudação:', error);
@@ -879,11 +884,16 @@ class EventHandler {
 
       this.logger.debug(`[groupLeave] Outra pessoa sai, farewell? `, {farewells: group?.farewells});
       if (group && group.farewells && !isBotLeaving) {
-        const farewell = await this.processFarewellMessage(group, data.user, bot);
-        if (farewell) {
-          bot.sendMessage(data.group.id, farewell.message, { mentions: farewell.mentions }).catch(error => {
-            this.logger.error('Erro ao enviar mensagem de despedida:', error);
-          });
+        const farewells = await this.processFarewellMessage(group, data.user, bot);
+        if (farewells && Array.isArray(farewells)) {
+          for (const farewell of farewells) {
+              const options = farewell.options ?? {};
+              if(farewell.mentions) options.mentions = farewell.mentions;
+
+              bot.sendMessage(data.group.id, farewell.message, options).catch(error => {
+                this.logger.error('Erro ao enviar mensagem de despedida:', error);
+              });
+          }
         }
       }
     } catch (error) {
@@ -896,14 +906,11 @@ class EventHandler {
    * @param {Group} group - O objeto do grupo
    * @param {Object} user - O usuário que entrou
    * @param {Object} chatData - Dados adicionais do chat (opcional)
-   * @returns {Promise<string|MessageMedia>} - A mensagem de saudação
+   * @returns {Promise<Array<{message: string|MessageMedia, options: Object, mentions: Array}>>} - Array de mensagens de saudação
    */
   async generateGreetingMessage(bot, group, user, chatData = null) {
     try {
-      if (!group.greetings) return null;
-
-      // MENTIONS QUEBRADOS POR CAUSA DE LID
-      //this.logger.info(`[generateGreetingMessage] `, {group, user, chatData});
+      if (!group.greetings) return [];
 
       // Obtém os dados completos do chat, se não fornecidos
       if (!chatData) {
@@ -920,26 +927,40 @@ class EventHandler {
       let numeroPessoas = "";
       let quantidadePessoas = 1;
       let isPlural = false;
-      let mentions = [];
+      let baseMentions = [];
 
       if (Array.isArray(user)) {
         numeroPessoas = user.map(u => `@${u.id.split('@')[0]}` ?? "@123456780").join(", ");
         quantidadePessoas = user.length;
         isPlural = quantidadePessoas > 1;
-        mentions = user.map(u => u.id);
+        baseMentions = user.map(u => u.id);
       } else {
         numeroPessoas = `@${user.id.split('@')[0]}` ?? "@123456780";
-        mentions = [user.id];
+        baseMentions = [user.id];
       }
 
-      // Se saudação de texto
-      if (group.greetings.text) {
-        // Substitui variáveis
-        let message = group.greetings.text;
+      // Filtra tipos de greeting disponíveis
+      const availableTypes = Object.keys(group.greetings).filter(type => group.greetings[type]);
+      
+      if (availableTypes.length === 0) return [];
+
+      const messagesToSend = [];
+
+      // Função auxiliar para processar texto com variáveis
+      const processText = async (text) => {
+        if (!text) return { text: "", mentions: [] };
+        let message = typeof text === 'string' ? text : "";
+        
+        // Se text for objeto (legado/erro), tenta extrair texto ou ignora
+        if (typeof text === 'object') {
+             this.logger.warn('processText recebeu um objeto, ignorando ou convertendo:', text);
+             // Se tiver propriedade 'text' ou 'caption', usa
+             message = text.text || text.caption || "";
+             if (typeof message !== 'string') message = "";
+        }
 
         // Variáveis básicas
-        //message = message.replace(/{pessoa}/g, nomesPessoas);
-        message = message.replace(/{pessoa}/g, numeroPessoas); // Usa o numero pra marcar
+        message = message.replace(/{pessoa}/g, numeroPessoas);
 
         // Variáveis de grupo
         message = message.replace(/{tituloGrupo}/g, chatData?.name ?? "Grupo");
@@ -966,30 +987,68 @@ class EventHandler {
         const options = {};
         message = await this.variableProcessor.process(message, { message: false, group, options, bot });
 
-        if (options.mentions && options.mentions.length > 0) {
-          mentions = mentions.concat(options.mentions);
-        }
+        return { text: message, mentions: options.mentions || [] };
+      };
 
-        mentions = [...new Set(mentions)]; // deixa unicos
-        return { message, mentions };
+      for (const type of availableTypes) {
+          const greetingData = group.greetings[type];
+          let currentMentions = [...baseMentions];
+
+          // Se saudação de texto
+          if (type === 'text') {
+            const processed = await processText(greetingData); // greetingData is the string itself for text type
+            currentMentions = [...new Set([...currentMentions, ...processed.mentions])];
+            
+            messagesToSend.push({
+                message: processed.text,
+                options: { mentions: currentMentions },
+                mentions: currentMentions
+            });
+          } 
+          // Se for mídia (image, video, audio, sticker)
+          else if (greetingData && greetingData.file) {
+              const mediaPath = path.join(this.database.databasePath, 'media', greetingData.file);
+              
+              try {
+                  // Verifica se arquivo existe
+                  await fs.access(mediaPath);
+                  
+                  const MessageMedia = require('whatsapp-web.js').MessageMedia;
+                  const media = MessageMedia.fromFilePath(mediaPath);
+                  
+                  // Processa caption se houver (audio e sticker ignoram caption no envio, mas a gente processa igual)
+                  let caption = "";
+                  if (type !== 'audio' && type !== 'sticker') {
+                      const processedCaption = await processText(greetingData.caption);
+                      caption = processedCaption.text;
+                      currentMentions = [...new Set([...currentMentions, ...processedCaption.mentions])];
+                  }
+                  
+                  // Retorna objeto pronto para sendMessage
+                  messagesToSend.push({ 
+                      message: media, 
+                      options: { 
+                          caption: caption,
+                          mentions: currentMentions,
+                          sendAudioAsVoice: type === 'audio',
+                          sendMediaAsSticker: type === 'sticker'
+                      },
+                      mentions: currentMentions
+                  });
+                  
+              } catch (err) {
+                  this.logger.error(`Erro ao carregar mídia de greeting (${mediaPath}):`, err);
+                  // Fallback para texto se falhar ao carregar mídia e houver texto configurado (mas não duplicar se o loop já cobrir 'text')
+                  // Como o loop passa por todos os types, se 'text' estiver configurado, ele será processado separadamente.
+                  // Então aqui apenas logamos o erro.
+              }
+          }
       }
 
-      // Se saudação de sticker
-      if (group.greetings.sticker) {
-        // TODO: Implementar saudação de sticker
-      }
-
-      // Se saudação de imagem
-      if (group.greetings.image) {
-        // TODO: Implementar saudação de imagem
-      }
-
-      // Saudação padrão
-      //return `Bem-vindo ao grupo, ${user.name}!`;
-      return false;
+      return messagesToSend;
     } catch (error) {
       this.logger.error('Erro ao gerar mensagem de saudação:', error);
-      return null;
+      return [];
     }
   }
 
@@ -997,50 +1056,98 @@ class EventHandler {
    * Processa mensagem de despedida para membros que saem do grupo
    * @param {Group} group - O objeto do grupo
    * @param {Object} user - O usuário que saiu
-   * @returns {string} - A mensagem de despedida
+   * @returns {Promise<Array<{message: string|MessageMedia, options: Object, mentions: Array}>>} - Array de mensagens de despedida
    */
   async processFarewellMessage(group, user, bot, chatData) {
     try {
-      if (!group.farewells) return null;
+      if (!group.farewells) return [];
 
-      // Se despedida de texto
-      if (group.farewells.text) {
-
-        // Obtém os dados completos do chat, se não fornecidos
-        if (!chatData) {
-          try {
-            // Tenta obter o chat para mais informações
-            chatData = await bot.client.getChatById(group.id);
-          } catch (error) {
-            this.logger.error('Erro ao obter dados do chat para despedidas:', error);
-          }
+      // Obtém os dados completos do chat, se não fornecidos
+      if (!chatData) {
+        try {
+          // Tenta obter o chat para mais informações
+          chatData = await bot.client.getChatById(group.id);
+        } catch (error) {
+          this.logger.error('Erro ao obter dados do chat para despedidas:', error);
         }
-
-        // Substitui variáveis
-        let message = group.farewells.text;
-        message = message.replace(/{pessoa}/g, `@${user.id.split('@')[0]}`);
-        message = message.replace(/{tituloGrupo}/g, chatData?.name ?? "Grupo");
-
-        // Processa variáveis
-        const options = {};
-        message = await this.variableProcessor.process(message, { message: false, group, options, bot });
-
-        let mentions = [user.id];
-        if (options.mentions && options.mentions.length > 0) {
-          mentions = mentions.concat(options.mentions);
-        }
-
-        mentions = [...new Set(mentions)]; // deixa unicos
-
-        return { message, mentions };
       }
 
-      // Despedida padrão
-      //return `Adeus, ${user.name}!`;
-      return false;
+      const availableTypes = Object.keys(group.farewells).filter(type => group.farewells[type]);
+      if (availableTypes.length === 0) return [];
+
+      const messagesToSend = [];
+      const baseMentions = [user.id];
+
+      const processText = async (text) => {
+          if (!text) return { text: "", mentions: [] };
+          let message = typeof text === 'string' ? text : "";
+          
+          if (typeof text === 'object') {
+             message = text.text || text.caption || "";
+             if (typeof message !== 'string') message = "";
+          }
+
+          message = message.replace(/{pessoa}/g, `@${user.id.split('@')[0]}`);
+          message = message.replace(/{tituloGrupo}/g, chatData?.name ?? "Grupo");
+
+          // Processa variáveis
+          const options = {};
+          message = await this.variableProcessor.process(message, { message: false, group, options, bot });
+
+          return { text: message, mentions: options.mentions || [] };
+      };
+
+      for (const type of availableTypes) {
+          const farewellData = group.farewells[type];
+          let currentMentions = [...baseMentions];
+
+          // Se despedida de texto
+          if (type === 'text') {
+            const processed = await processText(farewellData);
+            currentMentions = [...new Set([...currentMentions, ...processed.mentions])];
+            
+            messagesToSend.push({
+                message: processed.text,
+                options: { mentions: currentMentions },
+                mentions: currentMentions
+            });
+          }
+          // Se for mídia
+          else if (farewellData && farewellData.file) {
+              const mediaPath = path.join(this.database.databasePath, 'media', farewellData.file);
+              
+              try {
+                  await fs.access(mediaPath);
+                  const MessageMedia = require('whatsapp-web.js').MessageMedia;
+                  const media = MessageMedia.fromFilePath(mediaPath);
+                  
+                  let caption = "";
+                  if (type !== 'audio' && type !== 'sticker') {
+                      const processedCaption = await processText(farewellData.caption);
+                      caption = processedCaption.text;
+                      currentMentions = [...new Set([...currentMentions, ...processedCaption.mentions])];
+                  }
+                  
+                  messagesToSend.push({ 
+                      message: media, 
+                      options: { 
+                          caption: caption,
+                          mentions: currentMentions,
+                          sendAudioAsVoice: type === 'audio',
+                          sendMediaAsSticker: type === 'sticker'
+                      },
+                      mentions: currentMentions
+                  });
+              } catch (err) {
+                  this.logger.error(`Erro ao carregar mídia de farewell (${mediaPath}):`, err);
+              }
+          }
+      }
+
+      return messagesToSend;
     } catch (error) {
       this.logger.error('Erro ao processar mensagem de despedida:', error);
-      return null;
+      return [];
     }
   }
 

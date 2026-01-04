@@ -52,8 +52,8 @@ class BotAPI {
     };
 
     // Configura middlewares
-    this.app.use(bodyParser.json());
-    this.app.use(bodyParser.urlencoded({ extended: true }));
+    this.app.use(bodyParser.json({ limit: '50mb' }));
+    this.app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
     // Configura rotas
     this.setupRoutes();
@@ -954,8 +954,8 @@ class BotAPI {
 
 
 
-    this.app.get('/media/:platform/:channel/:event/:type', async (req, res) => {
-      const { platform, channel, event, type } = req.params;
+    this.app.get('/media-direct/:fileName', async (req, res) => {
+      const { fileName } = req.params;
       const token = req.query.token;
 
       if (!token) {
@@ -973,32 +973,21 @@ class BotAPI {
           return res.status(401).send('Token expired');
         }
 
-        // Get database instance                 
+        // Get group data                 
         const groupData = await this.database.getGroup(webManagementData.groupId);
 
-        if (!groupData || !groupData[platform]) {
-          return res.status(404).send('Platform not set');
+        if (!groupData) {
+          return res.status(404).send('Group not found');
         }
 
-        const allPlatformData = groupData[platform].find(plt => plt.channel == channel);
-        if (!allPlatformData) {
-          return res.status(404).send('Channel not set');
+        // Security check: verify the file belongs to this group's configuration
+        const groupStr = JSON.stringify(groupData);
+        if (!groupStr.includes(fileName)) {
+          this.logger.warn(`[security] Unauthenticated access attempt to file ${fileName} by group ${groupData.id}`);
+          return res.status(403).send('Forbidden');
         }
 
-        let mediaFound = allPlatformData.onConfig?.media?.find(m => m.type == type);
-        if (event == "off") {
-          mediaFound = allPlatformData.offConfig?.media.find(m => m.type == type);
-        }
-
-        if (!mediaFound) {
-          return res.status(404).send(`${type}@${event} not found`);
-        }
-
-        this.logger.info(mediaFound);
-
-        const fileName = mediaFound.content;
         const filePath = path.join(this.database.databasePath, "media", fileName);
-        this.logger.info(filePath);
 
         // Verify file exists  
         await fs.access(filePath).catch(() => {
@@ -1017,12 +1006,13 @@ class BotAPI {
           case '.mp4': contentType = 'video/mp4'; break;
           case '.mp3': contentType = 'audio/mpeg'; break;
           case '.wav': contentType = 'audio/wav'; break;
+          case '.webp': contentType = 'image/webp'; break;
         }
 
         res.setHeader('Content-Type', contentType);
         res.sendFile(filePath);
       } catch (error) {
-        this.logger.error('Error serving media:', error);
+        this.logger.error('Error serving direct media:', error);
         return res.status(500).send('Server error');
       }
     });

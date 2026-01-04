@@ -129,18 +129,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('group-created-at').value = formatDate(data.createdAt) || '';  
         document.getElementById('group-name-input').value = data.name || '';  
         
-        // Check if greetings and farewells exist
-        if (data.greetings && data.greetings.text) {
-            document.getElementById('group-greet-message').value = data.greetings.text;
-        } else {
-            document.getElementById('group-greet-message').value = '';
-        }
-        
-        if (data.farewells && data.farewells.text) {
-            document.getElementById('group-farewell-message').value = data.farewells.text;
-        } else {
-            document.getElementById('group-farewell-message').value = '';
-        }
+        // Setup Greetings and Farewells
+        setupGreetingsFarewells();
         
         // Checkboxes  
         document.getElementById('group-isNSFW').checked = data.filters && data.filters.nsfw === true;
@@ -188,6 +178,113 @@ document.addEventListener('DOMContentLoaded', () => {
         setupStreamPlatforms();
     }  
     
+    function setupGreetingsFarewells() {
+        // Setup Greetings
+        setupDirectMediaSection('greetings');
+        
+        // Setup Farewells
+        setupDirectMediaSection('farewells');
+    }
+
+    function setupDirectMediaSection(type) {
+        const container = document.getElementById(`${type}-container`);
+        container.innerHTML = '';
+        
+        const dataObj = groupData[type] || {};
+        
+        Object.keys(dataObj).forEach(mediaType => {
+            const data = dataObj[mediaType];
+            let content = "";
+            let file = "";
+            
+            if (mediaType === 'text') {
+                content = data; // For text, the value is the string
+            } else {
+                file = data.file;
+                content = data.caption || ""; // For media, we might have a caption
+            }
+
+            // Normalize for display
+            const mediaDisplay = {
+                type: mediaType,
+                content: mediaType === 'text' ? content : file,
+                caption: mediaType !== 'text' ? content : undefined
+            };
+
+            const mediaItem = createDirectMediaItem(type, mediaDisplay);
+            container.appendChild(mediaItem);
+        });
+    }
+
+    function createDirectMediaItem(section, media) {
+        const mediaItem = document.createElement('div');
+        mediaItem.className = 'media-item';
+        mediaItem.dataset.section = section;
+        mediaItem.dataset.type = media.type;
+        
+        // Media type icon
+        let typeIcon = '';
+        switch (media.type) {
+            case 'text': typeIcon = '💬'; break;
+            case 'image': typeIcon = '🖼'; break;
+            case 'audio': typeIcon = '🔉'; break; // 'audio' in backend, 'sound' in frontend options? need to align
+            case 'video': typeIcon = '📼'; break;
+            case 'sticker': typeIcon = '🩻'; break;
+            default: typeIcon = '📄';
+        }
+        
+        // Media content preview
+        let contentPreview = '';
+        if (media.type === 'text') {
+            const truncatedContent = media.content.length > 50 
+                ? media.content.substring(0, 50) + '...' 
+                : media.content;
+            contentPreview = `<div class="media-content">${truncatedContent}</div>`;
+        } else {
+            // Use the new endpoint for direct media
+            const mediaLink = `/media-direct/${media.content}?token=${token}`;
+            contentPreview = `<div class="media-content" onclick="window.open('${mediaLink}','_new')" target="_new" style="cursor: pointer; color: #4299e1; text-decoration: underline;">Arquivo: ${media.content} (Abrir)</div>`;
+            
+            // Show caption only for image and video
+            if ((media.type === 'image' || media.type === 'video') && media.caption) {
+                let captionText = media.caption;
+                if (typeof media.caption === 'object') {
+                    captionText = ""; // Don't show [object Object]
+                }
+                if (captionText) {
+                    contentPreview += `<div class="media-caption"><small>Legenda: ${captionText}</small></div>`;
+                }
+            }
+        }
+        
+        mediaItem.innerHTML = `
+            <div class="media-item-header">
+                <div class="media-type-icon">${typeIcon}</div>
+                <div class="media-item-type">${getMediaTypeDisplayName(media.type)}</div>
+                <div class="media-item-actions">
+                    <button type="button" class="btn-edit-media" title="Editar mídia">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button type="button" class="btn-delete-media" title="Excluir mídia">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            ${contentPreview}
+        `;
+        
+        // Add event listeners
+        mediaItem.querySelector('.btn-edit-media').addEventListener('click', () => {
+            editMedia(section, null, null, media.type); // Using media.type as index/identifier
+        });
+        
+        mediaItem.querySelector('.btn-delete-media').addEventListener('click', () => {
+            deleteMedia(section, null, null, media.type);
+        });
+        
+        return mediaItem;
+    }
+
     function setupStreamPlatforms() {
         // Setup Twitch
         setupPlatformSection('twitch');
@@ -409,8 +506,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 : media.content;
             contentPreview = `<div class="media-content">${truncatedContent}</div>`;
         } else if (media.content) {
-            const mediaLink = `/media/${platform}/${channel}/${event}/${media.type}?token=${token}`;
-            contentPreview = `<div class="media-content" onclick="window.open('${mediaLink}','_new')" target="_new">Arquivo: ${media.content}</div>`;
+            // Use the unified media-direct endpoint
+            const mediaLink = `/media-direct/${media.content}?token=${token}`;
+            contentPreview = `<div class="media-content" onclick="window.open('${mediaLink}','_new')" target="_new" style="cursor: pointer; color: #4299e1; text-decoration: underline;">Arquivo: ${media.content} (Abrir)</div>`;
         } else {
             contentPreview = `<div class="media-content">Sem conteúdo</div>`;
         }
@@ -552,45 +650,95 @@ document.addEventListener('DOMContentLoaded', () => {
     function showAddMediaModal(platform, channel, event) {
         // Reset the modal
         document.getElementById('media-platform').value = platform;
-        document.getElementById('media-channel').value = channel;
-        document.getElementById('media-event').value = event;
+        
+        const isDirect = (platform === 'greetings' || platform === 'farewells');
+        
+        // Hide/Show platform-specific groups
+        document.getElementById('media-platform-group').style.display = isDirect ? 'none' : 'block';
+        document.getElementById('media-channel-group').style.display = isDirect ? 'none' : 'block';
+        document.getElementById('media-event-group').style.display = isDirect ? 'none' : 'block';
+
+        // Only set channel if it exists (might be null for greetings)
+        if (channel) document.getElementById('media-channel').value = channel;
+        if (event) document.getElementById('media-event').value = event;
+        
         document.getElementById('media-type').value = 'text';
         document.getElementById('text-content').value = '';
-        document.getElementById('media-file').value = '';
-        document.getElementById('media-preview-container').classList.add('hidden');
+        
+        const mediaFile = document.getElementById('media-file');
+        if(mediaFile) mediaFile.value = '';
+        
+        const sendAsSticker = document.getElementById('send-as-sticker');
+        if(sendAsSticker) sendAsSticker.checked = false;
+        
+        const previewContainer = document.getElementById('media-preview-container');
+        if(previewContainer) previewContainer.classList.add('hidden');
         
         // Show text content, hide file upload
         document.getElementById('text-content-group').classList.remove('hidden');
         document.getElementById('media-file-group').classList.add('hidden');
         
         // Update modal title
-        const modalTitle = `Adicionar Mídia - ${getPlatformDisplayName(platform)} (${channel})`;
+        let modalTitle = "";
+        if (platform === 'greetings') modalTitle = "Adicionar Boas-vindas";
+        else if (platform === 'farewells') modalTitle = "Adicionar Despedida";
+        else modalTitle = `Adicionar Mídia - ${getPlatformDisplayName(platform)} (${channel})`;
+        
         document.querySelector('#media-upload-modal .modal-header h2').textContent = modalTitle;
         
         // Show the modal
         document.getElementById('media-upload-modal').classList.remove('hidden');
         
         // Add event listener for media type change
-        document.getElementById('media-type').addEventListener('change', handleMediaTypeChange);
+        // Remove previous listener to avoid duplicates if any (though not strictly necessary if using named function, but good practice)
+        // actually element.addEventListener adds multiple if called multiple times with same function? No, same function ref is deduped.
+        // But handleMediaTypeChange depends on current DOM state which is fine.
         
-        // Add event listener for file input change
-        document.getElementById('media-file').addEventListener('change', handleFileInputChange);
+        // Re-run handleMediaTypeChange to set initial state correctly
+        handleMediaTypeChange();
         
         // Add event listener for add button
-        document.getElementById('add-media').onclick = () => {
+        const addButton = document.getElementById('add-media');
+        // Remove old listeners by cloning
+        const newAddButton = addButton.cloneNode(true);
+        addButton.parentNode.replaceChild(newAddButton, addButton);
+        
+        newAddButton.textContent = 'Adicionar';
+        newAddButton.onclick = () => {
             addMedia(platform, channel, event);
         };
     }
     
     function handleMediaTypeChange() {
         const mediaType = document.getElementById('media-type').value;
+        const platform = document.getElementById('media-platform').value;
         
+        const isGreetingsOrFarewells = (platform === 'greetings' || platform === 'farewells');
+
         if (mediaType === 'text') {
             document.getElementById('text-content-group').classList.remove('hidden');
             document.getElementById('media-file-group').classList.add('hidden');
+            // Update label for text
+            document.querySelector('label[for="text-content"]').textContent = "Conteúdo:";
         } else {
-            document.getElementById('text-content-group').classList.add('hidden');
             document.getElementById('media-file-group').classList.remove('hidden');
+            
+            // Show/Hide "Send as sticker" checkbox
+            // Relevant for image/video types
+            const sendAsStickerContainer = document.getElementById('send-as-sticker').parentElement;
+            if (mediaType === 'image' || mediaType === 'video') {
+                 sendAsStickerContainer.classList.remove('hidden');
+            } else {
+                 sendAsStickerContainer.classList.add('hidden');
+            }
+
+            // For greetings/farewells image/video, show text input as caption
+            if (isGreetingsOrFarewells && (mediaType === 'image' || mediaType === 'video')) {
+                 document.getElementById('text-content-group').classList.remove('hidden');
+                 document.querySelector('label[for="text-content"]').textContent = "Legenda (Caption):";
+            } else {
+                 document.getElementById('text-content-group').classList.add('hidden');
+            }
         }
     }
     
@@ -631,8 +779,147 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function addMedia(platform, channel, event) {
         const mediaType = document.getElementById('media-type').value;
+        const mappedMediaType = mediaType === 'sound' ? 'audio' : mediaType; // Backend uses 'audio'
+
         let mediaContent = '';
         
+        // Branch for Greetings/Farewells
+        if (platform === 'greetings' || platform === 'farewells') {
+             if (groupData[platform] && groupData[platform][mappedMediaType]) {
+                 if(!confirm(`Já existe uma mídia do tipo ${mappedMediaType} configurada. Deseja substituir?`)){
+                     return;
+                 }
+             }
+             if (!groupData[platform]) groupData[platform] = {};
+
+             if (mappedMediaType === 'text') {
+                mediaContent = document.getElementById('text-content').value.trim();
+                if (!mediaContent) {
+                    alert('Por favor, informe o conteúdo do texto.');
+                    return;
+                }
+                groupData[platform].text = mediaContent;
+                document.getElementById('media-upload-modal').classList.add('hidden');
+                setupGreetingsFarewells();
+                return;
+             } else {
+                 // File upload for Greetings/Farewells
+                const fileInput = document.getElementById('media-file');
+                const sendAsSticker = document.getElementById('send-as-sticker').checked;
+                
+                // If it's just updating "Send as Sticker" for existing media (no new file), handle it
+                // We detect this if fileInput is empty but we are in edit mode (not handled explicitly here yet)
+                // Actually addMedia handles new files. editMedia calls addMedia.
+                // If editing and no file selected, we should check if we just want to update metadata (caption/type)
+                // But addMedia requires file for non-text currently if we follow the logic strictly.
+                // However, editMedia pre-fills the file info in UI but fileInput is empty.
+                
+                // Let's modify logic to allow updating without file if it exists
+                // We need to know if we are updating existing media.
+                // We can check if groupData[platform][mappedMediaType] exists.
+                
+                // Final media type to be stored
+                const finalMediaType = sendAsSticker ? 'sticker' : mappedMediaType;
+
+                // Let's grab caption if available
+                const caption = document.getElementById('text-content').value.trim();
+
+                if ((!fileInput.files || fileInput.files.length === 0)) {
+                    // No new file selected.
+                    // Check if we are updating existing media
+                    if (groupData[platform] && groupData[platform][mappedMediaType]) {
+                         // We are updating existing media.
+                         // If type changed (e.g. image -> sticker), we need to move the data?
+                         // The user instruction says "making the existing media a sticker".
+                         // If I have groupData['greetings']['image'] and I check "Sticker",
+                         // I should save it as groupData['greetings']['sticker'] and remove 'image'?
+                         // Or just update 'image' entry?
+                         // The structure is groupData[type][mediaType].
+                         // If I change to sticker, the key should probably be 'sticker'.
+                         
+                         const existingFile = groupData[platform][mappedMediaType].file;
+                         
+                         // If changing type to sticker
+                         if (sendAsSticker && mappedMediaType !== 'sticker') {
+                             if(confirm("Transformar esta mídia em Sticker? (A original será removida da categoria anterior)")){
+                                 groupData[platform]['sticker'] = {
+                                     file: existingFile,
+                                     caption: caption
+                                 };
+                                 // Remove old key if different
+                                 delete groupData[platform][mappedMediaType];
+                             } else {
+                                 return;
+                             }
+                         } else {
+                             // Just updating caption or kept same type
+                             // If it was already sticker and we unchecked?
+                             // Converting sticker back to image might not be safe if original file was webp?
+                             // But user only asked for "Send as sticker".
+                             
+                             groupData[platform][finalMediaType] = {
+                                 file: existingFile,
+                                 caption: caption
+                             };
+                         }
+
+                        document.getElementById('media-upload-modal').classList.add('hidden');
+                        setupGreetingsFarewells();
+                        return;
+                    } else {
+                        alert('Por favor, selecione um arquivo.');
+                        return;
+                    }
+                }
+
+                const file = fileInput.files[0];
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('token', token);
+                formData.append('groupId', groupId);
+                formData.append('type', platform); // greetings or farewells
+                formData.append('name', finalMediaType); // image, audio, sticker etc.
+                
+                document.getElementById('add-media').disabled = true;
+                document.getElementById('add-media').textContent = 'Enviando...';
+                
+                fetch('/api/upload-media', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        groupData[platform][finalMediaType] = {
+                            file: data.fileName,
+                            caption: caption
+                        };
+                        
+                        // If we are overwriting/converting, maybe we should clean up the old key if it was different?
+                        // Example: Uploading 'image' but checking 'sticker'. Key becomes 'sticker'.
+                        // If 'image' key existed, it remains unless we explicitly delete it.
+                        // But here we are adding new or replacing.
+                        // If I selected 'image' type in dropdown but checked 'sticker', I'm creating a 'sticker' entry.
+                        // If I had an 'image' entry before, it might stay if I don't delete it.
+                        // But typically users edit the specific type.
+                        
+                        document.getElementById('media-upload-modal').classList.add('hidden');
+                        setupGreetingsFarewells();
+                    } else {
+                        alert('Erro: ' + data.message);
+                    }
+                })
+                .catch(err => alert('Erro: ' + err.message))
+                .finally(() => {
+                    document.getElementById('add-media').disabled = false;
+                    document.getElementById('add-media').textContent = 'Adicionar';
+                });
+                return;
+             }
+        }
+
+        // --- Original Stream Logic Below ---
+
         // Get the channel index
         const channelIndex = groupData[platform].findIndex(c => c.channel === channel);
         
@@ -677,8 +964,17 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             // For file uploads, we need to handle the upload process
             const fileInput = document.getElementById('media-file');
+            const sendAsSticker = document.getElementById('send-as-sticker').checked;
             
-            if (!fileInput.files || fileInput.files.length === 0) {
+            // Determine effective media type
+            const finalMediaType = sendAsSticker ? 'sticker' : mediaType;
+
+            if ((!fileInput.files || fileInput.files.length === 0)) {
+                // If we are editing (implied by context or if we implement logic to pass existing file)
+                // But addMedia is used for adding new. 
+                // However, editMedia might call this? editMedia in streams calls updateMedia.
+                // updateMedia is separate. I need to update updateMedia too!
+                
                 alert('Por favor, selecione um arquivo.');
                 return;
             }
@@ -714,7 +1010,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.success) {
                     // Add the media to the group data
                     const newMedia = {
-                        type: mediaType,
+                        type: finalMediaType,
                         content: data.fileName
                     };
                     
@@ -752,6 +1048,81 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function editMedia(platform, channel, event, index) {
+        // Branch for Greetings/Farewells
+        if (platform === 'greetings' || platform === 'farewells') {
+            const mediaType = index; // identifying by type key
+            const data = groupData[platform][mediaType];
+
+            if (!data) return;
+
+            // Reset modal
+            document.getElementById('media-platform').value = platform;
+            
+            // Hide/Show platform-specific groups
+            document.getElementById('media-platform-group').style.display = 'none';
+            document.getElementById('media-channel-group').style.display = 'none';
+            document.getElementById('media-event-group').style.display = 'none';
+
+            document.getElementById('media-channel').value = 'main'; // dummy
+            document.getElementById('media-event').value = 'default'; // dummy
+            document.getElementById('media-type').value = mediaType === 'audio' ? 'sound' : mediaType;
+            
+            // Set checkbox state if it is a sticker
+            if (mediaType === 'sticker') {
+                 document.getElementById('send-as-sticker').checked = true;
+            } else {
+                 document.getElementById('send-as-sticker').checked = false;
+            }
+
+            // Adjust visibility
+            handleMediaTypeChange(); // This hides text/file inputs based on type
+            
+            if (mediaType === 'text') {
+                document.getElementById('text-content').value = data;
+            } else {
+                let captionVal = data.caption || "";
+                if (typeof captionVal === 'object') captionVal = ""; // Sanitize object captions
+                document.getElementById('text-content').value = captionVal;
+                
+                // Show file info
+                 document.getElementById('media-file-group').innerHTML = `
+                    <label>Arquivo atual:</label>
+                    <div class="media-content">${data.file}</div>
+                    <label for="media-file">Substituir arquivo (max 5MB):</label>
+                    <input type="file" id="media-file" accept="image/*,video/*,audio/*">
+                    <div class="checkbox-group" style="margin-top: 10px;">
+                        <input type="checkbox" id="send-as-sticker" ${mediaType === 'sticker' ? 'checked' : ''}>
+                        <label for="send-as-sticker" title="Converte a imagem/vídeo para sticker ao salvar">Enviar como Sticker</label>
+                    </div>
+                    <div id="media-preview-container" class="hidden">
+                        <img id="media-preview" class="media-preview">
+                    </div>
+                `;
+                document.getElementById('media-file').addEventListener('change', handleFileInputChange);
+                // Need to re-attach handleMediaTypeChange because we overwrote the innerHTML which might contain the checkbox if we moved it inside?
+                // No, check box was inside media-file-group in HTML, so overwriting innerHTML destroyed it.
+                // Re-added checkbox in the HTML string above.
+            }
+
+             // Update modal title
+            const modalTitle = `Editar ${platform === 'greetings' ? 'Boas-vindas' : 'Despedida'} - ${getMediaTypeDisplayName(mediaType)}`;
+            document.querySelector('#media-upload-modal .modal-header h2').textContent = modalTitle;
+            document.getElementById('media-upload-modal').classList.remove('hidden');
+
+            const addButton = document.getElementById('add-media');
+            // Remove old listeners by cloning
+            const newAddButton = addButton.cloneNode(true);
+            addButton.parentNode.replaceChild(newAddButton, addButton);
+
+            newAddButton.textContent = 'Salvar';
+            newAddButton.onclick = () => {
+                // Reuse addMedia logic which handles upsert/replace
+                addMedia(platform, null, null);
+            };
+            return;
+        }
+
+
         // Get the channel index
         const channelIndex = groupData[platform].findIndex(c => c.channel === channel);
         
@@ -776,7 +1147,17 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('media-platform').value = platform;
         document.getElementById('media-channel').value = channel;
         document.getElementById('media-event').value = event;
-        document.getElementById('media-type').value = media.type;
+        
+        // Hide/Show platform-specific groups
+        document.getElementById('media-platform-group').style.display = 'block';
+        document.getElementById('media-channel-group').style.display = 'block';
+        document.getElementById('media-event-group').style.display = 'block';
+
+        document.getElementById('media-type').value = media.type === 'sticker' ? 'image' : media.type;
+        
+        // Handle sticker state
+        const isSticker = media.type === 'sticker';
+        // Checkbox is inside media-file-group, which we might overwrite below.
         
         // Set content based on media type
         if (media.type === 'text') {
@@ -788,29 +1169,33 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('media-file-group').classList.remove('hidden');
             
             // Show file name if available
+            let fileInfoHtml = "";
             if (media.content) {
-                document.getElementById('media-file-group').innerHTML = `
+                fileInfoHtml = `
                     <label>Arquivo atual:</label>
                     <div class="media-content">${media.content}</div>
-                    <label for="media-file">Substituir arquivo (max 5MB):</label>
-                    <input type="file" id="media-file" accept="image/*,video/*,audio/*">
-                    <div id="media-preview-container" class="hidden">
-                        <img id="media-preview" class="media-preview">
-                    </div>
-                `;
-            } else {
-                document.getElementById('media-file-group').innerHTML = `
-                    <label for="media-file">Arquivo (max 5MB):</label>
-                    <input type="file" id="media-file" accept="image/*,video/*,audio/*">
-                    <div id="media-preview-container" class="hidden">
-                        <img id="media-preview" class="media-preview">
-                    </div>
                 `;
             }
+            
+            document.getElementById('media-file-group').innerHTML = `
+                ${fileInfoHtml}
+                <label for="media-file">${media.content ? 'Substituir' : ''} Arquivo (max 5MB):</label>
+                <input type="file" id="media-file" accept="image/*,video/*,audio/*">
+                <div class="checkbox-group" style="margin-top: 10px;">
+                    <input type="checkbox" id="send-as-sticker" ${isSticker ? 'checked' : ''}>
+                    <label for="send-as-sticker" title="Converte a imagem/vídeo para sticker ao salvar">Enviar como Sticker</label>
+                </div>
+                <div id="media-preview-container" class="hidden">
+                    <img id="media-preview" class="media-preview">
+                </div>
+            `;
             
             // Add event listener for file input change
             document.getElementById('media-file').addEventListener('change', handleFileInputChange);
         }
+        
+        // Adjust visibility AFTER setting HTML because handleMediaTypeChange looks for #send-as-sticker
+        handleMediaTypeChange();
         
         // Update modal title
         const modalTitle = `Editar Mídia - ${getPlatformDisplayName(platform)} (${channel})`;
@@ -819,19 +1204,22 @@ document.addEventListener('DOMContentLoaded', () => {
         // Show the modal
         document.getElementById('media-upload-modal').classList.remove('hidden');
         
-        // Add event listener for media type change
-        document.getElementById('media-type').addEventListener('change', handleMediaTypeChange);
-        
         // Add event listener for add button
-        document.getElementById('add-media').textContent = 'Salvar';
-        document.getElementById('add-media').onclick = () => {
+        const addButton = document.getElementById('add-media');
+        const newAddButton = addButton.cloneNode(true);
+        addButton.parentNode.replaceChild(newAddButton, addButton);
+        
+        newAddButton.textContent = 'Salvar';
+        newAddButton.onclick = () => {
             updateMedia(platform, channel, event, index);
         };
     }
     
     function updateMedia(platform, channel, event, index) {
         const mediaType = document.getElementById('media-type').value;
-        
+        const sendAsSticker = document.getElementById('send-as-sticker').checked;
+        const finalMediaType = sendAsSticker ? 'sticker' : mediaType;
+
         // Get the channel index
         const channelIndex = groupData[platform].findIndex(c => c.channel === channel);
         
@@ -876,7 +1264,13 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (!fileInput.files || fileInput.files.length === 0) {
                 // No new file, just close the modal
+                // BUT wait, what if we just changed "Send as Sticker" checkbox?
+                // We should update the type!
+                
+                mediaConfig[index].type = finalMediaType;
+                
                 document.getElementById('media-upload-modal').classList.add('hidden');
+                setupPlatformSection(platform);
                 return;
             }
             
@@ -911,7 +1305,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.success) {
                     // Update the media
                     mediaConfig[index] = {
-                        type: mediaType,
+                        type: finalMediaType,
                         content: data.fileName
                     };
                     
@@ -937,6 +1331,16 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function deleteMedia(platform, channel, event, index) {
         if (!confirm('Tem certeza que deseja excluir esta mídia?')) {
+            return;
+        }
+
+        // Branch for Greetings/Farewells
+        if (platform === 'greetings' || platform === 'farewells') {
+            const mediaType = index;
+            if (groupData[platform][mediaType]) {
+                delete groupData[platform][mediaType];
+                setupGreetingsFarewells();
+            }
             return;
         }
         
@@ -1064,7 +1468,16 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('add-nick').addEventListener('click', () => {  
             const nicksContainer = document.getElementById('nicks-container');  
             addNickEntry(nicksContainer, '', '');  
-        });  
+        });
+
+        // Add Greetings/Farewells Media
+        document.getElementById('add-greeting-media').addEventListener('click', () => {
+            showAddMediaModal('greetings', null, null);
+        });
+
+        document.getElementById('add-farewell-media').addEventListener('click', () => {
+            showAddMediaModal('farewells', null, null);
+        });
         
         // Close modals when clicking X or outside  
         document.querySelectorAll('.close-modal').forEach(button => {  
@@ -1073,7 +1486,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('media-upload-modal').classList.add('hidden');  
                 document.getElementById('restore-defaults-modal').classList.add('hidden');
             });  
-        });  
+        });
+
+        // Media type change listener
+        document.getElementById('media-type').addEventListener('change', handleMediaTypeChange);
          
         const cancelMediaButton = document.querySelector("#cancel-media");
         cancelMediaButton.addEventListener('click', () => {  
@@ -1119,8 +1535,7 @@ document.addEventListener('DOMContentLoaded', () => {
             groupData.farewells = {};
         }
         
-        groupData.greetings.text = document.getElementById('group-greet-message').value;  
-        groupData.farewells.text = document.getElementById('group-farewell-message').value;  
+        // Greetings and Farewells are updated directly via add/remove buttons
         
         // Ensure filters object exists
         if (!groupData.filters) {
@@ -1265,6 +1680,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return changes;  
     }  
     
+    function truncateValue(val) {
+        if (typeof val !== 'string') return val;
+        if (val.length > 50) {
+            return val.substring(0, 47) + '...';
+        }
+        return val;
+    }
+
     function showConfirmationModal(changes) {  
         // Format changes as HTML
         const formattedChanges = document.getElementById('changes-formatted');
@@ -1283,7 +1706,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (typeof value === 'boolean') {
                 displayValue = value ? 'Sim' : 'Não';
             } else {
-                displayValue = value.toString();
+                displayValue = truncateValue(value.toString());
             }
             
             changeItem.innerHTML = `
@@ -1305,13 +1728,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (Array.isArray(obj)) {
             if (obj.length === 0) return '<em>(lista vazia)</em>';
             
-            return `<ul>${obj.map(item => `<li>${typeof item === 'object' ? formatObjectForDisplay(item) : item}</li>`).join('')}</ul>`;
+            return `<ul>${obj.map(item => `<li>${typeof item === 'object' ? formatObjectForDisplay(item) : truncateValue(item.toString())}</li>`).join('')}</ul>`;
         }
         
         const entries = Object.entries(obj);
         if (entries.length === 0) return '<em>(objeto vazio)</em>';
         
-        return `<ul>${entries.map(([k, v]) => `<li><strong>${formatKeyName(k)}:</strong> ${typeof v === 'object' ? formatObjectForDisplay(v) : v}</li>`).join('')}</ul>`;
+        return `<ul>${entries.map(([k, v]) => `<li><strong>${formatKeyName(k)}:</strong> ${typeof v === 'object' ? formatObjectForDisplay(v) : truncateValue(v.toString())}</li>`).join('')}</ul>`;
     }
     
     function formatKeyName(key) {
