@@ -78,6 +78,7 @@ async function main() {
 
         redisDbAtual++;
         newRBot.initialize();
+        await sleep(500);
       } else if(rBot.useTelegram){
         logger.info(`Inicializando '${rBot.nome}' como Telegram Bot`);
         newRBot = new TelegramBot({
@@ -108,6 +109,7 @@ async function main() {
 
         redisDbAtual++;
         newRBot.initialize();
+        await sleep(500);
       } else if(rBot.useEvoGo){
         logger.info(`Inicializando '${rBot.nome}' como EvolutionAPI GO`);
         newRBot = new WhatsAppBotEvoGo({
@@ -161,6 +163,7 @@ async function main() {
         }
 
         newRBot.initialize();
+        await sleep(500);
       } else if(rBot.useEvo){
         logger.info(`Inicializando '${rBot.nome}' como evolutionAPI`);
         newRBot = new WhatsAppBotEvo({
@@ -213,6 +216,7 @@ async function main() {
         }
 
         newRBot.initialize();
+        await sleep(500);
       } else {
         logger.info(`Inicializando '${rBot.nome}' como whatsapp-web.js`);
         newRBot = new WhatsAppBot({
