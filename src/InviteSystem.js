@@ -63,8 +63,13 @@ class InviteSystem {
       const userCooldownDurationMs = this.inviteCooldown * 60 * 1000; // Cooldown do usuário em milissegundos
 
       if (lastUserInviteTime && (currentTime - lastUserInviteTime < userCooldownDurationMs)) {
-        this.logger.info(`Usuário ${message.author} está em cooldown para convites. Ignorando.`);
-        return false;
+        this.logger.info(`Usuário ${message.author} está em cooldown para convites. Ignorando (invite? '${inviteMatch}').`);
+        if(inviteMatch){
+          message.origin.react("⏰");
+          return true;
+        } else {
+          return false;
+        }
       }
       
       const inviteLink = inviteMatch[0];
@@ -180,7 +185,7 @@ class InviteSystem {
         } catch (err) {
           this.bot.sendMessage(authorId, "Leitura não é o seu forte, né? _Convite ignorado._");
         }
-        
+
         const punishDuration = (10 * this.inviteCooldown * 60 * 1000);
         const normalDuration = (this.inviteCooldown * 60 * 1000);
 
