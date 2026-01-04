@@ -16,6 +16,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const Stickers = require('./functions/Stickers');
 const GeoGuesser = require('./functions/GeoguesserGame');
+const LembretesCommands = require('./functions/LembretesCommands');
 
 class EventHandler {
   constructor() {
@@ -118,6 +119,11 @@ class EventHandler {
    */
   onConnected(bot) {
     this.logger.info(`Bot ${bot.id} conectado`);
+    
+    // Inicializa temporizadores de lembretes
+    LembretesCommands.inicializarLembretes(bot).catch(error => {
+      this.logger.error('Erro ao inicializar lembretes:', error);
+    });
   }
 
   /**
@@ -736,7 +742,7 @@ class EventHandler {
               if (bot.supportMsg && bot.supportMsg.length > 0) {
                 botInfoMessage += `\n---☭---☭---☭---☭---☭---☭---☭---☭---\n${bot.supportMsg}`;
               } else {
-                botInfoMessage += `\n\n⭕ Este é um número da ☭ *ravena comunitária* ☭, onde a pessoa que fornece o chip pode ter acesso às suas mensagens (assim como qualquer outro bot ilegal do whats). Se você não concorda com isto, fique lire para removê-la do grupo.⭕\n_Saiba mais enviando !comunitaria ou acessando o site oficial! Ou no !grupao_`;
+                botInfoMessage += `\n\n⭕ Este é um número da ☭ *ravena comunitária* ☭, um chip e celular fornecido por um membro da comunidade da ravena, não o criador oficial. O código, base de dados e servidor é exatamente o mesmo das outras ravenas! ⭕\n_Saiba mais enviando !comunitaria, acessando o site oficial ou no !grupao_`;
               }
             }
 
