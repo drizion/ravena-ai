@@ -230,8 +230,8 @@ async function storeMessage(message, chatId) {
     let textContent = message.type === 'text' ? message.content : message.caption;
 
     if(message.type === 'image'){
-      // Tenta interpretar a imagem usando Vision AI
-      if(message.content){
+      // Tenta interpretar a imagem usando Vision AI, menos se for pedido de sticker pra aliviar  a GPU
+      if(message.content && !message.caption?.startsWith("!s")){
         const completionOptions = {
           prompt: "Analyze the picture and return a brief description ((in pt-BR, portuguese brazil)) in the following format ((try to stay below 200 characters)): Imagem[xxxx xxxx xxx]",
           systemContext: `You are an expert bot in image processing and analysis`,
