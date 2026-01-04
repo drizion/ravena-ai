@@ -122,16 +122,26 @@ const weightScaleMsgs = [180, 150, 120, 100, 80, 60];
 
 // Peixes raríssimos e seus pesos adicionais
 const RARE_FISH = [
-  { name: "Dai Gum Loong", chance: 0.000008, weightBonus: 10000, emoji: "🐲" },
-  { name: "Leviathan", chance: 0.00001, weightBonus: 8000, emoji: "🐉" },
-  { name: "Megalodon", chance: 0.000015, weightBonus: 6000, emoji: "🦈" },
-  { name: "Kraken", chance: 0.00002, weightBonus: 7500, emoji: "🦑" },
-  { name: "Moby Dick", chance: 0.00003, weightBonus: 5000, emoji: "🐳" },
-  { name: "Baleia", chance: 0.00005, weightBonus: 1000, emoji: "🐋" },
-  { name: "Cthulhu", chance: 0.000005, weightBonus: 66666, emoji: "🐙" },
-  { name: "Hydra", chance: 0.000012, weightBonus: 5500, emoji: "🐍" },
-  { name: "Nessie", chance: 0.000025, weightBonus: 4500, emoji: "🦕" },
-  { name: "Godzilla", chance: 0.000009, weightBonus: 9000, emoji: "🦖" }
+  { name: "Dai Gum Loong", chance: 0.000008, weightBonus: 7000, emoji: "🐲" },
+  { name: "Leviathan", chance: 0.00001, weightBonus: 5600, emoji: "🐉" },
+  { name: "Megalodon", chance: 0.000015, weightBonus: 4200, emoji: "🦈" },
+  { name: "Kraken", chance: 0.00002, weightBonus: 5250, emoji: "🦑" },
+  { name: "Moby Dick", chance: 0.00003, weightBonus: 3500, emoji: "🐳" },
+  { name: "Baleia", chance: 0.00005, weightBonus: 700, emoji: "🐋" },
+  { name: "Cthulhu", chance: 0.000002, weightBonus: 66666, emoji: "🐙" },
+  { name: "Hydra", chance: 0.000012, weightBonus: 3850, emoji: "🐍" },
+  { name: "Nessie", chance: 0.000025, weightBonus: 3150, emoji: "🦕" },
+  { name: "Godzilla", chance: 0.000009, weightBonus: 6300, emoji: "🦖" },
+  { name: "Jörmungandr", chance: 0.000003, weightBonus: 20000, emoji: "🌏" },
+  { name: "Ryūjin", chance: 0.000007, weightBonus: 8500, emoji: "⛩️" },
+  { name: "Bakunawa", chance: 0.000011, weightBonus: 5400, emoji: "🌑" },
+  { name: "Charybdis", chance: 0.000013, weightBonus: 4600, emoji: "🌀" },
+  { name: "Aspidochelone", chance: 0.000018, weightBonus: 3300, emoji: "🏝️" },
+  { name: "Makara", chance: 0.000021, weightBonus: 2850, emoji: "🐊" },
+  { name: "Umibōzu", chance: 0.000024, weightBonus: 2500, emoji: "🌫️" },
+  { name: "Taniwha", chance: 0.000028, weightBonus: 2150, emoji: "🗿" },
+  { name: "Kelpie", chance: 0.000035, weightBonus: 1700, emoji: "🐎" },
+  { name: "Sedna", chance: 0.000045, weightBonus: 1300, emoji: "🧜‍♀️" }
 ];
 
 // Itens de lixo que podem ser pescados
@@ -212,8 +222,8 @@ const TRASH_ITEMS = [
 
 // Upgrades para pesca
 const UPGRADES = [
-  // { name: "Sonar Portátil", chance: 0.02, emoji: "📡", effect: "guaranteed_weight", minValue: 40, maxValue: 100, description: "Garante que o próximo peixe tenha entre 40kg e 70kg." },
-  // { name: "Minhocão", chance: 0.05, emoji: "🐛", effect: "next_fish_bonus", minValue: 10, maxValue: 80, description: "Adiciona um bônus de 10 a 80kg ao próximo peixe." },
+   { name: "Sonar Portátil", chance: 0.02, emoji: "📡", effect: "guaranteed_weight", minValue: 40, maxValue: 90, description: "Garante que o próximo peixe tenha entre 40kg e 90kg." },
+   { name: "Minhocão", chance: 0.05, emoji: "🐛", effect: "next_fish_bonus", minValue: 10, maxValue: 30, description: "Adiciona um bônus de 10 a 30kg ao próximo peixe." },
   { name: "Chapéu de Pescador", chance: 0.05, emoji: "👒", effect: "weight_boost", value: 0.2, duration: 3, description: "Aumenta o peso dos próximos 3 peixes em 20%." },
   { name: "Carretel", chance: 0.02, emoji: "🧵", effect: "weight_boost", value: 0.75, duration: 3, description: "Aumenta o peso dos próximos 3 peixes em 75%." },
   { name: "Pacote de Iscas", chance: 0.1, emoji: "🎁", effect: "extra_baits", minValue: 1, maxValue: 3, description: "Ganha de 1 a 3 iscas extras." },
@@ -246,7 +256,7 @@ const DEFAULT_GLOBAL_FACTORS = {
     trashChance: 1.0,
     buffChance: 1.0,
     debuffChance: 0.8,
-    rareFishChance: 0.8,
+    rareFishChance: 0.5,
     weightFactor: 1.0
 };
 
@@ -1125,7 +1135,7 @@ async function fishCommand(bot, message, args, group) {
       const notificacaoPeixeRaro = new ReturnMessage({
         content: rareFishImage,
         options: {
-          caption: `🏆 *${userName}* capturou um(a) _*${caughtFishes[0].name}* LENDÁRIO(A)_ pesando *${caughtFishes[0].weight.toFixed(2)} kg* no grupo "${groupName}"!\n\n> ${bot.id}`
+          caption: `🏆 *${userName}* capturou um(a) _*${caughtFishes[0].name}* LENDÁRIO(A)_ pesando *${caughtFishes[0].weight.toFixed(2)} kg* no grupo "${groupName}"! (${fish.emoji} ${fish.chance*100*DEFAULT_GLOBAL_FACTORS.rareFishChance}% de chance)\n\n> ${bot.id}`
         }
       });
 
@@ -1226,7 +1236,7 @@ async function myFishCommand(bot, message, args, group) {
 async function legendaryFishCommand(bot, message, args, group) {
   try {
     const chatId = message.group ?? message.author;
-    let yearFilter = null;
+    let yearFilter = 2026;
     if (args && args[0] && args[0].match(/^\d{4}$/)) {
         yearFilter = parseInt(args[0]);
     }
@@ -1254,11 +1264,12 @@ async function legendaryFishCommand(bot, message, args, group) {
         if (yearFilter) { countQuery += " AND year = ?"; countParams.push(yearFilter); }
 
         const countRow = await database.dbGet(dbName, countQuery, countParams);
-        return `\t${f.emoji} ${f.name} _(${f.weightBonus}kg, ${countRow?.c || 0} pescados${yearFilter ? ` em ${yearFilter}` : ''})_`;
+
+        return `\t${f.emoji} ${f.name} _(~${f.weightBonus}kg, ${(f.chance * 100 * DEFAULT_GLOBAL_FACTORS.rareFishChance).toFixed(5)}%\` de chance, ${countRow?.c || 0} pescados${yearFilter ? ` em ${yearFilter}` : ''})_`;
     }));
     const rareFishList = rareFishListItems.join("\n");
 
-    let textMessage = `🌊 *Lista de Peixes Lendários${yearFilter ? ` (${yearFilter})` : ''}* 🎣\n${rareFishList}\n\n🏆 *REGISTRO DE PEIXES LENDÁRIOS* 🎖️\n\n`;
+    let textMessage = `🌊 *Lista de Peixes Lendários* 🎣\n${rareFishList}\n\n🏆 *REGISTRO DE PEIXES LENDÁRIOS _${yearFilter}_* 🎖️\n\n`;
     
     for (let i = 0; i < legendaryFishes.length; i++) {
       const legendary = legendaryFishes[i];
@@ -1271,13 +1282,14 @@ async function legendaryFishCommand(bot, message, args, group) {
       textMessage += `   Data: ${date}\n\n`;
     }
     
-    if (legendaryFishes.length > 0) {
-      textMessage += `📷 *Mostrando imagens das ${Math.min(5, legendaryFishes.length)} lendas mais recentes...*`;
-    }
     
     const messages = [];
     messages.push(new ReturnMessage({ chatId, content: textMessage }));
     
+    /*
+    if (legendaryFishes.length > 0) {
+      textMessage += `📷 *Mostrando imagens das ${Math.min(5, legendaryFishes.length)} lendas mais recentes...*`;
+    }
     const legendaryToShow = legendaryFishes.slice(0, 5);
     
     for (const legendary of legendaryToShow) {
@@ -1298,6 +1310,7 @@ async function legendaryFishCommand(bot, message, args, group) {
         }
       } catch (e) {}
     }
+    */
     
     if (messages.length === 1) return messages[0];
     return messages;
@@ -1566,7 +1579,7 @@ async function listFishTypesCommand(bot, message, args, group) {
     for (const fish of RARE_FISH) {
       const chancePercent = fish.chance * 100 * DEFAULT_GLOBAL_FACTORS.rareFishChance;
       const countRow = await database.dbGet(dbName, "SELECT COUNT(*) as c FROM fishing_legendary_history WHERE fish_name = ?", [fish.name]);
-      fishMessage += `${fish.emoji} ${fish.name}: ${fish.weightBonus}kg extra (${chancePercent.toFixed(5)}% de chance, ${countRow?.c || 0} pescados até hoje)\n`;
+      fishMessage += `${fish.emoji} ${fish.name}: ~${fish.weightBonus}kg (${chancePercent.toFixed(5)}% de chance, ${countRow?.c || 0} pescados até hoje)\n`;
     }
 
     fishMessage += `\n🐛 Use \`!pesca-info\` para mais informações`;
