@@ -9,9 +9,11 @@ const util = require('util');
 const Logger = require('../utils/Logger');
 const Command = require('../models/Command');
 const ReturnMessage = require('../models/ReturnMessage');
+const CmdUsage = require('../utils/CmdUsage');
 
 const execPromise = util.promisify(exec);
 const logger = new Logger('image-commands');
+const cmdUsage = CmdUsage.getInstance();
 
 // Encapsule os comandos do imagemagick em promessas
 const convertPromise = util.promisify(imagemagick.convert);
@@ -245,12 +247,22 @@ async function handleJpeg(bot, message, args, group) {
     logger.debug(`Efeito jpeg aplicado, salvo em ${jpegPath}`);
     filePaths.push(jpegPath);
     
-    const resultMedia = await bot.createMedia(jpegPath);
-    
     cleanupTempFiles(filePaths).catch(error => {
       logger.error('Erro ao limpar arquivos temporários:', error);
     });
     
+    // Log detailed usage
+    cmdUsage.logFixedCommandUsage({
+      timestamp: Date.now(),
+      command: 'morejpeg',
+      user: message.author,
+      groupId: chatId,
+      args: args.join(' '),
+      info: {
+        effect: 'jpeg'
+      }
+    });
+
     return new ReturnMessage({
       chatId: chatId,
       content: resultMedia,
@@ -322,11 +334,22 @@ async function handleRemoveBg(bot, message, args, group) {
     
     const resultMedia = await bot.createMedia(trimmedPath);
     
-    // Limpa arquivos após envio
     cleanupTempFiles(filePaths).catch(error => {
       logger.error('Erro ao limpar arquivos temporários:', error);
     });
     
+    // Log detailed usage
+    cmdUsage.logFixedCommandUsage({
+      timestamp: Date.now(),
+      command: 'removebg',
+      user: message.author,
+      groupId: chatId,
+      args: args.join(' '),
+      info: {
+        output: 'document'
+      }
+    });
+
     return new ReturnMessage({
       chatId: chatId,
       content: resultMedia,
@@ -368,7 +391,7 @@ async function handleDistort(bot, message, args, group) {
   // Obtém intensidade dos args se fornecida
   let intensity = 50; // Padrão
   if (args.length > 0 && !isNaN(args[0])) {
-    intensity = Math.max(30, Math.min(70, parseInt(args[0])));
+    intensity = Math.max(1, Math.min(100, parseInt(args[0])));
   }
   
   try {
@@ -405,6 +428,18 @@ async function handleDistort(bot, message, args, group) {
       logger.error('Erro ao limpar arquivos temporários:', error);
     });
     
+    // Log detailed usage
+    cmdUsage.logFixedCommandUsage({
+      timestamp: Date.now(),
+      command: 'distort',
+      user: message.author,
+      groupId: chatId,
+      args: args.join(' '),
+      info: {
+        intensity: intensity
+      }
+    });
+
     return new ReturnMessage({
       chatId: chatId,
       content: resultMedia,
@@ -475,14 +510,24 @@ async function handleStickerBg(bot, message, args, group) {
     
     const resultMedia = await bot.createMedia(trimmedPath);
     
-    // Extrai nome do sticker dos args ou usa nome do grupo
-    const stickerName = args.length > 0 ? args.join(' ') : (group ? group.name : 'sticker');
-    
     // Limpa arquivos temporários
     cleanupTempFiles(filePaths).catch(error => {
       logger.error('Erro ao limpar arquivos temporários:', error);
     });
     
+    // Log detailed usage to 'sticker' registry
+    cmdUsage.logFixedCommandUsage({
+      timestamp: Date.now(),
+      command: 'sticker',
+      user: message.author,
+      groupId: chatId,
+      args: args.join(' '),
+      info: {
+        cropType: 'nobg',
+        mimeType: 'image/png'
+      }
+    });
+
     return new ReturnMessage({
       chatId: chatId,
       content: resultMedia,
@@ -557,6 +602,18 @@ async function handleArtisticEffect(bot, message, args, group, effect) {
       logger.error('Erro ao limpar arquivos temporários:', error);
     });
     
+    // Log detailed usage
+    cmdUsage.logFixedCommandUsage({
+      timestamp: Date.now(),
+      command: effect,
+      user: message.author,
+      groupId: chatId,
+      args: args.join(' '),
+      info: {
+        effect: effect
+      }
+    });
+
     return new ReturnMessage({
       chatId: chatId,
       content: resultMedia,

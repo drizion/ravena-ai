@@ -13,10 +13,12 @@ const crypto = require('crypto');
 const LLMService = require('../services/LLMService');
 const Command = require('../models/Command');
 const ReturnMessage = require('../models/ReturnMessage');
+const CmdUsage = require('../utils/CmdUsage');
 
 const execPromise = util.promisify(exec);
 const logger = new Logger('speech-commands');
 const database = Database.getInstance();
+const cmdUsage = CmdUsage.getInstance();
 const llmService = new LLMService({});
 
 const ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg';
@@ -243,6 +245,19 @@ async function textToSpeech(bot, message, args, group, char = "ravena") {
     });
     
     logger.info(`Áudio TTS gerado com sucesso usando personagem ${character.name}`);
+
+    // Log detailed usage
+    cmdUsage.logFixedCommandUsage({
+      timestamp: Date.now(),
+      command: 'tts',
+      user: message.author,
+      groupId: chatId,
+      args: args.join(' '),
+      info: {
+        character: character.name,
+        textLength: text.length
+      }
+    });
     
     // Limpa arquivos temporários
     try {
@@ -463,6 +478,20 @@ async function speechToText(bot, message, args, group, optimizeWithLLM = true) {
 
     logger.info(`[speechToText] Resultado STT gerado com sucesso: ${transcribedText}`);
 
+    // Log detailed usage
+    cmdUsage.logFixedCommandUsage({
+      timestamp: Date.now(),
+      command: 'stt',
+      user: message.author,
+      groupId: chatId,
+      args: args.join(' '),
+      info: {
+        textLength: transcribedText ? transcribedText.length : 0,
+        // Duration might be available if API was used, but variable scope is tricky here without major refactor
+        // Just logging text length for now
+      }
+    });
+
     return returnMessage;
   } catch (error) {
     logger.error('Erro na conversão de voz para texto:', error);
@@ -617,6 +646,18 @@ async function processAutoSTT(bot, message, group, opts) {
       logger.info(`[processAutoSTT] Resultado STT enviado: ${transcribedText}`);
 
       await bot.sendReturnMessages(returnMessage);
+
+      // Log detailed usage
+      cmdUsage.logFixedCommandUsage({
+        timestamp: Date.now(),
+        command: 'auto-stt',
+        user: message.author,
+        groupId: chatId,
+        args: '',
+        info: {
+          textLength: transcribedText ? transcribedText.length : 0
+        }
+      });
     } else {
       logger.warn(`[processAutoSTT] Transcrição vazia ou com erro para o chat ${chatId}`);
     }

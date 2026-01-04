@@ -7,9 +7,11 @@ const Command = require('../models/Command');
 const sharp = require('sharp');
 const ffmpeg = require('fluent-ffmpeg');
 const { MessageMedia } = require('whatsapp-web.js');
+const CmdUsage = require('../utils/CmdUsage');
 
 const logger = new Logger('sticker-commands');
 const database = Database.getInstance();
+const cmdUsage = CmdUsage.getInstance();
 const TEMP_DIR = path.join(__dirname, '../../temp', 'whatsapp-bot-stickers');
 //logger.info('Módulo  Commands carregado');
 
@@ -427,6 +429,19 @@ async function squareStickerCommand(bot, message, args, group, cropType) {
     // Extrair nome do sticker dos args ou usa nome do grupo
     const stickerName = args.length > 0 ? args.join(' ') : (group ? group.name : 'sticker');
     
+    // Log usage
+    cmdUsage.logFixedCommandUsage({
+      timestamp: Date.now(),
+      command: 'sticker',
+      user: message.author,
+      groupId: chatId,
+      args: args.join(' '),
+      info: {
+        cropType: cropType,
+        mimeType: mimeType
+      }
+    });
+
     // Cria ReturnMessage com opções para sticker
     return [
     new ReturnMessage({

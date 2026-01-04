@@ -9,6 +9,7 @@ const CustomVariableProcessor = require('./utils/CustomVariableProcessor');
 const ReturnMessage = require('./models/ReturnMessage');
 const AdminUtils = require('./utils/AdminUtils');
 const CacheManager = require('./services/CacheManager');
+const CmdUsage = require('./utils/CmdUsage');
 
 class CommandHandler {
   constructor() {
@@ -19,6 +20,7 @@ class CommandHandler {
     this.superAdmin = new SuperAdmin();
     this.variableProcessor = new CustomVariableProcessor();
     this.adminUtils = AdminUtils.getInstance();
+    this.cmdUsage = CmdUsage.getInstance();
     this.customCommands = {}; // Agrupados por groupId
     this.privateManagement = {}; // Para gerenciar grupos a partir de chats privados
 
@@ -418,6 +420,18 @@ class CommandHandler {
               if (methodName && typeof this.superAdmin[methodName] === 'function') {
                   this.logger.debug(`Executando método de super admin: ${methodName}`);
                   const result = await this.superAdmin[methodName](bot, message, args, group);
+
+                  // Log usage
+                  this.cmdUsage.logCommand({
+                    timestamp: Date.now(),
+                    type: 'superadmin',
+                    command: saCommand,
+                    user: message.author,
+                    groupId: message.group ?? 'private',
+                    args: args.join(' '),
+                    returnData: result ? (result.content || (Array.isArray(result) ? "Array" : "Object")) : "void"
+                  });
+
                   if (result) {
                       await bot.sendReturnMessages(result);
                   }
@@ -698,6 +712,17 @@ class CommandHandler {
 
         const managementResponse = await this.management[methodName](bot, messageClone, args, group, this.privateManagement);
         
+        // Log usage
+        this.cmdUsage.logCommand({
+          timestamp: Date.now(),
+          type: 'management',
+          command: managementCommand,
+          user: message.author,
+          groupId: group.id,
+          args: args.join(' '),
+          returnData: managementResponse ? (managementResponse.content || (Array.isArray(managementResponse) ? "Array" : "Object")) : "void"
+        });
+
         // Se a resposta for ReturnMessage ou array de ReturnMessage, modifica chatId se necessário
         if (managementResponse) {
           if (Array.isArray(managementResponse)) {
@@ -855,6 +880,18 @@ class CommandHandler {
         this.updateCooldown(command, groupId, bot.id);
         //this.logger.debug(`Comando ${command.name} tem method, executando`);
         const result = await command.method(bot, message, args, group);
+        
+        // Log usage
+        this.cmdUsage.logCommand({
+          timestamp: Date.now(),
+          type: 'fixed',
+          command: command.name,
+          user: message.author,
+          groupId: groupId || 'private',
+          args: args.join(' '),
+          returnData: result ? (result.content || (Array.isArray(result) ? "Array" : "Object")) : "void"
+        });
+
         //this.logger.debug(`Comando ${command.name} resposta do method: `, { ReMsg: (result instanceof ReturnMessage), result });
         
         // Verifica se o resultado é um ReturnMessage ou array de ReturnMessages
@@ -1022,6 +1059,17 @@ class CommandHandler {
       await this.database.updateCustomCommand(group.id, command);
       this.logger.debug(`Atualizadas estatísticas de uso para o comando *${command.startsWith}*, contagem: ${command.count}`);
       
+      // Log usage
+      this.cmdUsage.logCommand({
+        timestamp: Date.now(),
+        type: 'custom',
+        command: command.startsWith,
+        user: message.author,
+        groupId: group.id,
+        args: args.join(' '),
+        returnData: `Responses: ${responses.length}`
+      });
+
       // Reage à mensagem se especificado (esta é a reação específica do comando)
       if (command.react) {
         try {

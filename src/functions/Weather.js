@@ -2,9 +2,11 @@
 const Logger = require('../utils/Logger');
 const Command = require('../models/Command');
 const ReturnMessage = require('../models/ReturnMessage');
+const CmdUsage = require('../utils/CmdUsage');
 
 // Cria novo logger
 const logger = new Logger('weather-commands');
+const cmdUsage = CmdUsage.getInstance();
 
 // API Key do OpenWeatherMap - deve ser definida em .env
 const API_KEY = process.env.OPENWEATHER_API_KEY;
@@ -382,6 +384,20 @@ async function handleWeatherCommand(bot, message, args, group) {
     // Formata mensagem de clima
     const weatherMessage = formatWeatherMessage(weatherData);
     
+    // Log usage
+    cmdUsage.logFixedCommandUsage({
+      timestamp: Date.now(),
+      command: 'clima',
+      user: message.author,
+      groupId: chatId,
+      args: args.join(' '),
+      info: {
+        location: locationName || 'coordinates',
+        lat: latitude,
+        lon: longitude
+      }
+    });
+
     // Retorna a mensagem do clima
     returnMessages.push(
       new ReturnMessage({
