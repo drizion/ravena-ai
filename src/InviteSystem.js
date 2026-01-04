@@ -91,8 +91,11 @@ class InviteSystem {
       const invitesPrePath = path.join(this.database.databasePath, 'textos', 'invites_pre.txt');
       const preConvite = await fs.readFile(invitesPrePath, 'utf8');
 
+      // Gera código de verificação
+      const verificationCode = this.rndString();
+
       // Pergunta o motivo para adicionar o bot
-      await this.bot.sendMessage(message.author, `${preConvite}\n\`${this.rndString()}\``);
+      await this.bot.sendMessage(message.author, `${preConvite}\n\`${verificationCode}\``);
       
       // Define um timeout para tratar o convite mesmo se o usuário não responder
       const timeoutId = setTimeout(() => {
@@ -103,7 +106,8 @@ class InviteSystem {
       this.pendingRequests.set(message.author, {
         inviteLink,
         inviteCode,
-        timeout: timeoutId
+        timeout: timeoutId,
+        verificationCode
       });
 
       // Define o timestamp do último convite para o usuário (inicia o cooldown de usuário)
@@ -134,14 +138,14 @@ class InviteSystem {
       const text = message.type === 'text' ? message.content : message.caption;
       if (!text) return false;
       
-      const { inviteCode, inviteLink, timeout } = this.pendingRequests.get(message.author);
+      const { inviteCode, inviteLink, timeout, verificationCode } = this.pendingRequests.get(message.author);
       
       // Limpa o timeout
       clearTimeout(timeout);
       this.pendingRequests.delete(message.author);
       
       // Trata o convite com o motivo fornecido
-      await this.handleInviteRequest(message.author, inviteCode, inviteLink, text, message);
+      await this.handleInviteRequest(message.author, inviteCode, inviteLink, text, message, verificationCode);
       
       return true;
     } catch (error) {
@@ -156,10 +160,35 @@ class InviteSystem {
    * @param {string} inviteCode - O código de convite
    * @param {string} inviteLink - O link de convite completo
    * @param {string} reason - Motivo do convite
+   * @param {Object} message - Objeto da mensagem original
+   * @param {string} [verificationCode] - Código de verificação enviado ao usuário
    */
-  async handleInviteRequest(authorId, inviteCode, inviteLink, reason, message) {
+  async handleInviteRequest(authorId, inviteCode, inviteLink, reason, message, verificationCode) {
     try {
       this.logger.info(`Processando solicitação de convite de ${authorId} para o código ${inviteCode}`);
+      
+      // Verifica se o usuário enviou o código de verificação como motivo
+      if (verificationCode && reason && reason.trim().toLowerCase() === verificationCode.toLowerCase()) {
+        this.logger.info(`Usuário ${authorId} enviou o código de verificação como motivo (${verificationCode}). Ignorando convite.`);
+
+        this.bot.sendMessage(this.bot.grupoInvites, `Usuário ${authorId} enviou o código de verificação como motivo (${verificationCode}). Ignorando convite.`);
+
+        try {
+          const ignoredPath = path.join(this.database.databasePath, 'textos', 'invite_ignorado.txt');
+          const ignoredText = await fs.readFile(ignoredPath, 'utf8').catch(() => "Leitura não é o seu forte, né? _Convite ignorado._");
+          await this.bot.sendMessage(authorId, ignoredText);
+        } catch (err) {
+          this.bot.sendMessage(authorId, "Leitura não é o seu forte, né? _Convite ignorado._");
+        }
+        
+        const punishDuration = (10 * this.inviteCooldown * 60 * 1000);
+        const normalDuration = (this.inviteCooldown * 60 * 1000);
+
+        const futureTime = Date.now() + punishDuration - normalDuration;
+        this.userCooldowns.set(authorId, futureTime);
+        
+        return;
+      }
       
       // Obtém informações do usuário
       const userName = message.name ?? message.pushName ?? message.pushname ?? message.authorName ?? "Pessoa";
