@@ -267,7 +267,7 @@ async function getGlobalFactors() {
 }
 
 async function getUserData(userId) {
-    logger.debug(`[fishing][getUserData] ${userId}`);
+    //logger.debug(`[fishing][getUserData] ${userId}`);
     const row = await database.dbGet(dbName, "SELECT * FROM fishing_users WHERE user_id = ?", [userId]);
     if (!row) return null;
 
@@ -1135,7 +1135,7 @@ async function fishCommand(bot, message, args, group) {
       const notificacaoPeixeRaro = new ReturnMessage({
         content: rareFishImage,
         options: {
-          caption: `🏆 *${userName}* capturou um(a) _*${caughtFishes[0].name}* LENDÁRIO(A)_ pesando *${caughtFishes[0].weight.toFixed(2)} kg* no grupo "${groupName}"! (${fish.emoji} ${fish.chance*100*DEFAULT_GLOBAL_FACTORS.rareFishChance}% de chance)\n\n> ${bot.id}`
+          caption: `🏆 *${userName}* capturou um(a) _*${caughtFishes[0].name}* LENDÁRIO(A)_ pesando *${caughtFishes[0].weight.toFixed(2)} kg* no grupo "${groupName}"! (${caughtFishes[0].emoji} ${caughtFishes[0].chance*100*DEFAULT_GLOBAL_FACTORS.rareFishChance}% de chance)\n\n> ${bot.id}`
         }
       });
 
