@@ -757,5 +757,24 @@ document.addEventListener('DOMContentLoaded', () => {
     
     setInterval(fetchHealthData, 30000);
     setInterval(fetchTopDonates, 5 * 60 * 1000); // Atualiza doações a cada 5 minutos
+
+    // Socket.io connection for realtime activity
+    if (typeof io !== 'undefined') {
+        const socket = io();
+        const activityLight = document.getElementById('message-activity');
+
+        socket.on('activity', (data) => {
+            if (data && data.type === 'message') {
+                if (activityLight) {
+                    activityLight.classList.add('active');
+                    setTimeout(() => {
+                        activityLight.classList.remove('active');
+                    }, 50);
+                }
+            }
+        });
+    } else {
+        console.warn('Socket.io not found.');
+    }
 });
 

@@ -8,6 +8,7 @@ const upload = multer({ dest: 'uploads/' });
 const fs = require('fs').promises;
 const qrcode = require("qr-base64");
 const { exec, spawn } = require('child_process');
+const { Server } = require("socket.io");
 
 /**
  * Servidor API para o bot WhatsApp
@@ -50,6 +51,15 @@ class BotAPI {
       cacheTime: 30 * 60000, // 30 minutos
       data: []
     };
+
+    this.io = null;
+    if (this.eventHandler) {
+      this.eventHandler.on('activity', (data) => {
+        if (this.io) {
+          this.io.emit('activity', data);
+        }
+      });
+    }
 
     // Configura middlewares
     this.app.use(bodyParser.json({ limit: '50mb' }));
@@ -681,7 +691,7 @@ class BotAPI {
 
     // Upload media endpoint
     this.app.post('/api/upload-media', upload.single('file'), async (req, res) => {
-      const { token, groupId, type, name } = req.body;
+      const { token, groupId, type, name, caption } = req.body;
       const file = req.file;
 
       if (!token || !groupId || !type || !name || !file) {
@@ -722,6 +732,7 @@ class BotAPI {
 
         groupData[type][name] = {
           file: fileName,
+          caption: caption ? caption.trim() : undefined,
           uploadedAt: new Date().toISOString(),
           uploadedBy: webManagementData.requestNumber
         };
@@ -1757,6 +1768,12 @@ class BotAPI {
       try {
         this.server = this.app.listen(this.port, () => {
           this.logger.info(`Servidor API escutando na porta ${this.port}`);
+          
+          this.io = new Server(this.server);
+          this.io.on('connection', (socket) => {
+            // this.logger.debug('Novo cliente conectado via Socket.IO');
+          });
+
           resolve();
         });
       } catch (error) {

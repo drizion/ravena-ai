@@ -14,6 +14,11 @@
     <div class="container">
         <header>
             <h1  class="banner">ravenabot - status</h1>
+            
+            <div id="status-light-container" style="display: flex; justify-content: center; margin-bottom: 10px;">
+                <div id="message-activity" class="status-indicator" style="background-color: grey;" title="Cada piscada é uma mensagem enviada/recebida"></div>
+           </div>
+
             <!-- Links de Ícones Sociais -->
             <div class="social-links">
                 <a href="https://github.com/moothz/ravena-ai" target="_blank" title="Código da ravena no GitHub">
@@ -172,7 +177,7 @@
         </div>
     </div>
     
-    <!-- Scripts externos -->
+    <script src="/socket.io/socket.io.js"></script>
     <script src="https://code.highcharts.com/highcharts.js"></script>
     <script src="https://code.highcharts.com/modules/exporting.js"></script>
     <script src="https://code.highcharts.com/modules/export-data.js"></script>

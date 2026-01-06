@@ -1010,3 +1010,20 @@ nav a.active {
     color: var(--gold-color);
     font-size: 1rem;
 }
+
+/* Status Light Indicator */
+#message-activity {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background-color: grey;
+    box-shadow: 0 0 5px rgba(0,0,0,0.5);
+    transition: background-color 0.05s, box-shadow 0.05s;
+    cursor: help;
+    margin: 0 10px; /* Spacing */
+}
+
+#message-activity.active {
+    box-shadow: 0 0 10px #8d8 !important;
+    background-color: #87d078 !important;
+}

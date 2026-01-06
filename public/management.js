@@ -735,7 +735,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // For greetings/farewells image/video, show text input as caption
             if (isGreetingsOrFarewells && (mediaType === 'image' || mediaType === 'video')) {
                  document.getElementById('text-content-group').classList.remove('hidden');
-                 document.querySelector('label[for="text-content"]').textContent = "Legenda (Caption):";
+                 document.querySelector('label[for="text-content"]').textContent = "Legenda:";
             } else {
                  document.getElementById('text-content-group').classList.add('hidden');
             }
@@ -879,6 +879,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 formData.append('groupId', groupId);
                 formData.append('type', platform); // greetings or farewells
                 formData.append('name', finalMediaType); // image, audio, sticker etc.
+                formData.append('caption', caption);
                 
                 document.getElementById('add-media').disabled = true;
                 document.getElementById('add-media').textContent = 'Enviando...';
@@ -1067,24 +1068,26 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('media-event').value = 'default'; // dummy
             document.getElementById('media-type').value = mediaType === 'audio' ? 'sound' : mediaType;
             
-            // Set checkbox state if it is a sticker
-            if (mediaType === 'sticker') {
-                 document.getElementById('send-as-sticker').checked = true;
-            } else {
-                 document.getElementById('send-as-sticker').checked = false;
+            // Set initial checkbox state (will be overwritten if media-file-group innerHTML is updated)
+            const sendAsStickerChk = document.getElementById('send-as-sticker');
+            if (sendAsStickerChk) {
+                sendAsStickerChk.checked = (mediaType === 'sticker');
             }
 
-            // Adjust visibility
-            handleMediaTypeChange(); // This hides text/file inputs based on type
+            // Adjust visibility first to ensure groups are shown/hidden
+            handleMediaTypeChange(); 
             
             if (mediaType === 'text') {
-                document.getElementById('text-content').value = data;
+                document.getElementById('text-content').value = typeof data === 'string' ? data : (data.text || "");
             } else {
                 let captionVal = data.caption || "";
                 if (typeof captionVal === 'object') captionVal = ""; // Sanitize object captions
-                document.getElementById('text-content').value = captionVal;
                 
-                // Show file info
+                // Ensure caption input is populated
+                const textContentInput = document.getElementById('text-content');
+                textContentInput.value = captionVal;
+                
+                // Show file info - logic to rebuild DOM
                  document.getElementById('media-file-group').innerHTML = `
                     <label>Arquivo atual:</label>
                     <div class="media-content">${data.file}</div>
@@ -1099,9 +1102,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 `;
                 document.getElementById('media-file').addEventListener('change', handleFileInputChange);
-                // Need to re-attach handleMediaTypeChange because we overwrote the innerHTML which might contain the checkbox if we moved it inside?
-                // No, check box was inside media-file-group in HTML, so overwriting innerHTML destroyed it.
-                // Re-added checkbox in the HTML string above.
+                
+                // IMPORTANT: Re-run handleMediaTypeChange because overwriting innerHTML above might affect visibility logic
+                // if it depends on the presence of elements we just recreated? 
+                // No, visibility depends on media-type value which didn't change.
+                // But we should ensure the caption input is visible if it's image/video
+                if (mediaType === 'image' || mediaType === 'video') {
+                    document.getElementById('text-content-group').classList.remove('hidden');
+                    document.querySelector('label[for="text-content"]').textContent = "Legenda:";
+                }
             }
 
              // Update modal title
@@ -1718,7 +1727,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         // Show raw JSON for debug
-        document.getElementById('changes-raw').textContent = JSON.stringify(changes, null, 2);
+        //document.getElementById('changes-raw').textContent = JSON.stringify(changes, null, 2);
         
         // Show the modal
         document.getElementById('confirm-modal').classList.remove('hidden');

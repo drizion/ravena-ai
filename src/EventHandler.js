@@ -17,9 +17,11 @@ const path = require('path');
 const Stickers = require('./functions/Stickers');
 const GeoGuesser = require('./functions/GeoguesserGame');
 const LembretesCommands = require('./functions/LembretesCommands');
+const EventEmitter = require('events');
 
-class EventHandler {
+class EventHandler extends EventEmitter {
   constructor() {
+    super();
     this.logger = new Logger('event-handler');
     this.database = Database.getInstance();
     this.commandHandler = new CommandHandler();
@@ -141,6 +143,7 @@ class EventHandler {
    * @param {Object} message - A mensagem formatada
    */
   onMessage(bot, message) {
+    this.emit('activity', { type: 'message', botId: bot.id });
     // Processa mensagem sem aguardar para evitar bloquear a thread de eventos
     this.processMessage(bot, message).catch(error => {
       this.logger.error('Erro em processMessage:', error);
