@@ -170,14 +170,20 @@ async function pix(bot, message, args, group) {
   const nomePagador = message.pushname ?? message.authorName ?? message.name ?? "Fulano";
   let nomeRecebedor = "Fulano";
 
-  if(args[0].startsWith("@")){
+  if(message.mentions?.length > 0){
     // Primeiro argumento é um mention
-    const cttRecebedor = await bot.client.getContactById(message.mentions[0] ?? message.evoMessageData.sender);
-    nomeRecebedor = cttPagador.pushname ?? cttPagador.name ?? "Fulano";
+    const cttRecebedor = await bot.client.getContactById(message.mentions[0] ?? message.evoMessageData?.sender);
+    if(cttRecebedor){
+      logger.debug(`[pix] cttRecebedor `, { cttRecebedor });
+    }
+    nomeRecebedor = cttRecebedor.name?.pushName ?? cttRecebedor.name ?? cttRecebedor.pushName ?? cttRecebedor.pushname ?? cttRecebedor.number ?? "Fulano";
   } else if(!isFinite(args[0])) { // se não for mention nem numero, é um nome (chute)
     nomeRecebedor = args.slice(0, iValor).join(" ");
   }
 
+  if(!valorPix){
+    valorPix = 50;
+  }
 
   const dadosPix = {
       valor: formatarValorSimples(valorPix),

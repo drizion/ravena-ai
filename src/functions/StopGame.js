@@ -373,7 +373,7 @@ function parseLLMResponse(llmResponse) {
       const tudo = JSON.parse(llmResponse);
       return tudo;
     } catch(e){
-      logger.warn('Erro ao analisar resposta do LLM completa:', error);  
+      logger.warn('Erro ao analisar resposta do LLM completa:', e);  
       logger.debug(llmResponse);
       return {};
     }
@@ -401,7 +401,7 @@ async function endGame(bot, groupId) {
 
     
     // Verifica se há respostas suficientes
-    if (game.responses.length < MINIMUM_RESPONSES) {
+    if (Object.keys(game.responses).length < MINIMUM_RESPONSES) {
       await bot.sendMessage(groupId, `📝 O jogo de Stop/Adedonha foi cancelado por ter menos de ${MINIMUM_RESPONSES} respostas.`);
       delete activeGames[groupId];
       return;
