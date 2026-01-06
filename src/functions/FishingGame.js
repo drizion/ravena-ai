@@ -227,16 +227,20 @@ const UPGRADES = [
   { name: "Chapéu de Pescador", chance: 0.05, emoji: "👒", effect: "weight_boost", value: 0.2, duration: 3, description: "Aumenta o peso dos próximos 3 peixes em 20%." },
   { name: "Carretel", chance: 0.02, emoji: "🧵", effect: "weight_boost", value: 0.75, duration: 3, description: "Aumenta o peso dos próximos 3 peixes em 75%." },
   { name: "Pacote de Iscas", chance: 0.1, emoji: "🎁", effect: "extra_baits", minValue: 1, maxValue: 3, description: "Ganha de 1 a 3 iscas extras." },
-  { name: "Amuleto do Pescador", chance: 0.01, emoji: "🧿", effect: "rare_chance_boost", value: 0.0005, duration: 10, description: "Aumenta a chance de encontrar peixes raros nas próximas 10 pescarias." },
+  //{ name: "Amuleto do Pescador", chance: 0.01, emoji: "🧿", effect: "rare_chance_boost", value: 0.0003, duration: 5, description: "Aumenta a chance de encontrar peixes raros nas próximas 5 pescarias." },
+  //{ name: "Isca de Diamante", chance: 0.005, emoji: "💎", effect: "rare_chance_boost", value: 0.001, duration: 3, description: "Aumenta drasticamente a chance de raros por 3 pescarias." },
   //{ name: "Licença de Pesca Premium", chance: 0.03, emoji: "📜", effect: "cooldown_reduction", value: 0.5, duration: 5, description: "Reduz o tempo de espera para pescar em 50% nas próximas 5 pescarias." },
   { name: "Balança Adulterada", chance: 0.01, emoji: "⚖️", effect: "weight_boost", value: 1.5, duration: 1, description: "Aumenta o peso do próximo peixe em 150%!" },
-  { name: "Isca de Diamante", chance: 0.005, emoji: "💎", effect: "rare_chance_boost", value: 0.002, duration: 5, description: "Aumenta drasticamente a chance de raros por 5 pescarias." },
   //{ name: "Energético de Pescador", chance: 0.02, emoji: "⚡", effect: "cooldown_reduction", value: 0.9, duration: 2, description: "Reduz o tempo de espera em 90% nas próximas 2 pescarias." },
   { name: "Anzol de Titânio", chance: 0.025, emoji: "🔩", effect: "bait_on_trash", duration: 10, description: "Evita a perda de isca ao pescar lixo pelas próximas 10 vezes." },
 
   { name: "Bolso de Pesca", chance: 0.0008, emoji: "👖", effect: "inventory_slot", value: 1, description: "Aumenta seu inventário em 1." },
   { name: "Calça de Pesca", chance: 0.0004, emoji: "👖", effect: "inventory_slot", value: 2, description: "Aumenta seu inventário em 2." },
-  { name: "Mochilão", chance: 0.00001, emoji: "🎒", effect: "inventory_slot", value: 4, description: "Aumenta seu inventário em 4." }
+  { name: "Mochilão", chance: 0.00001, emoji: "🎒", effect: "inventory_slot", value: 4, description: "Aumenta seu inventário em 4." },
+
+  { name: "Pochete de Iscas", chance: 0.00056, emoji: "👜", effect: "max_baits", value: 1, description: "Aumenta seu limite de iscas em 1." },
+  { name: "Caixa de Iscas", chance: 0.00028, emoji: "🧰", effect: "max_baits", value: 2, description: "Aumenta seu limite de iscas em 2." },
+  { name: "Viveiro Portátil", chance: 0.000007, emoji: "⛲", effect: "max_baits", value: 4, description: "Aumenta seu limite de iscas em 4." }
 ];
 
 // Downgrades para pesca
@@ -261,10 +265,6 @@ const DEFAULT_GLOBAL_FACTORS = {
 };
 
 // --- HELPER FUNCTIONS FOR DB ---
-
-async function getGlobalFactors() {
-    return { ...DEFAULT_GLOBAL_FACTORS };
-}
 
 async function getUserData(userId) {
     //logger.debug(`[fishing][getUserData] ${userId}`);
@@ -395,7 +395,7 @@ async function clearInventory(userId) {
 /**
  * Obtém peixe aleatório do array de peixes com escala de dificuldade
  */
-async function getRandomFish(fishArray, isMultiCatch = false, userData = null, globalFactors = null) {
+async function getRandomFish(fishArray, isMultiCatch = false, userData = null) {
   // Verifica se o array tem peixes
   if (!fishArray || !Array.isArray(fishArray) || fishArray.length === 0) {
     const customVariables = await database.getCustomVariables();
@@ -403,25 +403,32 @@ async function getRandomFish(fishArray, isMultiCatch = false, userData = null, g
     fishArray = customVariables.peixes;
   }
 
-  if (!globalFactors) globalFactors = await getGlobalFactors();
-  const weightFactor = globalFactors.weightFactor || 1.0;
+  const weightFactor = DEFAULT_GLOBAL_FACTORS.weightFactor || 1.0;
   
   // Se for pescaria múltipla, não permite peixes raros
   if (!isMultiCatch) {
     // Sorteia peixe raro com chances muito baixas
+    const buffsAplicados = [];
     for (const rareFish of RARE_FISH) {
         let currentChance = rareFish.chance;
-        if(userData && userData.buffs){
+
+        let rareBoostApplied = false;
+        if(userData && userData.buffs && !rareBoostApplied){
             const rareChanceBuff = userData.buffs.find(b => b.type === 'rare_chance_boost' && b.remainingUses > 0);
             if(rareChanceBuff){
+                rareChanceBuff.remainingUses = 0; // Test
+                rareBoostApplied = true;
+
+                buffsAplicados.push(rareChanceBuff.value);
                 currentChance += rareChanceBuff.value;
             }
         }
 
       // Aplica fator global
-      currentChance *= globalFactors.rareFishChance;
+      currentChance *= DEFAULT_GLOBAL_FACTORS.rareFishChance;
 
       if (Math.random() < currentChance) {
+        logger.debug(`[getRandomFish] RARO CAPTURADO: Chance original ${rareFish.chance} x globalFactor ${DEFAULT_GLOBAL_FACTORS.rareFishChance} x buffs ${JSON.stringify(buffsAplicados)}`);
         const baseWeight = parseFloat((Math.random() * (MAX_FISH_WEIGHT - MIN_FISH_WEIGHT) + MIN_FISH_WEIGHT).toFixed(2));
         const totalWeight = baseWeight + rareFish.weightBonus;
         
@@ -448,8 +455,7 @@ async function getRandomFish(fishArray, isMultiCatch = false, userData = null, g
     const guaranteedWeightBuff = userData.buffs.find(b => b.type === 'guaranteed_weight' && b.remainingUses > 0);
     if (guaranteedWeightBuff) {
         weight = parseFloat((Math.random() * (guaranteedWeightBuff.maxValue - guaranteedWeightBuff.minValue) + guaranteedWeightBuff.minValue).toFixed(2));
-        guaranteedWeightBuff.remainingUses--; // consume buff object, update DB later
-        if(guaranteedWeightBuff.dbId) await updateBuffUses(guaranteedWeightBuff.dbId, guaranteedWeightBuff.remainingUses);
+        // Decrement handled in handleBuffDecrement
         return { name: fishName, weight, timestamp: Date.now() };
     }
   }
@@ -482,13 +488,15 @@ async function getRandomFish(fishArray, isMultiCatch = false, userData = null, g
  * Verifica e regenera iscas para um jogador
  */
 function regenerateBaits(userData) {
+  const maxBaits = getMaxBaits(userData);
+
   if (userData.baits === undefined) {
-    userData.baits = MAX_BAITS;
+    userData.baits = maxBaits;
     userData.lastBaitRegen = Date.now();
     return userData;
   }
   
-  if (userData.baits >= MAX_BAITS) {
+  if (userData.baits >= maxBaits) {
     userData.lastBaitRegen = Date.now();
     return userData;
   }
@@ -499,7 +507,7 @@ function regenerateBaits(userData) {
   const regensCount = Math.floor(elapsedSeconds / BAIT_REGEN_TIME);
   
   if (regensCount > 0) {
-    userData.baits = Math.min(userData.baits + regensCount, MAX_BAITS);
+    userData.baits = Math.min(userData.baits + regensCount, maxBaits);
     userData.lastBaitRegen = now - (elapsedSeconds % BAIT_REGEN_TIME) * 1000;
   }
   
@@ -514,13 +522,14 @@ async function addBaits(userId, baitsNum) {
   //userId = userId.split("@")[0] + "@c.us"; 
 
   let userData = await getUserData(userId);
+  const maxBaits = getMaxBaits(userData || {});
 
   if(!userData){
      // Create basic user if not exists
      userData = {
          userId,
          name: "User",
-         baits: MAX_BAITS,
+         baits: maxBaits,
          lastBaitRegen: Date.now(),
          totalWeight: 0, inventoryWeight: 0, totalCatches: 0, totalBaitsUsed: 0, totalTrashCaught: 0, biggestFish: null
      };
@@ -541,9 +550,23 @@ async function addBaitsCmd(bot, message, args, group) {
       return;
     }
 
-    const destUser = args[0];
+    if (!args[0] || !args[1]) return new ReturnMessage({ chatId, content: "❌ Uso: !psc-addBaits <@user|global> <qtd>" });
+
+    const target = args[0];
     const baitsNum = parseInt(args[1]);
-    const dados = await addBaits(destUser, baitsNum);
+
+    if (isNaN(baitsNum)) return new ReturnMessage({ chatId, content: "❌ Quantidade inválida." });
+
+    if (target.toLowerCase() === 'global') {
+        await database.dbRun(dbName, "UPDATE fishing_users SET baits = baits + ?, last_bait_regen = ?", [baitsNum, Date.now()]);
+        return new ReturnMessage({
+            chatId,
+            content: `🎣 ${baitsNum} iscas adicionadas para TODOS os jogadores!`,
+            reaction: "🎣"
+        });
+    }
+
+    const dados = await addBaits(target, baitsNum);
 
     if(!dados.userData){
       return new ReturnMessage({
@@ -554,7 +577,7 @@ async function addBaitsCmd(bot, message, args, group) {
     } else {
       return new ReturnMessage({
         chatId,
-        content: `🎣 Iscas de '${destUser}' ajustadas para ${dados.userData.baits}`,
+        content: `🎣 Iscas de '${target}' ajustadas para ${dados.userData.baits}`,
         reaction: "🎣" 
       });
     }
@@ -565,11 +588,12 @@ async function addBaitsCmd(bot, message, args, group) {
 }
 
 function getNextBaitRegenTime(userData) {
+  const maxBaits = getMaxBaits(userData);
   const now = Date.now();
   const lastRegen = userData.lastBaitRegen ?? now;
   const elapsedSeconds = Math.floor((now - lastRegen) / 1000);
   const secondsUntilNextBait = BAIT_REGEN_TIME - (elapsedSeconds % BAIT_REGEN_TIME);
-  const missingBaits = MAX_BAITS - userData.baits;
+  const missingBaits = maxBaits - userData.baits;
   const secondsUntilAllBaits = secondsUntilNextBait + ((missingBaits - 1) * BAIT_REGEN_TIME);
   
   return {
@@ -591,8 +615,8 @@ function formatTimeString(seconds) {
   return timeString;
 }
 
-function checkRandomItem(globalFactors) {
-  const factors = globalFactors || DEFAULT_GLOBAL_FACTORS;
+function checkRandomItem() {
+  const factors = DEFAULT_GLOBAL_FACTORS;
   
   if (Math.random() < (0.15 * factors.trashChance)) {
     const trashIndex = Math.floor(Math.random() * TRASH_ITEMS.length);
@@ -632,8 +656,7 @@ async function applyItemEffect(userData, item) {
       const trashProtector = baitOnTrashDebuff ?? baitOnTrashBuff;
 
       if (trashProtector) {
-        trashProtector.remainingUses--;
-        await updateBuffUses(trashProtector.dbId, trashProtector.remainingUses);
+        // Decrement handled in handleBuffDecrement
         effectMessage = `\n\n${item.emoji} Você pescou um(a) ${item.name}, mas seu ${trashProtector.originalName ?? 'Anzol'} te salvou de perder a isca!`;
       } else {
         effectMessage = `\n\n${item.emoji} Você pescou um(a) ${item.name}. Que pena!`;
@@ -742,8 +765,6 @@ async function applyBuffs(userData, fish) {
                 buffMessages.push(`🎯 Buff do ${buff.originalName || 'Minhocão'}: +${buff.value}kg (${beforeBonus}kg → ${modifiedFish.weight}kg)`);
                 break;
         }
-        buff.remainingUses--;
-        await updateBuffUses(buff.dbId, buff.remainingUses);
       }
   }
 
@@ -760,8 +781,6 @@ async function applyBuffs(userData, fish) {
                 buffMessages.push(`⬇️ Peixe magro... (${originalWeightDebuff}kg → ${modifiedFish.weight}kg)`);
                 break;
         }
-        debuff.remainingUses--;
-        await updateBuffUses(debuff.dbId, debuff.remainingUses);
       }
   }
 
@@ -843,6 +862,71 @@ function getMaxInventory(userData) {
     return limit;
 }
 
+function getMaxBaits(userData) {
+    let limit = MAX_BAITS;
+    if (userData.buffs) {
+        userData.buffs.forEach(b => {
+            if (b.type === 'max_baits' && b.remainingUses > 0) {
+                limit += b.value;
+            }
+        });
+    }
+    return limit;
+}
+
+async function handleBuffDecrement(userData, context) {
+    const { caughtFish, caughtTrash, isRare, isFirstCatchOfCommand } = context;
+    const buffsToUpdate = [];
+
+    const processList = (list) => {
+        if (!list) return;
+        for (const buff of list) {
+            if (buff.remainingUses <= 0) continue;
+            let shouldDecrement = false;
+
+            switch (buff.type) {
+                // Per Attempt (applies whether fish, trash, or nothing)
+                case 'rare_chance_boost':
+                     shouldDecrement = true;
+                     break;
+                case 'cooldown_reduction':
+                case 'longer_cooldown':
+                     if (isFirstCatchOfCommand) shouldDecrement = true;
+                     break;
+
+                // Per Fish Caught
+                case 'weight_boost':
+                case 'weight_loss':
+                case 'next_fish_bonus':
+                    if (caughtFish) shouldDecrement = true;
+                    break;
+                
+                // Per Normal Fish
+                case 'guaranteed_weight':
+                    if (caughtFish && !isRare) shouldDecrement = true;
+                    break;
+
+                // On Trash
+                case 'bait_on_trash':
+                    if (caughtTrash) shouldDecrement = true;
+                    break;
+            }
+
+            if (shouldDecrement) {
+                buff.remainingUses--;
+                buffsToUpdate.push(buff);
+            }
+        }
+    };
+
+    processList(userData.buffs);
+    processList(userData.debuffs);
+
+    for (const buff of buffsToUpdate) {
+        if (buff.dbId) await updateBuffUses(buff.dbId, buff.remainingUses);
+    }
+}
+
 /**
  * Pescar um peixe
  */
@@ -852,11 +936,8 @@ async function fishCommand(bot, message, args, group) {
     const userId = message.author;
     const userName = message.name ?? message.pushName ?? message.pushname ?? message.authorName ?? "Pescador";
     const groupId = message.group; 
-    const mentionPessoa = message.mentions ?? message.origin?.mentionedIds ?? [];
+    const mentionPessoa = message.mentions ?? message.origin?.mentionedIds ?? [];  
 
-    // Get global factors
-    const globalFactors = await getGlobalFactors();
-    
     let userData = await getUserData(userId);
     
     if (!userData) {
@@ -879,17 +960,11 @@ async function fishCommand(bot, message, args, group) {
 
     if (userData.buffs) {
         const cooldownBuff = userData.buffs.find(b => b.type === 'cooldown_reduction' && b.remainingUses > 0);
-        if (cooldownBuff) { currentCooldown *= (1 - cooldownBuff.value); 
-            cooldownBuff.remainingUses--; 
-            await updateBuffUses(cooldownBuff.dbId, cooldownBuff.remainingUses);
-        }
+        if (cooldownBuff) { currentCooldown *= (1 - cooldownBuff.value); }
     }
     if (userData.debuffs) {
         const cooldownDebuff = userData.debuffs.find(d => d.type === 'longer_cooldown' && d.remainingUses > 0);
-        if (cooldownDebuff) { currentCooldown *= cooldownDebuff.value; 
-            cooldownDebuff.remainingUses--;
-            await updateBuffUses(cooldownDebuff.dbId, cooldownDebuff.remainingUses);
-        }
+        if (cooldownDebuff) { currentCooldown *= cooldownDebuff.value; }
     }
 
     if (fishingCooldowns[userId] && now < fishingCooldowns[userId]) {
@@ -915,11 +990,12 @@ async function fishCommand(bot, message, args, group) {
     const caughtFishes = [];
     let effectMessage = '';
     let randomItem = null;
+    let trashProtected = false;
     
     for (let i = 0; i < catchCount; i++) {
       // Step 1: Check for Rare Fish immediately (rare fish overrides items)
       // We peek at the potential fish type first.
-      const rareCheckFish = await getRandomFish(fishArray, i > 0, userData, globalFactors);
+      const rareCheckFish = await getRandomFish(fishArray, i > 0, userData);
       
       let modifiedFish = null;
       let isTrash = false;
@@ -931,7 +1007,7 @@ async function fishCommand(bot, message, args, group) {
           // Not rare. Check for random items first.
           // Only check for items on the first catch of a multi-catch (or always? Original logic was i===0)
           if (i === 0) {
-              randomItem = checkRandomItem(globalFactors);
+              randomItem = checkRandomItem();
               
               if (randomItem) {
                   const itemResult = await applyItemEffect(userData, randomItem);
@@ -965,6 +1041,16 @@ async function fishCommand(bot, message, args, group) {
                       };
                       await addBuff(userData.userId, buff, false);
                       effectMessage += `\n\n${randomItem.emoji} Você equipou ${randomItem.name}! Espaço extra: +${randomItem.value}`;
+                  } else if (randomItem.effect === 'max_baits') {
+                      const buff = { 
+                          type: randomItem.effect, 
+                          value: randomItem.value, 
+                          remainingUses: 999999,
+                          originalName: randomItem.name,
+                          minValue: 0, maxValue: 0
+                      };
+                      await addBuff(userData.userId, buff, false);
+                      effectMessage += `\n\n${randomItem.emoji} Você equipou ${randomItem.name}! Limite de iscas aumentado: +${randomItem.value}`;
                   }
               }
           }
@@ -1013,12 +1099,21 @@ async function fishCommand(bot, message, args, group) {
              }
           }
       }
+
+      if (isTrash) {
+          trashProtected = userData.debuffs?.some(d => d.type === 'bait_on_trash' && d.remainingUses > 0) ||
+                           userData.buffs?.some(b => b.type === 'bait_on_trash' && b.remainingUses > 0);
+      }
+
+      await handleBuffDecrement(userData, {
+          caughtFish: !!(modifiedFish && !isTrash),
+          caughtTrash: isTrash,
+          isRare: !!(modifiedFish && modifiedFish.isRare),
+          isFirstCatchOfCommand: i === 0
+      });
     }
 
-    const hasTrashProtection = userData.debuffs?.some(d => d.type === 'bait_on_trash' && d.remainingUses > 0) ||
-                               userData.buffs?.some(b => b.type === 'bait_on_trash' && b.remainingUses > 0);
-
-    if (randomItem?.type !== 'trash' || !hasTrashProtection) {
+    if (randomItem?.type !== 'trash' || !trashProtected) {
         userData.baits--;
     }
     userData.totalBaitsUsed = (userData.totalBaitsUsed ?? 0) + 1;
@@ -1080,38 +1175,69 @@ async function fishCommand(bot, message, args, group) {
       extraMsg = `, segurando firme na vara de ${args[0]}, `;
     }
   
+    
+  
     if (caughtFishes.length === 0) {
+  
       return new ReturnMessage({
+  
         chatId,
-        content: `🎣 ${userName} jogou a linha ${extraMsg}e... ${effectMessage}\n\n> 🐛 Iscas restantes: ${userData.baits}/${MAX_BAITS}`,
+  
+        content: `🎣 ${userName} jogou a linha ${extraMsg}e... ${effectMessage}\n\n> 🐛 Iscas restantes: ${userData.baits}/${getMaxBaits(userData)}`,
+  
         reaction: "🎣" ,
+  
         options: { quotedMessageId: message.origin.id._serialized, mentions: mentionPessoa, evoReply: message.origin }
+  
       });
+  
     }
+  
     
+  
     let fishMessage;
+  
     if (caughtFishes.length > 1) {
+  
       const fishDetails = caughtFishes.map(fish => `*${fish.name}* (_${fish.weight.toFixed(2)} kg_)`).join(" e ");
+  
       fishMessage = `🎣 ${userName} pescou ${fishDetails}!`;
+  
     } else {
+  
       const fish = caughtFishes[0];
+  
       if (fish.isRare) {
+  
         fishMessage = `🏆 INCRÍVEL! _${userName}_ capturou um(a) _raríssimo_ *${fish.name}* de _${fish.weight.toFixed(2)} kg_! (${fish.emoji} ${fish.chance*100*DEFAULT_GLOBAL_FACTORS.rareFishChance}% de chance)`;
+  
       } else {
+  
         fishMessage = `🎣 ${userName} ${extraMsg}pescou um *${fish.name}* de _${fish.weight.toFixed(2)} kg_!`;
+  
       }
+  
     }
+  
     
+  
     if (caughtFishes.length === 1) {
+  
       const weight = caughtFishes[0].weight;
+  
       if (weight > weightScaleMsgs[0]) effectMessage = '\n\n👏 *UM MONSTRO!*' + effectMessage;
+  
       else if (weight > weightScaleMsgs[2]) effectMessage = '\n\n👏 *ENORME!*' + effectMessage;
+  
     }
+  
     
+  
     fishMessage += `\n\n> 🐳 Seu maior peixe: ${userData.biggestFish.name} (${userData.biggestFish.weight.toFixed(2)} kg)`;
-    fishMessage += `\n> 🐛 Iscas restantes: ${userData.baits}/${MAX_BAITS}`;
+  
+    fishMessage += `\n> 🐛 Iscas restantes: ${userData.baits}/${getMaxBaits(userData)}`;
+  
     fishMessage += effectMessage;
-
     // Se for peixe raro, tentar gerar imagem e salvar no histórico
     if (caughtFishes.length === 1 && caughtFishes[0].isRare) {
       let rareFishImage = await generateRareFishImage(bot, userName, caughtFishes[0].name, caughtFishes[0].weight);
@@ -1204,9 +1330,9 @@ async function myFishCommand(bot, message, args, group) {
         fishMessage += `${index + 1}. ${fish.name}: ${fish.weight.toFixed(2)} kg${rareMark}\n`;
       });
       
-      fishMessage += `\n*Stats*:\nTotal: ${userData.totalCatches}\nPeso Inv: ${userData.inventoryWeight?.toFixed(2) ?? 0} kg\nIscas: ${userData.baits}/${MAX_BAITS}\n`;
+      fishMessage += `\n*Stats*:\nTotal: ${userData.totalCatches}\nPeso Inv: ${userData.inventoryWeight?.toFixed(2) ?? 0} kg\nIscas: ${userData.baits}/${getMaxBaits(userData)}\n`;
       
-      if (userData.baits < MAX_BAITS) {
+      if (userData.baits < getMaxBaits(userData)) {
         const regenInfo = getNextBaitRegenTime(userData);
         fishMessage += `Prox isca: ${formatTimeString(regenInfo.secondsUntilNextBait)}\n`;
       }
@@ -1434,7 +1560,7 @@ async function fishingInfoCommand(bot, message) {
         let infoMessage = "🎣 *Informações & Estatísticas do Jogo da Pesca* 🎣\n\n";
 
         infoMessage += "📜 *Regras e Informações Gerais*\n";
-        infoMessage += `- *Iscas Máximas:* \`${MAX_BAITS}\`\n`;
+        infoMessage += `- *Iscas Máximas:* \`${MAX_BAITS}\` (expansível com itens)\n`;
         infoMessage += `- *Recarga de Isca:* 1 a cada ${BAIT_REGEN_TIME / 60} minutos. _(Não é possível alterar este tempo)_\n`;
         infoMessage += `-  *Peso dos Peixes:* de \`${MIN_FISH_WEIGHT}kg\` a \`${MAX_FISH_WEIGHT}kg\`\n`;
         infoMessage += `- *Peixes:* \`${fishVariety}\` tipos (\`!pesca-peixes\` para ver)\n\n`;
@@ -1612,6 +1738,7 @@ async function showBaitsCommand(bot, message, args, group) {
     
     userData = regenerateBaits(userData);
     const regenInfo = getNextBaitRegenTime(userData);
+    const maxBaits = getMaxBaits(userData);
     
     // Salva atualização de regen
     await saveUserData(userData);
@@ -1620,14 +1747,14 @@ async function showBaitsCommand(bot, message, args, group) {
     const allBaitsTime = regenInfo.allBaitsTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     
     let baitMessage = `🐛 *Iscas de ${userName}*\n\n`;
-    const baitEmojis = Array(MAX_BAITS).fill('⚪').fill('🐛', 0, userData.baits).join(' ');
+    const baitEmojis = Array(maxBaits).fill('⚪').fill('🐛', 0, userData.baits).join(' ');
     
     baitMessage += `${baitEmojis}\n\n`;
-    baitMessage += `Você tem ${userData.baits}/${MAX_BAITS} iscas.\n`;
+    baitMessage += `Você tem ${userData.baits}/${maxBaits} iscas.\n`;
     
-    if (userData.baits < MAX_BAITS) {
+    if (userData.baits < maxBaits) {
       baitMessage += `Próxima isca em: ${formatTimeString(regenInfo.secondsUntilNextBait)} (${nextBaitTime})\n`;
-      if (userData.baits < MAX_BAITS - 1) {
+      if (userData.baits < maxBaits - 1) {
         baitMessage += `Todas as iscas em: ${formatTimeString(regenInfo.secondsUntilAllBaits)} (${allBaitsTime})\n`;
       }
     } else {
@@ -1637,7 +1764,7 @@ async function showBaitsCommand(bot, message, args, group) {
     baitMessage += `\n*Sobre Iscas*:\n`;
     baitMessage += `• Você precisa de iscas para pescar\n`;
     baitMessage += `• Regenera 1 isca a cada ${Math.floor(BAIT_REGEN_TIME/60)} minutos (${Math.floor(BAIT_REGEN_TIME/60/60)} hora e ${Math.floor((BAIT_REGEN_TIME/60) % 60)} minutos)\n`;
-    baitMessage += `• Máximo de ${MAX_BAITS} iscas\n`;
+    baitMessage += `• Máximo de ${maxBaits} iscas\n`;
     baitMessage += `• Você pode encontrar pacotes de iscas enquanto pesca\n`;
     
     return new ReturnMessage({
@@ -1654,12 +1781,12 @@ async function showBaitsCommand(bot, message, args, group) {
 async function globalFactorsCommand(bot, message, args, group) {
     if (!args || args.length === 0) {
         // List factors
-        const factors = await getGlobalFactors();
+        const factors = DEFAULT_GLOBAL_FACTORS;
         let msg = "🌍 *Fatores Globais de Pesca* 🌍\n\n";
         for (const [key, val] of Object.entries(factors)) {
             msg += `• *${key}*: ${val}x\n`;
         }
-        msg += "\nPara alterar: `!pesca-global <chave> <valor>`";
+        //msg += "\nPara alterar: `!pesca-global <chave> <valor>`";
         return new ReturnMessage({ chatId: message.group ?? message.author, content: msg });
     }
 
@@ -1685,9 +1812,157 @@ async function globalFactorsCommand(bot, message, args, group) {
     return new ReturnMessage({ chatId: message.group ?? message.author, content: `✅ Fator global *${key}* atualizado para *${value}x*.` });
 }
 
-/**  
- * Reseta os dados de pesca para o grupo atual  
- */  
+async function handleAddEffectCmd(bot, message, args, isDebuff) {
+    const chatId = message.group ?? message.author;
+    if (!adminUtils.isSuperAdmin(message.author)) return;
+
+    if (args.length < 2) return new ReturnMessage({ chatId, content: `❌ Uso: !psc-add${isDebuff ? 'Debuff' : 'Buff'} <@user|global> <nome>` });
+
+    const target = args[0];
+    const effectNameInput = args.slice(1).join(' ').toLowerCase();
+
+    const list = isDebuff ? DOWNGRADES : UPGRADES;
+    const item = list.find(i => i.name.toLowerCase() === effectNameInput);
+
+    if (!item) {
+        return new ReturnMessage({ chatId, content: `❌ ${isDebuff ? 'Debuff' : 'Buff'} '${effectNameInput}' não encontrado.` });
+    }
+
+    let value = item.value;
+    if (value === undefined && (item.minValue !== undefined || item.maxValue !== undefined)) {
+         value = Math.floor(Math.random() * (item.maxValue - item.minValue + 1)) + item.minValue;
+    }
+    
+    const buff = {
+        type: item.effect,
+        value: value,
+        minValue: item.minValue,
+        maxValue: item.maxValue,
+        remainingUses: item.duration || 1,
+        originalName: item.name
+    };
+    
+    if (item.effect === 'inventory_slot') buff.remainingUses = 999999;
+
+    if (target.toLowerCase() === 'global') {
+        await database.dbRun(dbName, `INSERT INTO fishing_buffs 
+            (user_id, effect_type, is_debuff, value, min_value, max_value, remaining_uses, original_name)
+            SELECT user_id, ?, ?, ?, ?, ?, ?, ? FROM fishing_users`,
+            [buff.type, isDebuff ? 1 : 0, buff.value, buff.minValue, buff.maxValue, buff.remainingUses, buff.originalName]);
+            
+        return new ReturnMessage({ chatId, content: `✅ ${isDebuff ? 'Debuff' : 'Buff'} '${item.name}' adicionado a todos os usuários.` });
+    } else {
+        const userId = target.replace(/\D/g, '');
+        if(!userId) return new ReturnMessage({ chatId, content: "❌ ID de usuário inválido." });
+
+        await addBuff(userId, buff, isDebuff);
+        return new ReturnMessage({ chatId, content: `✅ ${isDebuff ? 'Debuff' : 'Buff'} '${item.name}' adicionado para ${target}.` });
+    }
+}
+
+async function addBuffCmd(bot, message, args, group) {
+    return handleAddEffectCmd(bot, message, args, false);
+}
+
+async function addDebuffCmd(bot, message, args, group) {
+    return handleAddEffectCmd(bot, message, args, true);
+}
+
+async function addFishCmd(bot, message, args, group) {
+    const chatId = message.group ?? message.author;
+    if (!adminUtils.isSuperAdmin(message.author)) return;
+    
+    if (args.length < 4) return new ReturnMessage({ chatId, content: "❌ Uso: !psc-addFish <@user|global> <group_id> <peso> <nome...>" });
+    
+    const target = args[0];
+    const groupId = args[1];
+    const weightStr = args[2];
+    const weight = parseFloat(weightStr.replace(',', '.'));
+    
+    if (isNaN(weight)) return new ReturnMessage({ chatId, content: "❌ Peso inválido." });
+    
+    const fishName = args.slice(3).join(' ');
+    
+    const fish = {
+        name: fishName,
+        weight: weight,
+        timestamp: Date.now(),
+        isRare: false,
+        emoji: "🐟",
+        data_json: {}
+    };
+    
+    const rare = RARE_FISH.find(f => f.name.toLowerCase() === fishName.toLowerCase());
+    if (rare) {
+        fish.emoji = rare.emoji;
+        fish.isRare = true;
+    }
+    
+    const validGroup = (groupId && groupId !== '0' && groupId !== '-' && groupId.includes('@'));
+
+    if (target.toLowerCase() === 'global') {
+        await database.dbRun(dbName, `INSERT INTO fishing_inventory 
+            (user_id, name, weight, is_rare, timestamp, emoji, data_json)
+            SELECT user_id, ?, ?, ?, ?, ?, ? FROM fishing_users`,
+            [fish.name, fish.weight, fish.isRare ? 1 : 0, fish.timestamp, fish.emoji, JSON.stringify(fish)]);
+            
+        await database.dbRun(dbName, `UPDATE fishing_users SET 
+            total_weight = total_weight + ?,
+            inventory_weight = inventory_weight + ?,
+            total_catches = total_catches + 1`, 
+            [fish.weight, fish.weight]);
+
+        if (validGroup) {
+            // Upsert into fishing_group_stats for all users
+            // If entry exists: update weight/catches. If not: insert with this fish as biggest.
+            // Note: Does not update biggest_fish for existing entries to avoid complex JSON parsing in SQL.
+             await database.dbRun(dbName, `
+                INSERT INTO fishing_group_stats (group_id, user_id, name, total_weight, total_catches, biggest_fish_json)
+                SELECT ?, user_id, name, ?, 1, ? FROM fishing_users
+                WHERE true
+                ON CONFLICT(group_id, user_id) DO UPDATE SET
+                total_weight = total_weight + ?,
+                total_catches = total_catches + 1`,
+                [groupId, fish.weight, JSON.stringify(fish), fish.weight]);
+        }
+            
+        return new ReturnMessage({ chatId, content: `✅ Peixe '${fish.name}' (${fish.weight}kg) adicionado para TODOS os usuários.` });
+    } else {
+        const userId = target.replace(/\D/g, '');
+        if(!userId) return new ReturnMessage({ chatId, content: "❌ ID de usuário inválido." });
+
+        let userData = await getUserData(userId);
+        if (!userData) {
+            userData = {
+                userId, name: target, baits: MAX_BAITS, lastBaitRegen: Date.now(),
+                totalWeight: 0, inventoryWeight: 0, totalCatches: 0, totalBaitsUsed: 0, totalTrashCaught: 0, biggestFish: null
+            };
+        }
+        
+        await addFishToInventory(userId, fish);
+        
+        userData.fishes = userData.fishes || [];
+        userData.fishes.push(fish);
+        userData.totalWeight = (userData.totalWeight || 0) + fish.weight;
+        userData.inventoryWeight = (userData.inventoryWeight || 0) + fish.weight;
+        userData.totalCatches = (userData.totalCatches || 0) + 1;
+        
+        if (!userData.biggestFish || fish.weight > userData.biggestFish.weight) {
+            userData.biggestFish = fish;
+        }
+        
+        await saveUserData(userData);
+
+        if (validGroup) {
+            await updateGroupStats(groupId, userId, userData.name, fish.weight, true, fish);
+        }
+        
+        return new ReturnMessage({ chatId, content: `✅ Peixe '${fish.name}' (${fish.weight}kg) adicionado para ${target}.` });
+    }
+}
+
+/**
+ * Reseta os dados de pesca para o grupo atual */  
 async function resetFishingDataCommand(bot, message, args, group) {  
   try {  
     if (!message.group) return new ReturnMessage({ chatId: message.author, content: "❌ Este comando só pode ser usado em grupos." });  
@@ -1726,6 +2001,9 @@ const commands = [
   new Command({name: 'pesca-peixes',description: 'Lista todos os tipos de peixes disponíveis',category: "jogos",cooldown: 5,reactions: {after: "📋",error: "❌"},method: listFishTypesCommand}),
   new Command({name: 'pesca-iscas',description: 'Mostra suas iscas de pesca',category: "jogos",cooldown: 5,reactions: {after: "🐛",error: "❌"},method: showBaitsCommand}),
   new Command({name: 'psc-addBaits', description: 'Add Iscas', category: "jogos", adminOnly: true, hidden: true, cooldown: 0, reactions: { after: "➕", error: "❌" }, method: addBaitsCmd }),
+  new Command({name: 'psc-addBuff', description: 'Add Buff', category: "jogos", adminOnly: true, hidden: true, cooldown: 0, reactions: { after: "➕", error: "❌" }, method: addBuffCmd }),
+  new Command({name: 'psc-addDebuff', description: 'Add Debuff', category: "jogos", adminOnly: true, hidden: true, cooldown: 0, reactions: { after: "➖", error: "❌" }, method: addDebuffCmd }),
+  new Command({name: 'psc-addFish', description: 'Add Fish', category: "jogos", adminOnly: true, hidden: true, cooldown: 0, reactions: { after: "🐟", error: "❌" }, method: addFishCmd }),
   new Command({name: 'pesca-global', description: 'Fatores globais de pesca', category: "jogos", hidden: true,  adminOnly: true, cooldown: 5, reactions: { after: "🌍", error: "❌" }, method: globalFactorsCommand })
 ];
 
