@@ -122,26 +122,26 @@ const weightScaleMsgs = [180, 150, 120, 100, 80, 60];
 
 // Peixes raríssimos e seus pesos adicionais
 const RARE_FISH = [
-  { name: "Dai Gum Loong", chance: 0.000008, weightBonus: 7000, emoji: "🐲" },
-  { name: "Leviathan", chance: 0.00001, weightBonus: 5600, emoji: "🐉" },
-  { name: "Megalodon", chance: 0.000015, weightBonus: 4200, emoji: "🦈" },
-  { name: "Kraken", chance: 0.00002, weightBonus: 5250, emoji: "🦑" },
-  { name: "Moby Dick", chance: 0.00003, weightBonus: 3500, emoji: "🐳" },
-  { name: "Baleia", chance: 0.00005, weightBonus: 700, emoji: "🐋" },
-  { name: "Cthulhu", chance: 0.000002, weightBonus: 66666, emoji: "🐙" },
-  { name: "Hydra", chance: 0.000012, weightBonus: 3850, emoji: "🐍" },
-  { name: "Nessie", chance: 0.000025, weightBonus: 3150, emoji: "🦕" },
-  { name: "Godzilla", chance: 0.000009, weightBonus: 6300, emoji: "🦖" },
-  { name: "Jörmungandr", chance: 0.000003, weightBonus: 20000, emoji: "🌏" },
-  { name: "Ryūjin", chance: 0.000007, weightBonus: 8500, emoji: "⛩️" },
-  { name: "Bakunawa", chance: 0.000011, weightBonus: 5400, emoji: "🌑" },
-  { name: "Charybdis", chance: 0.000013, weightBonus: 4600, emoji: "🌀" },
-  { name: "Aspidochelone", chance: 0.000018, weightBonus: 3300, emoji: "🏝️" },
-  { name: "Makara", chance: 0.000021, weightBonus: 2850, emoji: "🐊" },
-  { name: "Umibōzu", chance: 0.000024, weightBonus: 2500, emoji: "🌫️" },
-  { name: "Taniwha", chance: 0.000028, weightBonus: 2150, emoji: "🗿" },
-  { name: "Kelpie", chance: 0.000035, weightBonus: 1700, emoji: "🐎" },
-  { name: "Sedna", chance: 0.000045, weightBonus: 1300, emoji: "🧜‍♀️" }
+  { name: "Cthulhu",        chance: 0.000002, weightBonus: 86665, emoji: "🐙" },
+  { name: "Jörmungandr",    chance: 0.000003, weightBonus: 26000, emoji: "🌏" },
+  { name: "Ryūjin",         chance: 0.000007, weightBonus: 11050, emoji: "⛩️" },
+  { name: "Dai Gum Loong",  chance: 0.000008, weightBonus: 9100,  emoji: "🐲" },
+  { name: "Godzilla",       chance: 0.000009, weightBonus: 8190,  emoji: "🦖" },
+  { name: "Leviathan",      chance: 0.000010,  weightBonus: 7280,  emoji: "🐉" },
+  { name: "Bakunawa",       chance: 0.000011, weightBonus: 7020,  emoji: "🌑" },
+  { name: "Hydra",          chance: 0.000012, weightBonus: 5005,  emoji: "🐍" },
+  { name: "Charybdis",      chance: 0.000013, weightBonus: 5980,  emoji: "🌀" },
+  { name: "Megalodon",      chance: 0.000015, weightBonus: 5460,  emoji: "🦈" },
+  { name: "Aspidochelone",  chance: 0.000018, weightBonus: 4290,  emoji: "🏝️" },
+  { name: "Kraken",         chance: 0.000020,  weightBonus: 6825,  emoji: "🦑" },
+  { name: "Makara",         chance: 0.000021, weightBonus: 3705,  emoji: "🐊" },
+  { name: "Umibōzu",        chance: 0.000024, weightBonus: 3250,  emoji: "🌫️" },
+  { name: "Nessie",         chance: 0.000025, weightBonus: 4095,  emoji: "🦕" },
+  { name: "Taniwha",        chance: 0.000028, weightBonus: 4550,  emoji: "🗿" },
+  { name: "Moby Dick",      chance: 0.000030,  weightBonus: 2795,  emoji: "🐳" },
+  { name: "Kelpie",         chance: 0.000035, weightBonus: 2210,  emoji: "🐎" },
+  { name: "Sedna",          chance: 0.000045, weightBonus: 1690,  emoji: "🧜‍♀️" },
+  { name: "Baleia",         chance: 0.000050,  weightBonus: 1200,   emoji: "🐋" }
 ];
 
 // Itens de lixo que podem ser pescados
@@ -234,13 +234,13 @@ const UPGRADES = [
   //{ name: "Energético de Pescador", chance: 0.02, emoji: "⚡", effect: "cooldown_reduction", value: 0.9, duration: 2, description: "Reduz o tempo de espera em 90% nas próximas 2 pescarias." },
   { name: "Anzol de Titânio", chance: 0.025, emoji: "🔩", effect: "bait_on_trash", duration: 10, description: "Evita a perda de isca ao pescar lixo pelas próximas 10 vezes." },
 
-  { name: "Bolso de Pesca", chance: 0.0008, emoji: "👖", effect: "inventory_slot", value: 1, description: "Aumenta seu inventário em 1." },
-  { name: "Calça de Pesca", chance: 0.0004, emoji: "👖", effect: "inventory_slot", value: 2, description: "Aumenta seu inventário em 2." },
-  { name: "Mochilão", chance: 0.00001, emoji: "🎒", effect: "inventory_slot", value: 4, description: "Aumenta seu inventário em 4." },
+  { name: "Bolso de Pesca", chance: 0.008, emoji: "👖", effect: "inventory_slot", value: 1, description: "Aumenta seu inventário em 1." },
+  { name: "Calça de Pesca", chance: 0.004, emoji: "👖", effect: "inventory_slot", value: 2, description: "Aumenta seu inventário em 2." },
+  { name: "Mochilão", chance: 0.0001, emoji: "🎒", effect: "inventory_slot", value: 4, description: "Aumenta seu inventário em 4." },
 
-  { name: "Pochete de Iscas", chance: 0.00056, emoji: "👜", effect: "max_baits", value: 1, description: "Aumenta seu limite de iscas em 1." },
-  { name: "Caixa de Iscas", chance: 0.00028, emoji: "🧰", effect: "max_baits", value: 2, description: "Aumenta seu limite de iscas em 2." },
-  { name: "Viveiro Portátil", chance: 0.000007, emoji: "⛲", effect: "max_baits", value: 4, description: "Aumenta seu limite de iscas em 4." }
+  { name: "Pochete de Iscas", chance: 0.0056, emoji: "👜", effect: "max_baits", value: 1, description: "Aumenta seu limite de iscas em 1." },
+  { name: "Caixa de Iscas", chance: 0.0028, emoji: "🧰", effect: "max_baits", value: 2, description: "Aumenta seu limite de iscas em 2." },
+  { name: "Viveiro Portátil", chance: 0.0005, emoji: "⛲", effect: "max_baits", value: 4, description: "Aumenta seu limite de iscas em 4." }
 ];
 
 // Downgrades para pesca
@@ -256,11 +256,17 @@ const DOWNGRADES = [
   { name: "Olho Gordo", chance: 0.03, emoji: "🧿", effect: "weight_loss", value: -0.8, duration: 2, description: "O olho gordo dos invejosos reduziu 80% do peso dos seus próximos 2 peixes." }
 ];
 
+// 
+RARE_FISH.sort((a, b) => a.chance - b.chance);
+UPGRADES.sort((a, b) => a.chance - b.chance);
+DOWNGRADES.sort((a, b) => a.chance - b.chance);
+
+
 const DEFAULT_GLOBAL_FACTORS = {
     trashChance: 1.0,
     buffChance: 1.0,
     debuffChance: 0.8,
-    rareFishChance: 0.5,
+    rareFishChance: 1,
     weightFactor: 1.0
 };
 
@@ -1303,7 +1309,7 @@ async function fishCommand(bot, message, args, group) {
   }
 }
 
-async function myFishCommand(bot, message, args, group) {
+async function fishingDataCommand(bot, message, args, group) {
   try {
     const chatId = message.group ?? message.author;
     const userId = message.author;
@@ -1318,41 +1324,65 @@ async function myFishCommand(bot, message, args, group) {
     userData = regenerateBaits(userData);
     await saveUserData(userData);
     
+    const maxBaits = getMaxBaits(userData);
+    const maxInventory = getMaxInventory(userData);
     const fishes = userData.fishes;
     
-    let fishMessage = `🎣 *Peixes de ${userName}*\n\n`;
-    if (fishes.length === 0) {
-      fishMessage += 'Nenhum peixe no inventário.';
-    } else {
-      const sortedFishes = [...fishes].sort((a, b) => b.weight - a.weight);
-      sortedFishes.forEach((fish, index) => {
-        const rareMark = fish.isRare ? ` ${fish.emoji} RARO!` : '';
-        fishMessage += `${index + 1}. ${fish.name}: ${fish.weight.toFixed(2)} kg${rareMark}\n`;
-      });
-      
-      fishMessage += `\n*Stats*:\nTotal: ${userData.totalCatches}\nPeso Inv: ${userData.inventoryWeight?.toFixed(2) ?? 0} kg\nIscas: ${userData.baits}/${getMaxBaits(userData)}\n`;
-      
-      if (userData.baits < getMaxBaits(userData)) {
-        const regenInfo = getNextBaitRegenTime(userData);
-        fishMessage += `Prox isca: ${formatTimeString(regenInfo.secondsUntilNextBait)}\n`;
-      }
+    let msg = `🎣 *Ficha do Pescador: ${userName}*\n\n`;
 
-      if (userData.buffs?.length > 0) {
-        fishMessage += `\n*Buffs*: ${userData.buffs.length} ativos\n`;
-      }
-      if (userData.debuffs?.length > 0) {
-        fishMessage += `\n*Debuffs*: ${userData.debuffs.length} ativos\n`;
-      }
-      
-      if (fishes.length >= getMaxInventory(userData)) {
-        fishMessage += `\n⚠️ Inventário cheio! O menor peixe será solto na próxima pescaria.`;
-      }
+    // Stats
+    msg += `🐛 *Iscas:* ${userData.baits}/${maxBaits}\n`;
+    msg += `🎒 *Inventário:* ${fishes.length}/${maxInventory}\n`;
+    msg += `🎣 *Arremessos:* ${userData.totalBaitsUsed ?? 0}\n`;
+    msg += `🗑️ *Lixos:* ${userData.totalTrashCaught ?? 0}\n`;
+    msg += `🐟 *Capturas:* ${userData.totalCatches ?? 0}\n\n`;
+
+    // Buffs & Debuffs
+    const allBuffs = [];
+    if (userData.buffs) allBuffs.push(...userData.buffs.map(b => ({...b, isDebuff: false})));
+    if (userData.debuffs) allBuffs.push(...userData.debuffs.map(b => ({...b, isDebuff: true})));
+
+    // Sort by uses (ascending)
+    allBuffs.sort((a, b) => a.remainingUses - b.remainingUses);
+
+    if (allBuffs.length > 0) {
+        msg += `✨ *Efeitos Ativos:*\n`;
+        const combinedItems = [...UPGRADES, ...DOWNGRADES];
+        for (const buff of allBuffs) {
+            let icon = buff.isDebuff ? "🕯️" : "✨";
+            const refItem = combinedItems.find(i => i.name === buff.originalName);
+            if (refItem) icon = refItem.emoji;
+
+            if (buff.remainingUses > 100) {
+                 msg += `${icon} ${buff.originalName}\n`;
+            } else {
+                 msg += `${icon} ${buff.originalName} (${buff.remainingUses}x)\n`;
+            }
+        }
+        msg += `\n`;
     }
+
+    // Inventory
+    msg += `📦 *Meus Pescados:*\n`;
+    if (fishes.length === 0) {
+        msg += `_Nenhum peixe no momento._\n`;
+    } else {
+        const sortedFishes = [...fishes].sort((a, b) => b.weight - a.weight);
+        let totalWeight = 0;
+        sortedFishes.forEach((fish, index) => {
+            totalWeight += fish.weight;
+            const rareMark = fish.isRare ? ` ${fish.emoji} RARO!` : '';
+            msg += `${index + 1}. ${fish.name}: ${fish.weight.toFixed(2)} kg${rareMark}\n`;
+        });
+        msg += `\n⚖️ *Peso Total:* ${totalWeight.toFixed(2)} kg\n`;
+    }
+
+    msg += `\n> Saiba mais sobre o jogo enviando:\n> !pesca-info`;
     
-    return new ReturnMessage({ chatId, content: fishMessage, options: { quotedMessageId: message.origin.id._serialized, evoReply: message.origin } });
+    return new ReturnMessage({ chatId, content: msg, options: { quotedMessageId: message.origin.id._serialized, evoReply: message.origin } });
   } catch (error) {
-    logger.error('Erro myFish:', error);
-    return new ReturnMessage({ chatId: message.group ?? message.author, content: '❌ Erro ao ver peixes.' });
+    logger.error('Erro fishingData:', error);
+    return new ReturnMessage({ chatId: message.group ?? message.author, content: '❌ Erro ao ver ficha.' });
   }
 }
 
@@ -1717,66 +1747,7 @@ async function listFishTypesCommand(bot, message, args, group) {
   }
 }
 
-/**
- * Mostra as iscas do jogador
- */
-async function showBaitsCommand(bot, message, args, group) {
-  try {
-    const chatId = message.group ?? message.author;
-    const userId = message.author;
-    const userName = message.name ?? message.pushName ?? message.pushname ?? message.authorName ?? "Pescador";
-    
-    let userData = await getUserData(userId);
-    
-    if (!userData) {
-      userData = {
-         userId, name: userName, baits: MAX_BAITS, lastBaitRegen: Date.now(),
-         totalWeight: 0, inventoryWeight: 0, totalCatches: 0, totalBaitsUsed: 0, totalTrashCaught: 0, biggestFish: null
-      };
-      await saveUserData(userData);
-    }
-    
-    userData = regenerateBaits(userData);
-    const regenInfo = getNextBaitRegenTime(userData);
-    const maxBaits = getMaxBaits(userData);
-    
-    // Salva atualização de regen
-    await saveUserData(userData);
-    
-    const nextBaitTime = regenInfo.nextBaitTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    const allBaitsTime = regenInfo.allBaitsTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    
-    let baitMessage = `🐛 *Iscas de ${userName}*\n\n`;
-    const baitEmojis = Array(maxBaits).fill('⚪').fill('🐛', 0, userData.baits).join(' ');
-    
-    baitMessage += `${baitEmojis}\n\n`;
-    baitMessage += `Você tem ${userData.baits}/${maxBaits} iscas.\n`;
-    
-    if (userData.baits < maxBaits) {
-      baitMessage += `Próxima isca em: ${formatTimeString(regenInfo.secondsUntilNextBait)} (${nextBaitTime})\n`;
-      if (userData.baits < maxBaits - 1) {
-        baitMessage += `Todas as iscas em: ${formatTimeString(regenInfo.secondsUntilAllBaits)} (${allBaitsTime})\n`;
-      }
-    } else {
-      baitMessage += `Suas iscas estão no máximo!\n`;
-    }
 
-    baitMessage += `\n*Sobre Iscas*:\n`;
-    baitMessage += `• Você precisa de iscas para pescar\n`;
-    baitMessage += `• Regenera 1 isca a cada ${Math.floor(BAIT_REGEN_TIME/60)} minutos (${Math.floor(BAIT_REGEN_TIME/60/60)} hora e ${Math.floor((BAIT_REGEN_TIME/60) % 60)} minutos)\n`;
-    baitMessage += `• Máximo de ${maxBaits} iscas\n`;
-    baitMessage += `• Você pode encontrar pacotes de iscas enquanto pesca\n`;
-    
-    return new ReturnMessage({
-      chatId,
-      content: baitMessage,
-      options: { quotedMessageId: message.origin.id._serialized, evoReply: message.origin }
-    });
-  } catch (error) {
-    logger.error('Erro ao mostrar iscas do jogador:', error);
-    return new ReturnMessage({ chatId: message.group ?? message.author, content: '❌ Erro ao mostrar iscas.' });
-  }
-}
 
 async function globalFactorsCommand(bot, message, args, group) {
     if (!args || args.length === 0) {
@@ -1992,14 +1963,16 @@ async function resetFishingDataCommand(bot, message, args, group) {
 const commands = [
   new Command({name: 'pescar', description: 'Pesque um peixe', category: "jogos", cooldown: 0, reactions: { before: "🎣", after: "🐟", error: "❌" }, method: fishCommand }),
   new Command({name: 'pesca', hidden: true, description: 'Pesque um peixe', category: "jogos", cooldown: 0, reactions: { before: "🎣", after: "🐟", error: "❌" }, method: fishCommand }),
-  new Command({name: 'meus-pescados', description: 'Seus peixes', category: "jogos", cooldown: 5, reactions: { after: "🐠", error: "❌" }, method: myFishCommand }),
+  new Command({name: 'meus-pescados', description: 'Ficha do Pescador', category: "jogos", cooldown: 5, reactions: { after: "🐠", error: "❌" }, method: fishingDataCommand }),
+  new Command({name: 'pesca-dados', hidden: true, description: 'Ficha do Pescador', category: "jogos", cooldown: 5, reactions: { after: "🐠", error: "❌" }, method: fishingDataCommand }),
+  new Command({name: 'pesca-ficha', description: 'Ficha do Pescador', category: "jogos", cooldown: 5, reactions: { after: "🐠", error: "❌" }, method: fishingDataCommand }),
   new Command({name: 'pesca-ranking',description: 'Mostra o ranking de pescaria do grupo atual',category: "jogos",group: "pescrank",cooldown: 5,reactions: {after: "🏆",error: "❌"},method: fishingRankingCommand}),
   new Command({name: 'pescados', hidden: true, description: 'Mostra o ranking de pescaria do grupo atual',category: "jogos",group: "pescrank",cooldown: 5,reactions: {after: "🐋",error: "❌"},method: fishingRankingCommand}),
   new Command({name: 'pesca-info',  description: 'Informações do jogo',  category: "jogos",  adminOnly: true,  cooldown: 60,  reactions: {  after: "📕",  error: "❌"  },  method: fishingInfoCommand  }),
   new Command({name: 'pesca-reset',  description: 'Reseta os dados de pesca para o grupo atual',  category: "jogos",  adminOnly: true,  cooldown: 10,  reactions: {  before: process.env.LOADING_EMOJI ?? "🌀",  after: "✅",  error: "❌"  },  method: resetFishingDataCommand  }),
   new Command({name: 'pesca-lendas',description: 'Mostra os peixes lendários que foram pescados',category: "jogos",cooldown: 10,reactions: {after: "🐉",error: "❌"},method: legendaryFishCommand}),
   new Command({name: 'pesca-peixes',description: 'Lista todos os tipos de peixes disponíveis',category: "jogos",cooldown: 5,reactions: {after: "📋",error: "❌"},method: listFishTypesCommand}),
-  new Command({name: 'pesca-iscas',description: 'Mostra suas iscas de pesca',category: "jogos",cooldown: 5,reactions: {after: "🐛",error: "❌"},method: showBaitsCommand}),
+  new Command({name: 'pesca-iscas',description: 'Ficha do Pescador',category: "jogos",cooldown: 5,reactions: {after: "🐛",error: "❌"},method: fishingDataCommand}),
   new Command({name: 'psc-addBaits', description: 'Add Iscas', category: "jogos", adminOnly: true, hidden: true, cooldown: 0, reactions: { after: "➕", error: "❌" }, method: addBaitsCmd }),
   new Command({name: 'psc-addBuff', description: 'Add Buff', category: "jogos", adminOnly: true, hidden: true, cooldown: 0, reactions: { after: "➕", error: "❌" }, method: addBuffCmd }),
   new Command({name: 'psc-addDebuff', description: 'Add Debuff', category: "jogos", adminOnly: true, hidden: true, cooldown: 0, reactions: { after: "➖", error: "❌" }, method: addDebuffCmd }),
@@ -2007,7 +1980,7 @@ const commands = [
   new Command({name: 'pesca-global', description: 'Fatores globais de pesca', category: "jogos", hidden: true,  adminOnly: true, cooldown: 5, reactions: { after: "🌍", error: "❌" }, method: globalFactorsCommand })
 ];
 
-// No longer need saveSync for SQLite (it's atomic) but keeping stub if external calls exist
+// Stub
 function saveSync() {} 
 
 module.exports = { 

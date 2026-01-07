@@ -55,7 +55,7 @@ function extractDate(text) {
  */
 async function detectNews(msgBody, groupId) {
   try {
-    const mensagem = msgBody.toLowerCase();
+    const mensagem = msgBody?.toLowerCase() ?? "";
     
     // Verifica se a mensagem atende aos critérios para ser uma MuNews
     if (mensagem.length > 5000) {
