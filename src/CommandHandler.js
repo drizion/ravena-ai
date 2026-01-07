@@ -612,10 +612,11 @@ class CommandHandler {
     
     // Verifica se é um comando personalizado (apenas para mensagens de grupo)
     if (group && this.customCommands[group.id] && !skipCustom) { // Quando é comando embutid ({cmd-xxx}), não roda personalizados, se não vira um loop
-      const customCommand = this.findCustomCommand(command, this.customCommands[group.id]);
-      if (customCommand) {
-        this.logger.debug(`[${gidDebug}][${message.author}/${message.authorName}] Comando custom (${customCommand.startsWith}) '${command}' '${args.join(" ")}'`);
-        this.executeCustomCommand(bot, message, customCommand, args, group);
+      const matchResult = this.findCustomCommand(command, this.customCommands[group.id], args);
+      if (matchResult) {
+        const { customCommand, newArgs } = matchResult;
+        this.logger.debug(`[${gidDebug}][${message.author}/${message.authorName}] Comando custom (${customCommand.startsWith}) '${command}' '${newArgs.join(" ")}'`);
+        this.executeCustomCommand(bot, message, customCommand, newArgs, group);
         return;
       } else {
         if (group.prefix && group.prefix !== '') {
@@ -946,33 +947,58 @@ class CommandHandler {
 
   /**
    * Encontra um comando personalizado pelo nome na lista
-   * @param {string} commandName - O nome do comando
+   * @param {string} firstWord - O nome do comando ou primeira palavra
    * @param {Array} commands - Lista de comandos personalizados
-   * @returns {Object|null} - O objeto de comando personalizado ou null
+   * @param {Array} args - Argumentos do comando
+   * @returns {Object|null} - Objeto contendo { customCommand, newArgs } ou null
    */
-  findCustomCommand(commandName, commands) {
-    // Primeiro, procura uma correspondência exata
-    const exactMatch = commands.find(cmd => cmd.startsWith && (
-      cmd.caseSensitive 
-      ? cmd.startsWith === commandName 
-      : cmd.startsWith.toLowerCase() === commandName.toLowerCase()
-    ));
+  findCustomCommand(firstWord, commands, args = []) {
+    // Construct all possible prefixes from input
+    const inputs = [];
+    let current = firstWord;
+    inputs.push({ text: current, consumed: 0 });
+    
+    const limit = Math.min(args.length, 10);
+    for (let i = 0; i < limit; i++) {
+        current += " " + args[i];
+        inputs.push({ text: current, consumed: i + 1 });
+    }
 
-    if (exactMatch) {
-      this.logger.debug(`Encontrada correspondência exata para comando '${commandName}'`);
-      return exactMatch;
+    // 1. Exact matches (Longest first)
+    for (let i = inputs.length - 1; i >= 0; i--) {
+        const check = inputs[i];
+        const commandName = check.text;
+
+        const exactMatch = commands.find(cmd => cmd.startsWith && (
+            cmd.caseSensitive 
+            ? cmd.startsWith === commandName 
+            : cmd.startsWith.toLowerCase() === commandName.toLowerCase()
+        ));
+
+        if (exactMatch) {
+            this.logger.debug(`Encontrada correspondência exata para comando '${commandName}'`);
+            return { customCommand: exactMatch, newArgs: args.slice(check.consumed) };
+        }
     }
     
-    // Se não encontrar uma correspondência exata, procura uma correspondência parcial
-    const partialMatch = commands.find(cmd => {
-      if (cmd.startsWith && commandName.toLowerCase().startsWith(cmd.startsWith.toLowerCase())) {
-        return true;
-      }
-      return false;
-    });
+    // 2. Partial matches (Longest first)
+    for (let i = inputs.length - 1; i >= 0; i--) {
+        const check = inputs[i];
+        const commandName = check.text;
+        
+        const partialMatch = commands.find(cmd => {
+            if (cmd.startsWith && commandName.toLowerCase().startsWith(cmd.startsWith.toLowerCase())) {
+                return true;
+            }
+            return false;
+        });
+
+        if (partialMatch) {
+             return { customCommand: partialMatch, newArgs: args.slice(check.consumed) };
+        }
+    }
     
-    //this.logger.debug(`Buscando comando personalizado '${commandName}': ${partialMatch ? 'encontrado' : 'não encontrado'}`);
-    return partialMatch ?? null;
+    return null;
   }
 
   /**
@@ -1143,9 +1169,10 @@ class CommandHandler {
       const command =  `${textContent}`;
 
       //this.logger.debug(`[processCustomIgnoresPrefix][${group.name}] Buscando comando '${command}'`);
-      const customCommand = this.findCustomCommand(command, this.customCommands[group.id]);
+      const matchResult = this.findCustomCommand(command, this.customCommands[group.id]);
 
-      if (customCommand) {
+      if (matchResult) {
+        const { customCommand } = matchResult;
         this.logger.debug(`[processCustomIgnoresPrefix] `,customCommand);
         this.executeCustomCommand(bot, message, customCommand, [], group);
       }

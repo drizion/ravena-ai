@@ -406,7 +406,7 @@ class Management {
       });
     }
 
-    let commandTrigger = args.join(' ').toLowerCase();
+    let commandTrigger = args.join(' ').trim().toLowerCase();
 
     // Verifica se a mensagem é uma resposta
     const quotedMsg = await message.origin.getQuotedMessage();
@@ -417,13 +417,13 @@ class Management {
         if (message.origin && message.origin.body) {
           // Extrai o texto após o comando
           const prefixo = group.prefix ?? '!';
-          commandTrigger = args[0];
+          commandTrigger = args[0].trim();
           const comandoCompleto = `${prefixo}g-addCmd ${commandTrigger}`;
           bodyTexto = message.origin.body.substring(message.origin.body.indexOf(comandoCompleto) + comandoCompleto.length).trim();
         } else {
           this.logger.info(`[addCmd] Não consegui pegar o body de mensagem, vou usar os args mesmo.`);
           bodyTexto = args.slice(1).join(" ");
-          commandTrigger = args[0];
+          commandTrigger = args[0].trim();
 
         }
       } else {
@@ -439,6 +439,13 @@ class Management {
 
     if(commandTrigger.startsWith(group.prefix)){
       commandTrigger = commandTrigger.replace(group.prefix, "");
+    }
+
+    if (commandTrigger.split(/\s+/).length > 10) {
+      return new ReturnMessage({
+        chatId: group.id,
+        content: 'O gatilho do comando não pode ter mais de 10 palavras.'
+      });
     }
     
     
@@ -558,7 +565,7 @@ class Management {
       });
     }
     
-    let commandTrigger = args.join(' ').toLowerCase();
+    let commandTrigger = args.join(' ').trim().toLowerCase();
 
 
     const quotedMsg = await message.origin.getQuotedMessage();
@@ -569,13 +576,13 @@ class Management {
         if (message.origin && message.origin.body) {
           // Extrai o texto após o comando
           const prefixo = group.prefix ?? '!';
-          commandTrigger = args[0];
+          commandTrigger = args[0].trim();
           const comandoCompleto = `${prefixo}g-addCmdReply ${commandTrigger}`;
           bodyTexto = message.origin.body.substring(message.origin.body.indexOf(comandoCompleto) + comandoCompleto.length).trim();
         } else {
           this.logger.info(`[addCmdReply] Não consegui pegar o body de mensagem, vou usar os args mesmo.`);
           bodyTexto = args.slice(1).join(" ");
-          commandTrigger = args[0];
+          commandTrigger = args[0].trim();
 
         }
       } else {
@@ -594,7 +601,7 @@ class Management {
     
     // Obtém comandos personalizados para este grupo
     const commands = await this.database.getCustomCommands(group.id);
-    const command = commands.find(cmd => cmd.startsWith === commandTrigger && !cmd.deleted);
+    const command = commands.find(cmd => (cmd.startsWith?.trim() === commandTrigger) && !cmd.deleted);
     
     if (!command) {
       return new ReturnMessage({
@@ -696,11 +703,11 @@ class Management {
       });
     }
     
-    const commandTrigger = args.join(' ');
+    const commandTrigger = args.join(' ').trim().toLowerCase();
     
     // Obtém comandos personalizados para este grupo
     const commands = await this.database.getCustomCommands(group.id);
-    const command = commands.find(cmd => cmd.startsWith === commandTrigger && !cmd.deleted);
+    const command = commands.find(cmd => (cmd.startsWith?.trim()?.toLowerCase() === commandTrigger) && !cmd.deleted);
     
     if (!command) {
       return new ReturnMessage({
@@ -744,18 +751,11 @@ class Management {
       });
     }
     
-    if (args.length === 0) {
-      return new ReturnMessage({
-        chatId: group.id,
-        content: 'Por favor, forneça o comando personalizado a ser habilitado. Exemplo: !g-cmd-enable saudação'
-      });
-    }
-    
-    const commandTrigger = args.join(' ');
+    const commandTrigger = args.join(' ').trim().toLowerCase();
     
     // Obtém comandos personalizados para este grupo
     const commands = await this.database.getCustomCommands(group.id);
-    const command = commands.find(cmd => cmd.startsWith === commandTrigger && !cmd.deleted);
+    const command = commands.find(cmd => (cmd.startsWith?.trim()?.toLowerCase() === commandTrigger) && !cmd.deleted);
     
     if (!command) {
       return new ReturnMessage({
@@ -805,11 +805,11 @@ class Management {
       });
     }
     
-    const commandTrigger = args.join(' ');
+    const commandTrigger = args.join(' ').trim().toLowerCase();
     
     // Obtém comandos personalizados para este grupo
     const commands = await this.database.getCustomCommands(group.id);
-    const command = commands.find(cmd => cmd.startsWith === commandTrigger && !cmd.deleted);
+    const command = commands.find(cmd => (cmd.startsWith?.trim()?.toLowerCase() === commandTrigger) && !cmd.deleted);
     
     if (!command) {
       return new ReturnMessage({
@@ -859,11 +859,11 @@ class Management {
       });
     }
     
-    const commandTrigger = args.join(' ');
+    const commandTrigger = args.join(' ').trim().toLowerCase();
     
     // Obtém comandos personalizados para este grupo
     const commands = await this.database.getCustomCommands(group.id);
-    const command = commands.find(cmd => cmd.startsWith === commandTrigger && !cmd.deleted);
+    const command = commands.find(cmd => (cmd.startsWith?.trim()?.toLowerCase() === commandTrigger) && !cmd.deleted);
     
     if (!command) {
       return new ReturnMessage({
