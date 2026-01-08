@@ -3,13 +3,14 @@ const Logger = require('../utils/Logger');
 
 class CacheManager {
   constructor(redisURL, redisDB, redisTTL, maxCacheSize) {
-    this.logger = new Logger(`redis`);
+    this.useRedis = (process.env.USE_REDIS !== 'false') ?? false;
+    this.logger = new Logger(`cache-manager`);
     this.redisURL = redisURL;
     this.redisDB = (redisDB ?? 0) % 15;
     this.redisTTL = parseInt(redisTTL, 10) || 3600;
     this.maxCacheSize = parseInt(maxCacheSize, 10) || 100;
 
-    // in-memory fallback
+    // in-memory main cache / fallback
     this.messageCache = [];
     this.contactCache = [];
     this.chatCache = [];
@@ -18,7 +19,7 @@ class CacheManager {
 
     this.redisClient = null;
 
-    if (this.redisURL) {
+    if (this.redisURL && this.useRedis) {
       try {
         this.redisClient = new Redis(`${this.redisURL}/${this.redisDB}`, { /* ... options ... */ });
         this.redisClient.on('connect', () => this.logger.info(`CacheManager: Connected to Redis db ${this.redisDB}.`));
@@ -30,7 +31,7 @@ class CacheManager {
         this.redisClient = null;
       }
     } else {
-      this.logger.info('CacheManager: No redisURL provided. Using in-memory cache only.');
+      this.logger.info('CacheManager: No Redis configured. Using in-memory cache only.');
     }
   }
 
