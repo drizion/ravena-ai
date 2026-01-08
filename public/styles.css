@@ -1011,19 +1011,75 @@ nav a.active {
     font-size: 1rem;
 }
 
-/* Status Light Indicator */
-#message-activity {
+/* Status Light Indicator General */
+.status-indicator-light {
     width: 20px;
     height: 20px;
     border-radius: 50%;
     background-color: grey;
     box-shadow: 0 0 5px rgba(0,0,0,0.5);
-    transition: background-color 0.05s, box-shadow 0.05s;
+    margin: 0 auto;
+    transition: background-color 0.3s, box-shadow 0.3s;
     cursor: help;
-    margin: 0 10px; /* Spacing */
 }
 
-#message-activity.active {
-    box-shadow: 0 0 10px #8d8 !important;
-    background-color: #87d078 !important;
+.status-indicator-light.up, .status-indicator-light.green {
+    background-color: #85e413 !important;
+    box-shadow: 0 0 8px #85e413 !important;
+}
+
+.status-indicator-light.down, .status-indicator-light.red {
+    background-color: #df5151 !important;
+    box-shadow: 0 0 8px #df5151 !important;
+}
+
+.status-indicator-light.backup, .status-indicator-light.yellow {
+    background-color: #dfd86b !important;
+    box-shadow: 0 0 8px #dfd86b !important;
+}
+
+/* Message Activity Specifics */
+/* Grey when down (default class usually handles grey, but we can enforce) */
+.status-indicator-light.activity-grey {
+    background-color: grey !important;
+    box-shadow: none !important;
+}
+
+/* Dim Green (Idle UP) */
+.status-indicator-light.activity-idle {
+    background-color: #cfe8b1 !important;
+    box-shadow: 0 0 5px #cfe8b1 !important;
+}
+
+/* Flash Green (Activity) */
+.status-indicator-light.activity-flash {
+    background-color: #85e413 !important;
+    box-shadow: 0 0 10px #85e413 !important;
+    transition: background-color 0.1s ease-out !important; /* Fast flash */
+}
+
+/* Flash Yellow (No activity > 30s) */
+.status-indicator-light.activity-warning {
+    animation: flash-yellow 1s infinite;
+}
+
+@keyframes flash-yellow {
+    0%, 100% { background-color: #cfe8b1; box-shadow: 0 0 5px #cfe8b1; }
+    50% { background-color: #dfd86b; box-shadow: 0 0 10px #dfd86b; }
+}
+
+/* Flash Red (No activity > 60s) */
+.status-indicator-light.activity-danger {
+    animation: flash-red 1s infinite;
+}
+
+@keyframes flash-red {
+    0%, 100% { background-color: #cfe8b1; box-shadow: 0 0 5px #cfe8b1; }
+    50% { background-color: #df5151; box-shadow: 0 0 10px #df5151; }
+}
+
+/* WebSocket Overlay */
+.ws-loading-overlay {
+    backdrop-filter: blur(2px);
+    transition: opacity 0.3s;
 }

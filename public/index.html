@@ -15,28 +15,63 @@
         <header>
             <h1  class="banner">ravenabot - status</h1>
             
-            <div id="status-light-container" style="display: flex; justify-content: center; margin-bottom: 10px;">
-                <div id="message-activity" class="status-indicator" style="background-color: grey;" title="Cada piscada é uma mensagem enviada/recebida"></div>
-           </div>
+            <div class="status-grid-container" style="position: relative; margin-bottom: 20px;">
+                <table class="status-table" style="margin: 0 auto; border-collapse: collapse;">
+                    <tr class="status-lights-row">
+                         <td style="padding: 5px 25px;"><div id="service-evolutiongo" class="status-indicator-light" title="Evolution V3 / Serviço principal do WhatsApp"></div></td>
+                         <td style="padding: 5px 25px;"><div id="api-imagine" class="status-indicator-light" title="!imagine / Servidor IA de Imagens (ComfyUI/Z-Image)"></div></td>
+                         <td style="padding: 5px 25px;"><div id="api-llm" class="status-indicator-light" title="!ia/!resumo/!interagir / Servidor IA de linguagem (LLM)"></div></td>
+                         <td style="padding: 5px 25px;"><div id="api-whisper" class="status-indicator-light" title="!stt / Servidor conversão de voz para texto (Whisper)"></div></td>
+                         <td style="padding: 5px 25px;"><div id="api-alltalk" class="status-indicator-light" title="!tts / Servidor conversão de texto para voz (AllTalkV2)"></div></td>
+                         <td style="padding: 5px 25px;"><div id="message-activity" class="status-indicator-light" title="Atividade / Cada piscada é uma mensagem enviada/recebida"></div></td>
+                    </tr>
+                    <tr class="status-labels-row" style="color: #b7b7c5; font-size: 0.8rem; text-align: center;">
+                        <td>Evolution</td>
+                        <td>Imagine</td>
+                        <td>LLM</td>
+                        <td>Whisper</td>
+                        <td>AllTalk</td>
+                        <td>Atividade</td>
+                    </tr>
+                </table>
+                <div id="ws-loading-overlay" class="ws-loading-overlay" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5, 6, 13, 0.8); color: white; display: flex; justify-content: center; align-items: center; z-index: 10;">
+                    <span>Carregando status...</span>
+                </div>
+            </div>
 
             <!-- Links de Ícones Sociais -->
-            <div class="social-links">
-                <a href="https://github.com/moothz/ravena-ai" target="_blank" title="Código da ravena no GitHub">
-                    <img src="github.png" class="social-icon">
-                </a>
-
-                <a href="https://tipa.ai/moothz" target="_blank" title="Faça sua doação!">
-                    <img src="tipaai.jpg" class="social-icon">
-                </a>
-
-                <a href="https://whatsapp.com/channel/0029VbBwXS7K5cDI4P8okp2f" target="_blank" title="Canal de Avisos - Fique por dentro das novidades!">
-                    <img src="grupo-avisos-small.jpg" class="social-icon">
-                </a>
-                <a href="https://chat.whatsapp.com/GMtTi1V6XIBChCBgkQC9g0" target="_blank" title="Grupão da ravena - Interaja com outros usuários ou tire dúvidas">
-                    <img src="grupo-geral-small.jpg" class="social-icon">
-                </a>
+            <div class="social-links-container" style="margin-top: 15px;">
+                <table class="social-table" style="margin: 0 auto; border-collapse: collapse;">
+                    <tr class="social-icons-row">
+                        <td style="padding: 5px 35px;">
+                            <a href="https://github.com/moothz/ravena-ai" target="_blank" title="Código da ravena no GitHub">
+                                <img src="github.png" class="social-icon">
+                            </a>
+                        </td>
+                        <td style="padding: 5px 35px;">
+                            <a href="https://tipa.ai/moothz" target="_blank" title="Faça sua doação!">
+                                <img src="tipaai.jpg" class="social-icon">
+                            </a>
+                        </td>
+                        <td style="padding: 5px 35px;">
+                            <a href="https://whatsapp.com/channel/0029VbBwXS7K5cDI4P8okp2f" target="_blank" title="Canal de Avisos - Fique por dentro das novidades!">
+                                <img src="grupo-avisos-small.jpg" class="social-icon">
+                            </a>
+                        </td>
+                        <td style="padding: 5px 35px;">
+                            <a href="https://chat.whatsapp.com/GMtTi1V6XIBChCBgkQC9g0" target="_blank" title="Grupão da ravena - Interaja com outros usuários ou tire dúvidas">
+                                <img src="grupo-geral-small.jpg" class="social-icon">
+                            </a>
+                        </td>
+                    </tr>
+                    <tr class="social-labels-row" style="color: #b7b7c5; font-size: 0.8rem; text-align: center;">
+                        <td>Código<br>no GitHub</td>
+                        <td>Contribua!<br>($$)</td>
+                        <td>Canal de<br>Avisos</td>
+                        <td>Comunidade<br>ravenabot</td>
+                    </tr>
+                </table>
             </div>
-            <span class="legenda-links">^ Acesse os links ^</span>
         </header>
 
         <!-- Banner de Top Donates -->

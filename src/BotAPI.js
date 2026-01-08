@@ -9,6 +9,7 @@ const fs = require('fs').promises;
 const qrcode = require("qr-base64");
 const { exec, spawn } = require('child_process');
 const { Server } = require("socket.io");
+const axios = require('axios');
 
 /**
  * Servidor API para o bot WhatsApp
@@ -34,6 +35,7 @@ class BotAPI {
 
     // Estado da UPS
     this.lastUpsStatus = null;
+    this.lastServicesStatus = null;
 
     // Cache para os dados analíticos processados
     this.analyticsCache = {
@@ -75,7 +77,89 @@ class BotAPI {
 
     // Configura atualização periódica do cache (a cada 10 minutos)
     this.cacheUpdateInterval = setInterval(() => this.updateAnalyticsCache(), this.analyticsCache.cacheTime);
+    
+    // Configura verificação periódica de serviços (a cada 30 segundos)
+    this.checkServicesInterval = setInterval(() => this.checkServices(), 30000);
   }
+
+  /**
+   * Verifica o status dos serviços externos e emite via Socket.IO
+   */
+  async checkServices() {
+    if (!this.io) return;
+
+    const services = {
+      evolutiongo: 'unknown',
+      imagine: 'down',
+      llm: 'down',
+      whisper: 'down',
+      alltalk: 'down'
+    };
+
+    // 1. Check Evolution Go Systemd Service
+    // Tenta verificar via systemctl
+    try {
+        await new Promise((resolve) => {
+            exec('systemctl is-active evolution-go', (error, stdout) => {
+                // systemctl retorna exit code 0 se ativo, 3 se inativo, etc.
+                if (!error && stdout && stdout.trim() === 'active') {
+                    services.evolutiongo = 'up';
+                } else {
+                    services.evolutiongo = 'down';
+                }
+                resolve();
+            });
+        });
+    } catch (e) {
+        services.evolutiongo = 'down';
+    }
+    
+    // Função auxiliar para timeout curto
+    const checkUrl = async (url) => {
+        if (!url) return false;
+        try {
+            await axios.get(url, { timeout: 2000 });
+            return true;
+        } catch (e) {
+            return false;
+        }
+    };
+
+    // 2. Check Imagine (ComfyUI)
+    if (await checkUrl(process.env.COMFYUI_URL)) {
+        services.imagine = 'up';
+    }
+
+    // 3. Check LLM (Main + Backup)
+    const llmMain = "http://192.168.195.211:11434";
+    const llmBackup = "http://192.168.3.200:12345";
+    
+    const mainUp = await checkUrl(llmMain);
+    if (mainUp) {
+        services.llm = 'up'; // Green
+    } else {
+        const backupUp = await checkUrl(llmBackup);
+        if (backupUp) {
+            services.llm = 'backup'; // Yellow
+        } else {
+            services.llm = 'down'; // Red
+        }
+    }
+
+    // 4. Check Whisper
+    if (await checkUrl(process.env.WHISPER_API_URL)) {
+        services.whisper = 'up';
+    }
+
+    // 5. Check AllTalk
+    if (await checkUrl(process.env.ALLTALK_API)) {
+        services.alltalk = 'up';
+    }
+
+    this.lastServicesStatus = services;
+    this.io.emit('service-status', services);
+  }
+
 
 
   // Helper function to read tokens
@@ -1758,6 +1842,10 @@ class BotAPI {
       clearInterval(this.cacheUpdateInterval);
       this.cacheUpdateInterval = null;
     }
+    if (this.checkServicesInterval) {
+        clearInterval(this.checkServicesInterval);
+        this.checkServicesInterval = null;
+    }
   }
 
   /**
@@ -1772,7 +1860,13 @@ class BotAPI {
           this.io = new Server(this.server);
           this.io.on('connection', (socket) => {
             // this.logger.debug('Novo cliente conectado via Socket.IO');
+            if (this.lastServicesStatus) {
+                socket.emit('service-status', this.lastServicesStatus);
+            }
           });
+
+          // Realiza uma verificação inicial logo após iniciar o IO
+          this.checkServices();
 
           resolve();
         });

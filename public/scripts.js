@@ -762,17 +762,96 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof io !== 'undefined') {
         const socket = io();
         const activityLight = document.getElementById('message-activity');
+        const overlay = document.getElementById('ws-loading-overlay');
+        
+        // State variables
+        let lastActivity = Date.now();
+        let evolutionStatus = 'unknown'; // 'up', 'down', 'unknown'
+
+        // Status update function for general services
+        const updateStatusLight = (elementId, status) => {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            
+            // Remove existing classes
+            el.classList.remove('up', 'down', 'backup', 'green', 'red', 'yellow');
+            
+            if (status === 'up') el.classList.add('up');
+            else if (status === 'down') el.classList.add('down');
+            else if (status === 'backup') el.classList.add('backup');
+            else el.classList.add('down'); // Default to down/red
+        };
+
+        // Message activity light logic loop
+        setInterval(() => {
+            if (!activityLight) return;
+
+            // Priority 1: Evolution Service Down
+            if (evolutionStatus === 'down' || evolutionStatus === 'unknown') {
+                 activityLight.className = 'status-indicator-light activity-grey';
+                 return;
+            }
+
+            const now = Date.now();
+            const diff = now - lastActivity;
+
+            // Remove animation classes first to reset or switch
+            // We keep the base class
+            
+            if (diff > 60000) { // > 60s
+                activityLight.className = 'status-indicator-light activity-danger';
+            } else if (diff > 30000) { // > 30s
+                activityLight.className = 'status-indicator-light activity-warning';
+            } else {
+                // Idle or Flash (Flash is handled by event, here we revert to idle if not flashing)
+                // However, flash class has a transition. We shouldn't remove it immediately if it was just added.
+                // But the event handler adds 'activity-flash' and setTimeout removes it.
+                // So here we just ensure if neither warning nor danger, it is idle (or flash if currently flashing)
+                if (!activityLight.classList.contains('activity-flash')) {
+                     activityLight.className = 'status-indicator-light activity-idle';
+                }
+            }
+        }, 1000);
+
+        socket.on('connect', () => {
+            if (overlay) overlay.style.display = 'none';
+        });
+
+        socket.on('disconnect', () => {
+            if (overlay) overlay.style.display = 'flex';
+             // Also grey out activity
+             if (activityLight) activityLight.className = 'status-indicator-light activity-grey';
+        });
 
         socket.on('activity', (data) => {
             if (data && data.type === 'message') {
+                lastActivity = Date.now();
                 if (activityLight) {
-                    activityLight.classList.add('active');
+                    // Force flash
+                    activityLight.classList.remove('activity-idle', 'activity-warning', 'activity-danger');
+                    activityLight.classList.add('activity-flash');
+                    
+                    // Remove flash class after 100ms (to fallback to idle via interval or css transition)
                     setTimeout(() => {
-                        activityLight.classList.remove('active');
-                    }, 50);
+                        activityLight.classList.remove('activity-flash');
+                         // The interval loop will pick up 'activity-idle' shortly
+                    }, 100);
                 }
             }
         });
+
+        socket.on('service-status', (services) => {
+            // Update Evolution Status
+            evolutionStatus = services.evolutiongo;
+            updateStatusLight('service-evolutiongo', services.evolutiongo);
+            
+            // Update others
+            updateStatusLight('api-imagine', services.imagine);
+            updateStatusLight('api-llm', services.llm);
+            updateStatusLight('api-whisper', services.whisper);
+            updateStatusLight('api-alltalk', services.alltalk);
+        });
+        
     } else {
         console.warn('Socket.io not found.');
     }
