@@ -83,7 +83,7 @@ async function ragnarokCommand(bot, message, args, group) {
 
         try {
           await connection.execute(
-            'INSERT INTO `char` (account_id, name, char_num, class, base_level, job_level, hair, hair_color, last_map, last_x, last_y, save_map, save_x, save_y, max_hp, hp, max_sp, sp) VALUES (?, ?, 0, 0, 1, 1, 1, 1, "ghosthunter", 54, 61, "ghosthunter", 54, 61, 40, 40, 11, 11)',
+            'INSERT INTO `char` (account_id, name, char_num, class, base_level, job_level, hair, hair_color, last_map, last_x, last_y, save_map, save_x, save_y, max_hp, hp, max_sp, sp) VALUES (?, ?, 0, 0, 1, 1, 1, 1, "darkmall", 100, 98, "darkmall", 100, 98, 40, 40, 11, 11)',
             [accountId, charName]
           );
         } catch (charErr) {
