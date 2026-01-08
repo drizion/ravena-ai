@@ -23,11 +23,17 @@ class CommandHandler {
     this.cmdUsage = CmdUsage.getInstance();
     this.customCommands = {}; // Agrupados por groupId
     this.privateManagement = {}; // Para gerenciar grupos a partir de chats privados
-
-    this.cooldowns = {}; // Armazena cooldowns por grupo e comando
     this.cooldownMessages = {}; // Rastreia quando a última mensagem de cooldown foi enviada
-    this.cooldownsLastSaved = Date.now();
-    this.loadCooldowns(); // Carrega cooldowns do arquivo ao inicializar
+
+    // Inicializa banco de dados de cooldowns
+    this.database.getSQLiteDb('cooldowns', `
+      CREATE TABLE IF NOT EXISTS cooldowns (
+        context_key TEXT,
+        command TEXT,
+        timestamp INTEGER,
+        PRIMARY KEY (context_key, command)
+      );
+    `);
     
     // Emojis de reação padrão
     this.defaultReactions = {
@@ -99,87 +105,47 @@ class CommandHandler {
   }
 
   /**
-   * Carrega cooldowns do arquivo
+   * Métodos de cooldowns removidos (migrado para SQLite)
    */
-  async loadCooldowns() {
-    try {
-      const cooldownsPath = path.join(this.database.databasePath, 'cooldowns.json');
-      try {
-        const data = await fs.readFile(cooldownsPath, 'utf8');
-        this.cooldowns = JSON.parse(data);
-        this.logger.info(`Cooldowns carregados: ${Object.keys(this.cooldowns).length} grupos`);
-      } catch (error) {
-        if (error.code !== 'ENOENT') {
-          this.logger.error('Erro ao carregar cooldowns:', error.message ?? "xxx");
-        } else {
-          this.logger.info('Arquivo de cooldowns não encontrado, iniciando com cooldowns vazios');
-        }
-        this.cooldowns = {};
-      }
-    } catch (error) {
-      this.logger.error('Erro ao inicializar cooldowns:', error.message ?? "xxx");
-      this.cooldowns = {};
-    }
-  }
-
-  /**
-   * Salva cooldowns em arquivo
-   */
-  async saveCooldowns() {
-    try {
-      const cooldownsPath = path.join(this.database.databasePath, 'cooldowns.json');
-  
-      
-      await fs.writeFile(cooldownsPath, JSON.stringify(this.cooldowns, null, 2));
-      this.cooldownsLastSaved = Date.now();
-      //this.logger.debug('Cooldowns salvos com sucesso');
-    } catch (error) {
-      this.logger.error('Erro ao salvar cooldowns:', error.message ?? "xxx");
-    }
-  }
 
   /**
    * Verifica se um comando está em cooldown
    * @param {Command|string} command - Comando ou nome do comando
    * @param {string} groupId - ID do grupo ou chat
-   * @returns {Object} - Informações sobre o cooldown
+   * @returns {Promise<Object>} - Informações sobre o cooldown
    */
-  checkCooldown(command, groupId, botId) {
+  async checkCooldown(command, groupId, botId) {
     const commandName = typeof command === 'string' ? command : command.name;
-    
     const finalId = `${botId}_${groupId}`;
 
-    // Se não existir cooldown para este grupo, cria
-    if (!this.cooldowns[finalId]) {
-      this.cooldowns[finalId] = {};
+    try {
+      const row = await this.database.dbGet('cooldowns', 
+        'SELECT timestamp FROM cooldowns WHERE context_key = ? AND command = ?', 
+        [finalId, commandName]
+      );
+
+      const lastUsed = row ? row.timestamp : 0;
+      const now = Date.now();
+      
+      let cooldownValue = 0;
+      if (typeof command === 'object') {
+        cooldownValue = command.cooldown ?? cooldownValue;
+      }
+      
+      const cooldownMs = cooldownValue * 1000;
+      
+      if (now - lastUsed < cooldownMs) {
+        const timeLeft = Math.ceil((cooldownMs - (now - lastUsed)) / 1000);
+        return {
+          inCooldown: true,
+          timeLeft: timeLeft,
+          formattedTime: this.formatCooldownTime(timeLeft)
+        };
+      }
+    } catch (error) {
+      this.logger.error('Erro ao verificar cooldown:', error);
     }
     
-    // Obtém timestamp do último uso
-    const lastUsed = this.cooldowns[finalId][commandName] ?? 0;
-    const now = Date.now();
-    
-    // Obtém valor de cooldown (em segundos)
-    let cooldownValue = 0; // Valor padrão
-    
-    if (typeof command === 'object') {
-      cooldownValue = command.cooldown ?? cooldownValue;
-    }
-    
-    // Converte para milissegundos
-    const cooldownMs = cooldownValue * 1000;
-    
-    // Verifica se ainda está em cooldown
-    if (now - lastUsed < cooldownMs) {
-      // Calcula tempo restante
-      const timeLeft = Math.ceil((cooldownMs - (now - lastUsed)) / 1000);
-      return {
-        inCooldown: true,
-        timeLeft: timeLeft,
-        formattedTime: this.formatCooldownTime(timeLeft)
-      };
-    }
-    
-    // Não está em cooldown
     return {
       inCooldown: false,
       timeLeft: 0,
@@ -215,24 +181,17 @@ class CommandHandler {
    * @param {Command|string} command - Comando ou nome do comando
    * @param {string} groupId - ID do grupo ou chat
    */
-  updateCooldown(command, groupId, botId) {
+  async updateCooldown(command, groupId, botId) {
     const commandName = typeof command === 'string' ? command : command.name;
-    
     const finalId = `${botId}_${groupId}`;
 
-    // Se não existir cooldown para este grupo, cria
-    if (!this.cooldowns[finalId]) {
-      this.cooldowns[finalId] = {};
-    }
-    
-    // Atualiza timestamp
-    this.cooldowns[finalId][commandName] = Date.now();
-    
-    // Salva cooldowns a cada minuto
-    if (Date.now() - this.cooldownsLastSaved > 60000) {
-      this.saveCooldowns().catch(error => {
-        this.logger.error('Erro ao salvar cooldowns:', error.message ?? "xxx");
-      });
+    try {
+      await this.database.dbRun('cooldowns', `
+        INSERT INTO cooldowns (context_key, command, timestamp) VALUES (?, ?, ?)
+        ON CONFLICT(context_key, command) DO UPDATE SET timestamp = excluded.timestamp
+      `, [finalId, commandName, Date.now()]);
+    } catch (error) {
+      this.logger.error('Erro ao atualizar cooldown:', error);
     }
   }
 
@@ -859,7 +818,7 @@ class CommandHandler {
 
       // Verifica cooldown
       const groupId = message.group ?? message.author;
-      const cooldownInfo = this.checkCooldown(command, groupId, bot.id);
+      const cooldownInfo = await this.checkCooldown(command, groupId, bot.id);
 
       if (cooldownInfo.inCooldown) {
         this.logger.debug(`Comando ${command.name} em cooldown por mais ${cooldownInfo.timeLeft}s`);
@@ -1061,11 +1020,10 @@ class CommandHandler {
         return;
       }
 
-      // Verifica cooldown
-      const cooldownInfo = this.checkCooldown(command.startsWith, message.group, bot.id);
-
-      if (cooldownInfo.inCooldown) {
-        this.logger.debug(`Comando ${command.startsWith} em cooldown por mais ${cooldownInfo.timeLeft}s`);
+            // Verifica cooldown
+            const cooldownInfo = await this.checkCooldown(command.startsWith, message.group, bot.id);
+            
+            if (cooldownInfo.inCooldown) {        this.logger.debug(`Comando ${command.startsWith} em cooldown por mais ${cooldownInfo.timeLeft}s`);
         this.handleCooldownMessage(bot, message, command.startsWith, message.group, cooldownInfo);
         return;
       }

@@ -600,14 +600,8 @@ class BotAPI {
 
     // Endpoint para Top Donates
     this.app.get('/top-donates', async (req, res) => {
-      const donationsPath = path.join(this.database.databasePath, 'donations.json');
-
       try {
-        await fs.access(donationsPath);
-
-        // Se a linha acima não lançar um erro, o arquivo existe.
-        const donationsData = await fs.readFile(donationsPath, 'utf8');
-        const donations = JSON.parse(donationsData);
+        const donations = await this.database.getDonations();
 
         // Mapeia para remover o campo 'numero' por privacidade
         const publicDonations = donations.map(({ nome, valor }) => ({ nome, valor }));
