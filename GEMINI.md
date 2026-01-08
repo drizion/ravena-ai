@@ -17,7 +17,7 @@ CRUD commands, set group parameters and more
 
 
 ## FixedComands
-Loads implemented comnands from src/function folders, all of them export their commands:
+Loads implemented commands from src/function folders (autoload), all of them export their commands:
 module.exports = { commands };
 
 They receive messages from the CommandHandler and reply by returning a single or array of ReturnMessages (defined in src/models). They can also directly send messages or reactions using bot client object
