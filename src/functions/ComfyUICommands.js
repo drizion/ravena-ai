@@ -25,6 +25,9 @@ if (!COMFYUI_URL.match(/^https?:\/\//)) {
 
 const aesthetic = "\n\n(Aesthetic: Gothic, lightly purple-ish tinted atmosphere, cartoony)";
 
+const samplers = ["dpmpp_sde", "euler_ancestral", "res_multistep"];
+const schedulers = ["simple", "beta", "ddim_uniform"];
+
 const urlObj = new URL(COMFYUI_URL);
 const httpProtocol = urlObj.protocol; // 'http:' or 'https:'
 const wsProtocol = httpProtocol === 'https:' ? 'wss:' : 'ws:';
@@ -139,7 +142,7 @@ async function handleExecutionSuccess(promptId) {
     }
 }
 
-async function queuePrompt(promptText) {
+async function queuePrompt(promptText, sampler = 'dpmpp_sde', scheduler = 'beta') {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
         // Attempt immediate reconnect/wait if not open
         if (!ws || ws.readyState === WebSocket.CLOSED) connectWebSocket();
@@ -167,8 +170,8 @@ async function queuePrompt(promptText) {
                 "seed": Math.floor(Math.random() * 999999999999999),
                 "steps": 8,
                 "cfg": 1,
-                "sampler_name": "res_multistep",
-                "scheduler": "simple",
+                "sampler_name": sampler,
+                "scheduler": scheduler,
                 "denoise": 1
             }
         },
@@ -334,9 +337,12 @@ async function generateImage(bot, message, args, group, skipNotify = true) {
     
         // Inicia cronômetro
         const startTime = Date.now();
+
+        const sampler = samplers[Math.floor(Math.random() * samplers.length)];
+        const scheduler = schedulers[Math.floor(Math.random() * schedulers.length)];
     
         // Queue Prompt and Wait for Image
-        let imageBuffer = await queuePrompt(prompt + aesthetic);
+        let imageBuffer = await queuePrompt(prompt + aesthetic, sampler, scheduler);
     
         // Calcula o tempo de geração
         const generationTime = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -425,7 +431,7 @@ async function generateImage(bot, message, args, group, skipNotify = true) {
             }
         }, 30000, tempImagePath);
     
-        const caption = `🎨 *Prompt:* ${prompt}\n📊 *Modelo:* _z_image_turbo_bf16_\n🕐 *Tempo:* ${generationTime}s${safetyMsg}`;
+        const caption = `🎨 *Prompt:* ${prompt}\n📊 *Modelo:* _z-image-turbo-bf16_\n🩻*Sampler&Scheduler*: _${sampler}/${scheduler}_\n🕐 *Tempo:* ${generationTime}s${safetyMsg}`;
         
         const media = await bot.createMedia(tempImagePath);
         const filterNSFW = group?.filters?.nsfw ?? false;
