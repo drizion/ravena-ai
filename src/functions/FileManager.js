@@ -1,4 +1,4 @@
-﻿const path = require('path');
+const path = require('path');
 const fs = require('fs').promises;
 const crypto = require('crypto');
 const { MessageMedia } = require('whatsapp-web.js');
@@ -9,99 +9,79 @@ const ReturnMessage = require('../models/ReturnMessage');
 
 const logger = new Logger('file-manager');
 const database = Database.getInstance();
+const DB_NAME = 'files';
+
+// Initialize Database Tables
+const db = database.getSQLiteDb(DB_NAME, `
+  CREATE TABLE IF NOT EXISTS files (
+    chat_id TEXT,
+    file_path TEXT,
+    file_info TEXT,
+    PRIMARY KEY (chat_id, file_path)
+  );
+  CREATE TABLE IF NOT EXISTS chat_storage (
+    chat_id TEXT PRIMARY KEY,
+    total_size INTEGER
+  );
+`);
 
 // Configurações de limites
 const CONFIG = {
   MAX_FILE_SIZE: 100 * 1024 * 1024, // 100MB
   MAX_GROUP_STORAGE: 1 * 1024 * 1024 * 1024, // 1GB
-  MAX_FILENAME_LENGTH: 10,
+  MAX_FILENAME_LENGTH: 50,
   MAX_FOLDER_DEPTH: 5,
-  VALID_FILENAME_REGEX: /^[a-zA-Z0-9_]+$/
+  VALID_FILENAME_REGEX: /^[a-zA-Z0-9_\-\.]+$/
 };
 
-// Nome do banco de dados de arquivos
-const FILES_DB_FILE = 'files-db.json';
-
-//logger.info('Módulo FileManager carregado');
-
 /**
- * Estrutura do banco de dados de arquivos:
- * {
- *   "chats": {
- *     "12345@g.us": {
- *       "totalSize": 12345,
- *       "files": {
- *         "pasta/arquivo.txt": {
- *           "path": "local/path/to/file.txt",
- *           "size": 1234,
- *           "name": "arquivo.txt",
- *           "type": "text/plain",
- *           "createdAt": 1234567890,
- *           "createdBy": "user@c.us",
- *           "isFolder": false
- *         },
- *         "pasta": {
- *           "isFolder": true,
- *           "createdAt": 1234567890,
- *           "createdBy": "user@c.us"
- *         }
- *       }
- *     }
- *   }
- * }
+ * Helper to get file info from DB
  */
-
-/**
- * Carrega o banco de dados de arquivos
- * @returns {Promise<Object>} Banco de dados de arquivos
- */
-async function loadFilesDB() {
-  try {
-    const db = await database.loadJSON(path.join(database.databasePath, FILES_DB_FILE));
-    if (!db || !db.chats) {
-      return { chats: {} };
-    }
-    return db;
-  } catch (error) {
-    logger.error('Erro ao carregar banco de dados de arquivos:', error);
-    return { chats: {} };
-  }
+async function getFile(chatId, filePath) {
+  const row = await database.dbGet(DB_NAME, 'SELECT file_info FROM files WHERE chat_id = ? AND file_path = ?', [chatId, filePath]);
+  return row ? JSON.parse(row.file_info) : null;
 }
 
 /**
- * Salva o banco de dados de arquivos
- * @param {Object} db Banco de dados de arquivos
- * @returns {Promise<boolean>} Status de sucesso
+ * Helper to get total size
  */
-async function saveFilesDB(db) {
-  try {
-    return await database.saveJSONToFile(path.join(database.databasePath, FILES_DB_FILE), db);
-  } catch (error) {
-    logger.error('Erro ao salvar banco de dados de arquivos:', error);
-    return false;
-  }
+async function getTotalSize(chatId) {
+  const row = await database.dbGet(DB_NAME, 'SELECT total_size FROM chat_storage WHERE chat_id = ?', [chatId]);
+  return row ? row.total_size : 0;
 }
 
 /**
- * Inicializa o banco de dados para um chat
- * @param {Object} db Banco de dados de arquivos
- * @param {string} chatId ID do chat
- * @returns {Object} Banco de dados atualizado
+ * Helper to update total size
  */
-function initChatDB(db, chatId) {
-  if (!db.chats[chatId]) {
-    db.chats[chatId] = {
-      totalSize: 0,
-      files: {}
-    };
+async function updateTotalSize(chatId, delta) {
+  await database.dbRun(DB_NAME, `
+    INSERT INTO chat_storage (chat_id, total_size) VALUES (?, ?)
+    ON CONFLICT(chat_id) DO UPDATE SET total_size = total_size + ?
+  `, [chatId, delta, delta]);
+}
+
+/**
+ * Helper to list files
+ */
+async function listFilesFromDb(chatId, prefix = '') {
+  let sql = 'SELECT file_path, file_info FROM files WHERE chat_id = ?';
+  const params = [chatId];
+  
+  if (prefix) {
+    sql += ' AND file_path LIKE ?';
+    params.push(`${prefix}%`);
   }
-  return db;
+  
+  const rows = await database.dbAll(DB_NAME, sql, params);
+  const files = {};
+  rows.forEach(row => {
+    files[row.file_path] = JSON.parse(row.file_info);
+  });
+  return files;
 }
 
 /**
  * Obtém o caminho base para armazenar arquivos
- * @param {string} chatId ID do chat
- * @returns {string} Caminho base para arquivos
  */
 function getBasePath(chatId) {
   return path.join(__dirname, '../../media', chatId, 'files');
@@ -109,81 +89,55 @@ function getBasePath(chatId) {
 
 /**
  * Normaliza um caminho de arquivo
- * @param {string} filePath Caminho de arquivo
- * @returns {string} Caminho normalizado
  */
 function normalizePath(filePath) {
-  // Remove barra inicial e final
   let normalized = filePath ? filePath.trim() : '';
   normalized = normalized.replace(/^[\/\\]+|[\/\\]+$/g, '');
-  
-  // Substitui barras invertidas por barras normais
-  normalized = normalized.replace(/[\\]/g, '/');
-  
-  // Remove pontos duplos e barras duplicadas
+  normalized = normalized.replaceAll('\\', '/');
   const parts = normalized.split('/').filter(p => p && p !== '.' && p !== '..');
-  
   return parts.join('/');
 }
 
 /**
  * Valida um nome de arquivo
- * @param {string} filename Nome do arquivo
- * @returns {boolean} Se o nome é válido
  */
 function isValidFilename(filename) {
   if (!filename || filename.length > CONFIG.MAX_FILENAME_LENGTH) {
     return false;
   }
-  
   return CONFIG.VALID_FILENAME_REGEX.test(filename);
 }
 
 /**
- * Valida um caminho para profundidade máxima
- * @param {string} path Caminho a validar
- * @returns {boolean} Se o caminho é válido
+ * Valida um caminho
  */
 function isValidPath(path) {
   if (!path) return true;
-  
   const parts = normalizePath(path).split('/');
   return parts.length <= CONFIG.MAX_FOLDER_DEPTH && parts.every(isValidFilename);
 }
 
 /**
  * Gera nome de arquivo único
- * @param {string} originalName Nome original do arquivo
- * @returns {string} Nome de arquivo único
  */
 function generateUniqueFilename(originalName) {
   const basename = path.basename(originalName);
   const ext = path.extname(basename);
   let name = path.basename(basename, ext);
   
-  // Garante que o nome seja válido
   name = name.replace(/[^a-zA-Z0-9_]/g, '');
-  
-  // Trunca se for muito longo
   if (name.length > CONFIG.MAX_FILENAME_LENGTH) {
     name = name.substring(0, CONFIG.MAX_FILENAME_LENGTH);
   }
   
-  // Adiciona hash para unicidade
   const hash = crypto.randomBytes(2).toString('hex');
-  
-  // Se o nome estiver vazio, cria um nome genérico
-  if (!name) {
-    name = 'file';
-  }
+  if (!name) name = 'file';
   
   return `${name}_${hash}${ext}`;
 }
 
 /**
- * Formata tamanho em bytes para exibição
- * @param {number} bytes Tamanho em bytes
- * @returns {string} Tamanho formatado
+ * Formata tamanho em bytes
  */
 function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -194,246 +148,169 @@ function formatSize(bytes) {
 
 /**
  * Lista os arquivos e pastas de um chat
- * @param {WhatsAppBot} bot - Instância do bot
- * @param {Object} message - Dados da mensagem
- * @param {Array} args - Argumentos do comando
- * @param {Object} group - Dados do grupo
- * @returns {Promise<ReturnMessage>} - ReturnMessage com a lista de arquivos
  */
 async function listFiles(bot, message, args, group) {
   try {
     const chatId = message.group ?? message.author;
-    
-    // Carrega banco de dados
-    let db = await loadFilesDB();
-    db = initChatDB(db, chatId);
-    
-    // Obtém diretório a listar
     let targetDir = '';
     if (args.length > 0) {
       targetDir = normalizePath(args.join(' '));
     }
     
-    // Verifica se o diretório existe (caso não seja a raiz)
-    if (targetDir && !db.chats[chatId].files[targetDir]) {
-      const exists = Object.keys(db.chats[chatId].files).some(key => 
-        key.startsWith(`${targetDir}/`) || key === targetDir);
-      
-      if (!exists) {
-        return new ReturnMessage({
+    // Check if targetDir exists (unless root)
+    if (targetDir) {
+      const dirInfo = await getFile(chatId, targetDir);
+      // Also check if any file starts with targetDir/ (implicit folder check)
+      const hasChildren = await database.dbGet(DB_NAME, 
+        'SELECT 1 FROM files WHERE chat_id = ? AND file_path LIKE ? LIMIT 1', 
+        [chatId, `${targetDir}/%`]
+      );
+
+      if (!dirInfo && !hasChildren) {
+         return new ReturnMessage({
           chatId: chatId,
           content: `❌ Pasta não encontrada: ${targetDir}`
         });
       }
     }
     
-    // Obtém o nome do grupo ou autor para exibir no cabeçalho
-    let chatName = "Chat";
-    if (group) {
-      chatName = group.name || "Grupo";
-    } else {
+    const allFiles = await listFilesFromDb(chatId);
+    
+    let chatName = group ? (group.name || "Grupo") : "Chat";
+    if (!group) {
       try {
         const contact = await bot.client.getContactById(message.author);
         chatName = contact.pushname || contact.name || "Contato";
-      } catch (error) {
-        logger.error('Erro ao obter nome de contato:', error);
-      }
+      } catch (e) {}
     }
     
-    // Monta mensagem de listagem
     let messageContent = targetDir 
       ? `📂 *Conteúdo da pasta: ${targetDir}*\n_${chatName}_\n\n`
       : `📂 *Arquivos e Pastas*\n_${chatName}_\n\n`;
-    
-    // Adiciona pasta pai, se estiver em subpasta
+      
     if (targetDir) {
       const parentDir = targetDir.split('/').slice(0, -1).join('/');
-      messageContent += `📁 [..] (Pasta pai: ${parentDir || 'raiz'})\n\n`;
+      messageContent += `📁 [..] (Pasta pai: ${parentDir || 'raiz'})
+
+`;
       
-      // Modo específico: listar apenas o conteúdo da pasta alvo
       const fileEntries = [];
       const folderEntries = new Set();
       
-      // Itera sobre todos os arquivos no banco de dados para encontrar conteúdo da pasta específica
-      for (const [filePath, fileInfo] of Object.entries(db.chats[chatId].files)) {
-        if (filePath === targetDir) {
-          // É a própria pasta, ignora
-          continue;
-        } else if (filePath.startsWith(`${targetDir}/`)) {
-          // Está dentro da pasta alvo
+      for (const [filePath, fileInfo] of Object.entries(allFiles)) {
+        if (filePath === targetDir) continue;
+        
+        if (filePath.startsWith(`${targetDir}/`)) {
           const relativePath = filePath.substring(targetDir.length + 1);
           const parts = relativePath.split('/');
           
           if (parts.length === 1) {
-            // Arquivo ou pasta diretamente na pasta alvo
-            if (fileInfo.isFolder) {
-              folderEntries.add(parts[0]);
-            } else {
-              fileEntries.push({
-                name: parts[0],
-                path: filePath,
-                size: fileInfo.size || 0,
-                isFolder: false
-              });
-            }
+            if (fileInfo.isFolder) folderEntries.add(parts[0]);
+            else fileEntries.push({ name: parts[0], size: fileInfo.size || 0 });
           } else {
-            // Subpasta dentro da pasta alvo
             folderEntries.add(parts[0]);
           }
         }
       }
       
-      // Converte conjuntos em arrays e ordena
       const folders = Array.from(folderEntries).sort();
-      
-      // Ordena arquivos por nome
       fileEntries.sort((a, b) => a.name.localeCompare(b.name));
       
-      // Adiciona pastas
       if (folders.length > 0) {
         messageContent += '*Pastas:*\n';
-        folders.forEach(folder => {
-          messageContent += `📁 [${folder}]\n`;
-        });
+        folders.forEach(f => messageContent += `📁 [${f}]\n`);
         messageContent += '\n';
       }
       
-      // Adiciona arquivos
+      let totalSize = 0;
       if (fileEntries.length > 0) {
         messageContent += '*Arquivos:*\n';
-        let totalSize = 0;
-        
-        fileEntries.forEach(file => {
-          messageContent += `📄 ${file.name} (${formatSize(file.size)})\n`;
-          totalSize += file.size;
+        fileEntries.forEach(f => {
+          messageContent += `📄 ${f.name} (${formatSize(f.size)})\n`;
+          totalSize += f.size;
         });
-        
         messageContent += `\n*Total:* ${fileEntries.length} arquivo(s), ${formatSize(totalSize)}\n`;
       } else if (folders.length === 0) {
-        // Adiciona mensagem quando não há arquivos nem pastas
         messageContent += '_Nenhum arquivo ou pasta encontrado._\n\n';
       }
-    } else {
-      // Modo retroativo: listar todos os arquivos e pastas organizados hierarquicamente
       
-      // Coleta todas as pastas
+    } else {
+      // Root view
       const allFolders = [];
-      // Coleta todos os arquivos agrupados por pasta
-      const filesByFolder = {};
-      filesByFolder['raiz'] = [];
+      const filesByFolder = { 'raiz': [] };
       let totalFileCount = 0;
       let totalSize = 0;
       
-      // Organiza arquivos e pastas
-      for (const [filePath, fileInfo] of Object.entries(db.chats[chatId].files)) {
+      for (const [filePath, fileInfo] of Object.entries(allFiles)) {
         if (fileInfo.isFolder) {
-          // Adiciona a pasta à lista de pastas
           allFolders.push(filePath);
         } else {
-          // É um arquivo
           totalFileCount++;
           totalSize += fileInfo.size || 0;
           
-          // Determina a pasta pai
           const lastSlashIndex = filePath.lastIndexOf('/');
           let folder = 'raiz';
-          
           if (lastSlashIndex !== -1) {
             folder = filePath.substring(0, lastSlashIndex);
-            // Garante que a pasta existe no objeto
-            if (!filesByFolder[folder]) {
-              filesByFolder[folder] = [];
-            }
+            if (!filesByFolder[folder]) filesByFolder[folder] = [];
           }
-          
-          // Adiciona o arquivo à pasta apropriada
           filesByFolder[folder].push({
             name: filePath.substring(lastSlashIndex + 1),
-            path: filePath,
             size: fileInfo.size || 0
           });
         }
       }
       
-      // Ordena as pastas
       allFolders.sort();
       
-      // Adiciona arquivos na raiz
       if (filesByFolder['raiz'].length > 0) {
         messageContent += '*Arquivos na raiz:*\n';
         filesByFolder['raiz'].sort((a, b) => a.name.localeCompare(b.name));
-        
-        filesByFolder['raiz'].forEach(file => {
-          messageContent += `📄 ${file.name} (${formatSize(file.size)})\n`;
-        });
+        filesByFolder['raiz'].forEach(f => messageContent += `📄 ${f.name} (${formatSize(f.size)})\n`);
         messageContent += '\n';
       }
       
-      // Lista arquivos em cada pasta (recursivamente)
       messageContent += '*Arquivos em Pastas:*\n';
       
-      // Função para gerar hierarquia visual
       function getHierarchyPrefix(depth) {
-        let prefix = '';
-        for (let i = 0; i < depth; i++) {
-          prefix += '  ';
-        }
-        return prefix;
+        return '  '.repeat(depth);
       }
       
-      // Função para listar pastas recursivamente
       function listFoldersRecursively(currentPath, depth) {
         const foldersInPath = allFolders.filter(folder => {
           const parts = folder.split('/');
-          return parts.length === depth + 1 && 
-                (depth === 0 || folder.startsWith(currentPath + '/'));
+          return parts.length === depth + 1 && (depth === 0 || folder.startsWith(currentPath + '/'));
         });
-        
         foldersInPath.sort();
         
         for (const folder of foldersInPath) {
           const folderName = folder.split('/').pop();
           const prefix = getHierarchyPrefix(depth);
-          
-          // Adiciona a pasta
           messageContent += `${prefix}📁 [${folderName}]\n`;
           
-          // Adiciona os arquivos nesta pasta
-          if (filesByFolder[folder] && filesByFolder[folder].length > 0) {
+          if (filesByFolder[folder]) {
             filesByFolder[folder].sort((a, b) => a.name.localeCompare(b.name));
-            
-            filesByFolder[folder].forEach(file => {
-              messageContent += `${prefix}  └─ ${file.name} (${formatSize(file.size)})\n`;
+            filesByFolder[folder].forEach(f => {
+              messageContent += `${prefix}  └─ ${f.name} (${formatSize(f.size)})\n`;
             });
           }
-          
-          // Recursivamente lista subpastas
           listFoldersRecursively(folder, depth + 1);
         }
       }
       
-      // Começa a listar a partir da raiz
       listFoldersRecursively('', 0);
-      
-      // Adiciona resumo de arquivos
       messageContent += `\n*Total:* ${totalFileCount} arquivo(s), ${formatSize(totalSize)}\n`;
-      
-      if (totalFileCount === 0 && allFolders.length === 0) {
-        // Adiciona mensagem quando não há arquivos nem pastas
+       if (totalFileCount === 0 && allFolders.length === 0) {
         messageContent += '_Nenhum arquivo ou pasta encontrado._\n\n';
       }
     }
     
-    // Adiciona uso total
-    messageContent += `\n*Espaço usado:* ${formatSize(db.chats[chatId].totalSize || 0)} de ${formatSize(CONFIG.MAX_GROUP_STORAGE)}`;
-    
-    // Adiciona texto de ajuda
+    const usage = await getTotalSize(chatId);
+    messageContent += `\n*Espaço usado:* ${formatSize(usage)} de ${formatSize(CONFIG.MAX_GROUP_STORAGE)}`;
     messageContent += `\n\n💡 Use *!pastas [nome_da_pasta]* para ver apenas o conteúdo de uma pasta específica.`;
     
-    return new ReturnMessage({
-      chatId: chatId,
-      content: messageContent
-    });
+    return new ReturnMessage({ chatId: chatId, content: messageContent });
+    
   } catch (error) {
     logger.error('Erro ao listar arquivos:', error);
     return new ReturnMessage({
@@ -445,133 +322,81 @@ async function listFiles(bot, message, args, group) {
 
 /**
  * Baixa um arquivo ou pasta
- * @param {WhatsAppBot} bot - Instância do bot
- * @param {Object} message - Dados da mensagem
- * @param {Array} args - Argumentos do comando
- * @param {Object} group - Dados do grupo
- * @returns {Promise<ReturnMessage|Array<ReturnMessage>>} - ReturnMessage ou array de ReturnMessages
  */
 async function downloadFile(bot, message, args, group) {
   try {
     const chatId = message.group ?? message.author;
+    if (args.length === 0) {
+      return new ReturnMessage({ chatId: chatId, content: 'Por favor, forneça o caminho do arquivo ou pasta a ser baixado.' });
+    }
+    
+    const filePath = normalizePath(args.join(' '));
+    const fileInfo = await getFile(chatId, filePath);
+    
+    if (!fileInfo) {
+      return new ReturnMessage({ chatId: chatId, content: `❌ Arquivo ou pasta não encontrado: ${filePath}` });
+    }
+    
     const returnMessages = [];
     
-    if (args.length === 0) {
-      return new ReturnMessage({
-        chatId: chatId,
-        content: 'Por favor, forneça o caminho do arquivo ou pasta a ser baixado.'
-      });
-    }
-    
-    // Obtém caminho do arquivo/pasta
-    const filePath = normalizePath(args.join(' '));
-    
-    // Carrega banco de dados
-    let db = await loadFilesDB();
-    db = initChatDB(db, chatId);
-    
-    // Verifica se o arquivo/pasta existe
-    if (!db.chats[chatId].files[filePath]) {
-      return new ReturnMessage({
-        chatId: chatId,
-        content: `❌ Arquivo ou pasta não encontrado: ${filePath}`
-      });
-    }
-    
-    const fileInfo = db.chats[chatId].files[filePath];
-    const isFolder = fileInfo.isFolder;
-    
-    if (isFolder) {
-      // Busca todos os arquivos na pasta
-      const filesInFolder = Object.entries(db.chats[chatId].files)
+    if (fileInfo.isFolder) {
+      const allFiles = await listFilesFromDb(chatId, filePath);
+      const filesInFolder = Object.entries(allFiles)
         .filter(([path, info]) => !info.isFolder && path.startsWith(`${filePath}/`))
         .map(([path, info]) => ({ path, info }));
       
       if (filesInFolder.length === 0) {
-        return new ReturnMessage({
-          chatId: chatId,
-          content: `❌ A pasta está vazia: ${filePath}`
-        });
+        return new ReturnMessage({ chatId: chatId, content: `❌ A pasta está vazia: ${filePath}` });
       }
       
-      // Informa quantos arquivos serão enviados
-      returnMessages.push(
-        new ReturnMessage({
-          chatId: chatId,
-          content: `📤 Enviando ${filesInFolder.length} arquivo(s) da pasta: ${filePath}`
-        })
-      );
+      returnMessages.push(new ReturnMessage({
+        chatId: chatId,
+        content: `📤 Enviando ${filesInFolder.length} arquivo(s) da pasta: ${filePath}`
+      }));
       
-      // Envia até 5 arquivos para evitar spam e bloqueio
       const maxFiles = Math.min(5, filesInFolder.length);
       for (let i = 0; i < maxFiles; i++) {
         const { path: folderFilePath, info } = filesInFolder[i];
-        
         try {
-          // Caminho do arquivo físico
           const physicalPath = info.path || path.join(getBasePath(chatId), folderFilePath);
-          
-          // Lê o arquivo
           const fileBuffer = await fs.readFile(physicalPath);
-          
-          // Cria mídia
           const media = new MessageMedia(
             info.type || 'application/octet-stream',
             fileBuffer.toString('base64'),
             path.basename(folderFilePath)
           );
-
           media.filename = path.basename(folderFilePath);
           
-          // Adiciona mensagem com o arquivo ao array de retorno
-          returnMessages.push(
-            new ReturnMessage({
-              chatId: chatId,
-              content: media,
-              options: {
-                sendMediaAsDocument: true,
-                fileName: path.basename(filePath),
-                caption: `Arquivo: ${folderFilePath} (${formatSize(info.size || fileBuffer.length)})`
-              }
-            })
-          );
-        } catch (error) {
-          logger.error(`Erro ao enviar arquivo: ${folderFilePath}`, error);
-          returnMessages.push(
-            new ReturnMessage({
-              chatId: chatId,
-              content: `⚠️ Erro ao enviar arquivo: ${folderFilePath}`
-            })
-          );
+          returnMessages.push(new ReturnMessage({
+            chatId: chatId,
+            content: media,
+            options: {
+              sendMediaAsDocument: true,
+              fileName: path.basename(folderFilePath),
+              caption: `Arquivo: ${folderFilePath} (${formatSize(info.size || fileBuffer.length)})`
+            }
+          }));
+        } catch (e) {
+          logger.error(`Erro ao enviar: ${folderFilePath}`, e);
         }
       }
       
-      // Avisa se existem mais arquivos
       if (filesInFolder.length > maxFiles) {
-        returnMessages.push(
-          new ReturnMessage({
-            chatId: chatId,
-            content: `⚠️ Só foram enviados ${maxFiles} de ${filesInFolder.length} arquivos para evitar spam. Use comandos específicos para baixar os demais.`
-          })
-        );
+        returnMessages.push(new ReturnMessage({
+          chatId: chatId,
+          content: `⚠️ Só foram enviados ${maxFiles} de ${filesInFolder.length} arquivos para evitar spam.`
+        }));
       }
+      
     } else {
-      // Baixa um único arquivo
       try {
-        // Caminho do arquivo físico
         const physicalPath = fileInfo.path || path.join(getBasePath(chatId), filePath);
-        
-        // Lê o arquivo
         const fileBuffer = await fs.readFile(physicalPath);
-        
-        // Cria mídia
         const media = new MessageMedia(
           fileInfo.type || 'application/octet-stream',
           fileBuffer.toString('base64'),
           path.basename(filePath)
         );
-        
-        // Retorna a mídia em uma ReturnMessage
         return new ReturnMessage({
           chatId: chatId,
           content: media,
@@ -581,12 +406,9 @@ async function downloadFile(bot, message, args, group) {
             caption: `Arquivo: ${filePath} (${formatSize(fileInfo.size || fileBuffer.length)})`
           }
         });
-      } catch (error) {
-        logger.error(`Erro ao enviar arquivo: ${filePath}`, error);
-        return new ReturnMessage({
-          chatId: chatId,
-          content: `⚠️ Erro ao enviar arquivo: ${filePath}`
-        });
+      } catch (e) {
+        logger.error(`Erro ao enviar: ${filePath}`, e);
+        return new ReturnMessage({ chatId: chatId, content: `⚠️ Erro ao enviar arquivo: ${filePath}` });
       }
     }
     
@@ -602,221 +424,111 @@ async function downloadFile(bot, message, args, group) {
 
 /**
  * Cria uma nova pasta
- * @param {WhatsAppBot} bot - Instância do bot
- * @param {Object} message - Dados da mensagem
- * @param {Array} args - Argumentos do comando
- * @param {Object} group - Dados do grupo
- * @returns {Promise<ReturnMessage>} - ReturnMessage com o resultado
  */
 async function createFolder(bot, message, args, group) {
   try {
     const chatId = message.group ?? message.author;
+    if (args.length === 0) return new ReturnMessage({ chatId: chatId, content: 'Por favor, forneça o nome da pasta.' });
     
-    if (args.length === 0) {
-      return new ReturnMessage({
-        chatId: chatId,
-        content: 'Por favor, forneça o nome da pasta a ser criada.'
-      });
-    }
-    
-    // Obtém caminho da pasta
     const folderPath = normalizePath(args.join(' '));
+    if (!isValidPath(folderPath)) return new ReturnMessage({ chatId: chatId, content: `❌ Caminho inválido.` });
     
-    // Valida o caminho
-    if (!isValidPath(folderPath)) {
-      return new ReturnMessage({
-        chatId: chatId,
-        content: `❌ Caminho inválido. Certifique-se de que:
-- Cada pasta tenha no máximo ${CONFIG.MAX_FILENAME_LENGTH} caracteres
-- Use apenas letras, números e underscore (_)
-- A profundidade máxima é de ${CONFIG.MAX_FOLDER_DEPTH} níveis`
-      });
-    }
+    const existing = await getFile(chatId, folderPath);
+    if (existing) return new ReturnMessage({ chatId: chatId, content: `❌ Já existe um arquivo ou pasta com o nome: ${folderPath}` });
     
-    // Carrega banco de dados
-    let db = await loadFilesDB();
-    db = initChatDB(db, chatId);
-    
-    // Verifica se a pasta já existe
-    if (db.chats[chatId].files[folderPath]) {
-      return new ReturnMessage({
-        chatId: chatId,
-        content: `❌ Já existe um arquivo ou pasta com o nome: ${folderPath}`
-      });
-    }
-    
-    // Verifica se as pastas pai existem
+    // Check parent
     const parts = folderPath.split('/');
     if (parts.length > 1) {
       const parentPath = parts.slice(0, -1).join('/');
-      if (!db.chats[chatId].files[parentPath] && !db.chats[chatId].files[parentPath]?.isFolder) {
-        return new ReturnMessage({
-          chatId: chatId,
-          content: `❌ Pasta pai não existe: ${parentPath}`
-        });
+      const parent = await getFile(chatId, parentPath);
+      if (!parent || !parent.isFolder) {
+        return new ReturnMessage({ chatId: chatId, content: `❌ Pasta pai não existe: ${parentPath}` });
       }
     }
     
-    // Cria pasta no sistema de arquivos
     const physicalBasePath = getBasePath(chatId);
     const physicalPath = path.join(physicalBasePath, folderPath);
-    
     await fs.mkdir(physicalPath, { recursive: true });
     
-    // Adiciona pasta ao banco de dados
-    db.chats[chatId].files[folderPath] = {
+    const info = {
       isFolder: true,
       createdAt: Date.now(),
       createdBy: message.author
     };
     
-    // Salva banco de dados
-    await saveFilesDB(db);
+    await database.dbRun(DB_NAME, 'INSERT INTO files (chat_id, file_path, file_info) VALUES (?, ?, ?)', 
+      [chatId, folderPath, JSON.stringify(info)]);
+      
+    return new ReturnMessage({ chatId: chatId, content: `✅ Pasta criada: ${folderPath}` });
     
-    return new ReturnMessage({
-      chatId: chatId,
-      content: `✅ Pasta criada com sucesso: ${folderPath}`
-    });
   } catch (error) {
     logger.error('Erro ao criar pasta:', error);
-    return new ReturnMessage({
-      chatId: message.group ?? message.author,
-      content: 'Erro ao criar pasta. Por favor, tente novamente.'
-    });
+    return new ReturnMessage({ chatId: message.group ?? message.author, content: 'Erro ao criar pasta.' });
   }
 }
 
 /**
  * Envia um arquivo para uma pasta
- * @param {WhatsAppBot} bot - Instância do bot
- * @param {Object} message - Dados da mensagem
- * @param {Array} args - Argumentos do comando
- * @param {Object} group - Dados do grupo
- * @returns {Promise<ReturnMessage>} - ReturnMessage com o resultado
  */
 async function uploadFile(bot, message, args, group) {
   try {
     const chatId = message.group ?? message.author;
+    let destination = args.length > 0 ? normalizePath(args.join(' ')) : '';
     
-    // Obtém caminho de destino (pode ser vazio para a raiz)
-    let destination = '';
-    if (args.length > 0) {
-      destination = normalizePath(args.join(' '));
-    }
+    if (destination && !isValidPath(destination)) return new ReturnMessage({ chatId: chatId, content: `❌ Caminho inválido.` });
     
-    // Valida o caminho se não for a raiz
-    if (destination && !isValidPath(destination)) {
-      return new ReturnMessage({
-        chatId: chatId,
-        content: `❌ Caminho inválido. Certifique-se de que:
-- Cada pasta tenha no máximo ${CONFIG.MAX_FILENAME_LENGTH} caracteres
-- Use apenas letras, números e underscore (_)
-- A profundidade máxima é de ${CONFIG.MAX_FOLDER_DEPTH} níveis`
-      });
-    }
-    
-    // Obtém mensagem citada com mídia
     const quotedMsg = await message.origin.getQuotedMessage();
-    if (!quotedMsg || !quotedMsg.hasMedia) {
-      return new ReturnMessage({
-        chatId: chatId,
-        content: '❌ Por favor, mencione uma mensagem com arquivo.'
-      });
-    }
+    if (!quotedMsg || !quotedMsg.hasMedia) return new ReturnMessage({ chatId: chatId, content: '❌ Por favor, mencione uma mensagem com arquivo.' });
     
-    // Baixa a mídia
     const media = await quotedMsg.downloadMedia();
-    if (!media || !media.data) {
-      return new ReturnMessage({
-        chatId: chatId,
-        content: '❌ Não foi possível baixar o arquivo.'
-      });
-    }
+    if (!media || !media.data) return new ReturnMessage({ chatId: chatId, content: '❌ Não foi possível baixar o arquivo.' });
     
-    // Verifica o tamanho do arquivo
     const fileBuffer = Buffer.from(media.data, 'base64');
     const fileSize = fileBuffer.length;
     
-    if (fileSize > CONFIG.MAX_FILE_SIZE) {
-      return new ReturnMessage({
-        chatId: chatId,
-        content: `❌ O arquivo excede o tamanho máximo permitido (${formatSize(CONFIG.MAX_FILE_SIZE)}).`
-      });
-    }
+    if (fileSize > CONFIG.MAX_FILE_SIZE) return new ReturnMessage({ chatId: chatId, content: `❌ O arquivo excede o tamanho máximo.` });
     
-    // Carrega banco de dados
-    let db = await loadFilesDB();
-    db = initChatDB(db, chatId);
-    
-    // Verifica espaço disponível
-    const currentSize = db.chats[chatId].totalSize || 0;
+    const currentSize = await getTotalSize(chatId);
     if (currentSize + fileSize > CONFIG.MAX_GROUP_STORAGE) {
-      return new ReturnMessage({
-        chatId: chatId,
-        content: `❌ Espaço insuficiente. Usado: ${formatSize(currentSize)}, Disponível: ${formatSize(CONFIG.MAX_GROUP_STORAGE - currentSize)}, Necessário: ${formatSize(fileSize)}`
-      });
+      return new ReturnMessage({ chatId: chatId, content: `❌ Espaço insuficiente.` });
     }
     
-    // Obtém nome de arquivo
     let targetPath = destination;
     let fileName = '';
     
-    // Se o destino já é um arquivo (tem extensão), usa como nome de arquivo
     if (path.extname(destination)) {
       const parts = destination.split('/');
       fileName = parts.pop();
       targetPath = parts.join('/');
     } else {
-      // Usa o nome original do arquivo ou gera um nome
-      if (media.filename) {
-        fileName = generateUniqueFilename(media.filename);
-      } else {
-        // Determina extensão a partir do mimetype
+      if (media.filename) fileName = generateUniqueFilename(media.filename);
+      else {
         let ext = '.bin';
         if (media.mimetype) {
           const mimeExt = media.mimetype.split('/')[1];
-          if (mimeExt) {
-            ext = `.${mimeExt}`;
-          }
+          if (mimeExt) ext = `.${mimeExt}`;
         }
         fileName = generateUniqueFilename(`file${ext}`);
       }
     }
     
-    // Verifica se a pasta de destino existe (se não for a raiz)
     if (targetPath) {
-      if (!db.chats[chatId].files[targetPath] || !db.chats[chatId].files[targetPath].isFolder) {
-        return new ReturnMessage({
-          chatId: chatId,
-          content: `❌ Pasta de destino não existe: ${targetPath}`
-        });
-      }
+      const parent = await getFile(chatId, targetPath);
+      if (!parent || !parent.isFolder) return new ReturnMessage({ chatId: chatId, content: `❌ Pasta de destino não existe: ${targetPath}` });
     }
     
-    // Caminho completo para o arquivo no banco de dados
     const dbFilePath = targetPath ? `${targetPath}/${fileName}` : fileName;
+    const existing = await getFile(chatId, dbFilePath);
+    if (existing) return new ReturnMessage({ chatId: chatId, content: `❌ Já existe um arquivo com este nome: ${dbFilePath}` });
     
-    // Verifica se o arquivo já existe
-    if (db.chats[chatId].files[dbFilePath]) {
-      return new ReturnMessage({
-        chatId: chatId,
-        content: `❌ Já existe um arquivo com este nome: ${dbFilePath}`
-      });
-    }
-    
-    // Caminho físico para salvar o arquivo
     const physicalBasePath = getBasePath(chatId);
     const targetFolder = path.join(physicalBasePath, targetPath);
     const physicalFilePath = path.join(targetFolder, fileName);
     
-    // Garante que a pasta exista
     await fs.mkdir(targetFolder, { recursive: true });
-    
-    // Salva o arquivo
     await fs.writeFile(physicalFilePath, fileBuffer);
     
-    // Atualiza o banco de dados
-    db.chats[chatId].files[dbFilePath] = {
+    const info = {
       path: physicalFilePath,
       size: fileSize,
       name: fileName,
@@ -826,316 +538,178 @@ async function uploadFile(bot, message, args, group) {
       isFolder: false
     };
     
-    // Atualiza tamanho total
-    db.chats[chatId].totalSize = (db.chats[chatId].totalSize || 0) + fileSize;
+    await database.dbRun(DB_NAME, 'INSERT INTO files (chat_id, file_path, file_info) VALUES (?, ?, ?)', 
+      [chatId, dbFilePath, JSON.stringify(info)]);
     
-    // Salva banco de dados
-    await saveFilesDB(db);
+    await updateTotalSize(chatId, fileSize);
     
     const displayPath = targetPath ? `${targetPath}/${fileName}` : fileName;
-    
-    // Prepara comandos para exibição ao usuário
-    const downloadCommand = `!p-baixar ${displayPath}`;
-    const fileVariable = `{file-${displayPath}}`;
-    
-    // Retorna mensagem de sucesso com comandos
     return new ReturnMessage({
       chatId: chatId,
-      content: `✅ Arquivo salvo com sucesso: ${displayPath} (${formatSize(fileSize)})\n\n` +
-               `📥 *Para baixar:* \`${downloadCommand}\`\n` +
-               `🔗 *Para usar em comandos:* \`${fileVariable}\``
+      content: `✅ Arquivo salvo: ${displayPath} (${formatSize(fileSize)})
+
+📥 
+\`\`\`!p-baixar ${displayPath}\`\`\`
+🔗 
+\`\`\`{file-${displayPath}}\`\`\``
     });
+    
   } catch (error) {
     logger.error('Erro ao enviar arquivo:', error);
-    return new ReturnMessage({
-      chatId: message.group ?? message.author,
-      content: 'Erro ao enviar arquivo. Por favor, tente novamente.'
-    });
+    return new ReturnMessage({ chatId: message.group ?? message.author, content: 'Erro ao enviar arquivo.' });
   }
 }
 
 /**
  * Apaga um arquivo ou pasta
- * @param {WhatsAppBot} bot - Instância do bot
- * @param {Object} message - Dados da mensagem
- * @param {Array} args - Argumentos do comando
- * @param {Object} group - Dados do grupo
- * @returns {Promise<ReturnMessage>} - ReturnMessage com o resultado
  */
 async function deleteFile(bot, message, args, group) {
   try {
     const chatId = message.group ?? message.author;
+    if (args.length === 0) return new ReturnMessage({ chatId: chatId, content: 'Forneça o caminho.' });
     
-    if (args.length === 0) {
-      return new ReturnMessage({
-        chatId: chatId,
-        content: 'Por favor, forneça o caminho do arquivo ou pasta a ser excluído.'
-      });
-    }
-    
-    // Obtém caminho do arquivo/pasta
     const filePath = normalizePath(args.join(' '));
+    const fileInfo = await getFile(chatId, filePath);
     
-    // Carrega banco de dados
-    let db = await loadFilesDB();
-    db = initChatDB(db, chatId);
+    if (!fileInfo) return new ReturnMessage({ chatId: chatId, content: `❌ Não encontrado: ${filePath}` });
     
-    // Verifica se o arquivo/pasta existe
-    if (!db.chats[chatId].files[filePath]) {
-      return new ReturnMessage({
-        chatId: chatId,
-        content: `❌ Arquivo ou pasta não encontrado: ${filePath}`
-      });
-    }
-    
-    const fileInfo = db.chats[chatId].files[filePath];
-    const isFolder = fileInfo.isFolder;
-    
-    if (isFolder) {
-      // Verifica se a pasta está vazia
-      const hasChildren = Object.keys(db.chats[chatId].files).some(path => 
-        path !== filePath && path.startsWith(`${filePath}/`));
+    if (fileInfo.isFolder) {
+      const hasChildren = await database.dbGet(DB_NAME, 
+        'SELECT 1 FROM files WHERE chat_id = ? AND file_path LIKE ? AND file_path != ? LIMIT 1', 
+        [chatId, `${filePath}/%`, filePath]);
       
-      if (hasChildren) {
-        return new ReturnMessage({
-          chatId: chatId,
-          content: `❌ A pasta não está vazia: ${filePath}. Remova seus arquivos primeiro.`
-        });
-      }
+      if (hasChildren) return new ReturnMessage({ chatId: chatId, content: `❌ A pasta não está vazia.` });
       
-      // Exclui a pasta fisicamente
       const physicalPath = path.join(getBasePath(chatId), filePath);
-      try {
-        await fs.rmdir(physicalPath);
-      } catch (error) {
-        logger.error(`Erro ao excluir pasta física: ${physicalPath}`, error);
-        // Continua mesmo se falhar a exclusão física
-      }
+      try { await fs.rmdir(physicalPath); } catch (e) {}
       
-      // Remove do banco de dados
-      delete db.chats[chatId].files[filePath];
+      await database.dbRun(DB_NAME, 'DELETE FROM files WHERE chat_id = ? AND file_path = ?', [chatId, filePath]);
+      return new ReturnMessage({ chatId: chatId, content: `✅ Pasta excluída: ${filePath}` });
       
-      // Salva banco de dados
-      await saveFilesDB(db);
-      
-      return new ReturnMessage({
-        chatId: chatId,
-        content: `✅ Pasta excluída com sucesso: ${filePath}`
-      });
     } else {
-      // Arquivo - Recupera tamanho
       const fileSize = fileInfo.size || 0;
-      
-      // Exclui o arquivo fisicamente
       try {
-        if (fileInfo.path) {
-          await fs.unlink(fileInfo.path);
-        } else {
-          const physicalPath = path.join(getBasePath(chatId), filePath);
-          await fs.unlink(physicalPath);
-        }
-      } catch (error) {
-        logger.error(`Erro ao excluir arquivo físico: ${fileInfo.path || filePath}`, error);
-        // Continua mesmo se falhar a exclusão física
-      }
+        if (fileInfo.path) await fs.unlink(fileInfo.path);
+        else await fs.unlink(path.join(getBasePath(chatId), filePath));
+      } catch (e) {}
       
-      // Remove do banco de dados
-      delete db.chats[chatId].files[filePath];
+      await database.dbRun(DB_NAME, 'DELETE FROM files WHERE chat_id = ? AND file_path = ?', [chatId, filePath]);
+      await updateTotalSize(chatId, -fileSize);
       
-      // Atualiza tamanho total
-      db.chats[chatId].totalSize = Math.max(0, (db.chats[chatId].totalSize || 0) - fileSize);
-      
-      // Salva banco de dados
-      await saveFilesDB(db);
-      
-      return new ReturnMessage({
-        chatId: chatId,
-        content: `✅ Arquivo excluído com sucesso: ${filePath} (${formatSize(fileSize)})`
-      });
+      return new ReturnMessage({ chatId: chatId, content: `✅ Arquivo excluído: ${filePath}` });
     }
+    
   } catch (error) {
-    logger.error('Erro ao excluir arquivo/pasta:', error);
-    return new ReturnMessage({
-      chatId: message.group ?? message.author,
-      content: 'Erro ao excluir arquivo/pasta. Por favor, tente novamente.'
-    });
+    logger.error('Erro ao excluir:', error);
+    return new ReturnMessage({ chatId: message.group ?? message.author, content: 'Erro ao excluir.' });
   }
 }
 
 /**
- * Processa variável de arquivo para comandos personalizados
- * @param {string} filePath Caminho do arquivo no formato {file-path/to/file.ext} ou {file-path/to/folder}
- * @param {WhatsAppBot} bot Instância do bot
- * @param {string} chatId ID do chat
- * @returns {Promise<MessageMedia|Array<MessageMedia>|null>} Objeto de mídia, array de objetos de mídia, ou null
+ * Processa variável de arquivo
  */
 async function processFileVariable(filePath, bot, chatId) {
   try {
-    // Extrai caminho do arquivo da variável {file-path/to/file.ext} ou {file-path/to/folder}
     const filePathMatch = filePath.match(/^\{file-(.*?)\}$/);
     if (!filePathMatch) return null;
     
     const normalizedPath = normalizePath(filePathMatch[1]);
-    
-    // Carrega banco de dados
-    let db = await loadFilesDB();
-    db = initChatDB(db, chatId);
-    
-    // Verifica se o caminho existe
-    const fileInfo = db.chats[chatId].files[normalizedPath];
+    const fileInfo = await getFile(chatId, normalizedPath);
     if (!fileInfo) return null;
     
-    // Verifica se é uma pasta
     if (fileInfo.isFolder) {
-      // Busca todos os arquivos na pasta
-      const filesInFolder = Object.entries(db.chats[chatId].files)
+      // Return first 5 files
+      const allFiles = await listFilesFromDb(chatId, normalizedPath);
+      const filesInFolder = Object.entries(allFiles)
         .filter(([path, info]) => !info.isFolder && path.startsWith(`${normalizedPath}/`))
-        .map(([path, info]) => ({ path, info }));
-      
-      if (filesInFolder.length === 0) {
-        logger.warn(`Pasta vazia: ${normalizedPath}`);
-        return null;
-      }
-      
-      // Limita a 5 arquivos para evitar sobrecarga
-      const maxFiles = Math.min(5, filesInFolder.length);
-      const mediaFiles = [];
-      
-      for (let i = 0; i < maxFiles; i++) {
-        const { path: filePath, info } = filesInFolder[i];
+        .map(([path, info]) => ({ path, info }))
+        .slice(0, 5);
         
+      if (filesInFolder.length === 0) return null;
+      
+      const mediaFiles = [];
+      for (const { path: fPath, info } of filesInFolder) {
         try {
-          // Caminho do arquivo físico
-          const physicalPath = info.path || path.join(getBasePath(chatId), filePath);
-          
-          // Lê o arquivo
+          const physicalPath = info.path || path.join(getBasePath(chatId), fPath);
           const fileBuffer = await fs.readFile(physicalPath);
-          
-          // Cria mídia
           const media = new MessageMedia(
             info.type || 'application/octet-stream',
             fileBuffer.toString('base64'),
-            path.basename(filePath)
+            path.basename(fPath)
           );
-          
           mediaFiles.push({
             media,
-            caption: `Arquivo: ${filePath} (${formatSize(info.size || fileBuffer.length)})`
+            caption: `Arquivo: ${fPath} (${formatSize(info.size || fileBuffer.length)})`
           });
-        } catch (error) {
-          logger.error(`Erro ao processar arquivo na pasta: ${filePath}`, error);
-        }
+        } catch (e) {}
       }
+      return mediaFiles.length > 0 ? mediaFiles : null;
       
-      if (mediaFiles.length > 0) {
-        // Retorna o array de arquivos de mídia
-        return mediaFiles;
-      }
-      return null;
     } else {
-      // É um arquivo único
       try {
-        // Caminho do arquivo físico
         const physicalPath = fileInfo.path || path.join(getBasePath(chatId), normalizedPath);
-        
-        // Lê o arquivo
         const fileBuffer = await fs.readFile(physicalPath);
-        
-        // Cria mídia
         return new MessageMedia(
           fileInfo.type || 'application/octet-stream',
           fileBuffer.toString('base64'),
           path.basename(normalizedPath)
         );
-      } catch (error) {
-        logger.error(`Erro ao processar variável de arquivo: ${normalizedPath}`, error);
+      } catch (e) {
         return null;
       }
     }
   } catch (error) {
-    logger.error('Erro ao processar variável de arquivo:', error);
     return null;
   }
 }
 
-// Garante que o diretório base existe ao carregar
+// Ensure base directories
 (async () => {
   try {
-    // Carrega banco de dados
-    const db = await loadFilesDB();
-    
-    // Para cada chat, garante que o diretório base existe
-    for (const chatId in db.chats) {
-      const basePath = getBasePath(chatId);
-      await fs.mkdir(basePath, { recursive: true });
-    }
-  } catch (error) {
-    logger.error('Erro ao inicializar diretórios de arquivo:', error);
-  }
+     const rows = await database.dbAll(DB_NAME, 'SELECT chat_id FROM chat_storage');
+     for(const row of rows){
+        await fs.mkdir(getBasePath(row.chat_id), {recursive: true});
+     }
+  } catch (e) {}
 })();
 
-// Lista de comandos usando a classe Command
+// Commands
 const commands = [
   new Command({
     name: 'pastas',
     category: "arquivos",
-    description: 'Lista as pastas e arquivos criadas no grupo/chat',
-    reactions: {
-      before: process.env.LOADING_EMOJI ?? "🌀",
-      after: "📂"
-    },
+    description: 'Lista as pastas e arquivos',
+    reactions: { before: process.env.LOADING_EMOJI ?? "🌀", after: "📂" },
     method: listFiles
   }),
-  
   new Command({
     name: 'p-criar',
     description: 'Cria nova pasta',
     category: "arquivos",
-    reactions: {
-      before: process.env.LOADING_EMOJI ?? "🌀",
-      after: "📁"
-    },
+    reactions: { before: process.env.LOADING_EMOJI ?? "🌀", after: "📁" },
     method: createFolder
   }),
-  
   new Command({
     name: 'p-enviar',
-    description: 'Envia arquivo para a pasta destino',
+    description: 'Envia arquivo para a pasta',
     category: "arquivos",
-    reactions: {
-      before: process.env.LOADING_EMOJI ?? "🌀",
-      after: "📤"
-    },
+    reactions: { before: process.env.LOADING_EMOJI ?? "🌀", after: "📤" },
     method: uploadFile
   }),
-  
   new Command({
     name: 'p-excluir',
     description: 'Apaga arquivo ou pasta',
     category: "arquivos",
-    reactions: {
-      before: process.env.LOADING_EMOJI ?? "🌀",
-      after: "🧹"
-    },
+    reactions: { before: process.env.LOADING_EMOJI ?? "🌀", after: "🧹" },
     method: deleteFile
   }),
-  
   new Command({
     name: 'p-baixar',
     description: 'Baixa arquivo ou pasta',
     category: "arquivos",
-    reactions: {
-      before: process.env.LOADING_EMOJI ?? "🌀",
-      after: "📥"
-    },
+    reactions: { before: process.env.LOADING_EMOJI ?? "🌀", after: "📥" },
     method: downloadFile
   })
 ];
 
-// Registra os comandos sendo exportados
-//logger.debug(`Exportando ${commands.length} comandos:`, commands.map(cmd => cmd.name));
-
-module.exports = { 
-  commands,
-  processFileVariable 
-};
+module.exports = { commands, processFileVariable };
