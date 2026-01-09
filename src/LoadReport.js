@@ -262,19 +262,8 @@ class LoadReport {
    */
   async saveReport(report) {
     try {
-      // Obtém relatórios existentes
-      let reports = await this.database.getLoadReports() || [];
-
-      // Adiciona novo relatório
-      reports.push(report);
-
-      // Limita o tamanho da coleção para evitar arquivos muito grandes
-      // Mantém apenas os últimos 370 dias de relatórios (aproximadamente 1 ano)
-      const retentionPeriod = Date.now() - (370 * 24 * 60 * 60 * 1000);
-      reports = reports.filter(r => r.timestamp && r.timestamp > retentionPeriod);
-
-      // Salva no banco de dados
-      await this.database.saveLoadReports(reports);
+      // Salva no banco de dados (append-only)
+      await this.database.addLoadReport(report);
 
       this.logger.debug('Relatório de carga salvo com sucesso');
     } catch (error) {
