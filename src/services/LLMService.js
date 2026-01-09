@@ -26,9 +26,10 @@ class LLMService {
 
 		this.providerDefinitions = [
 			{
-				name: 'ollama-ministral-3:14b',
+				name: 'ollama-gemma3:27b',
 				method: async (options) => {
-					options.model = "ministral-3:14b";
+					//options.model = "ministral-3:14b";
+					options.model = "gemma3:27b";
 					options.timeout = 15000;
 					const response = await this.ollamaCompletion({customEndpoint: "http://192.168.195.211:11434", ...options});
 					if (response && response.message && response.message.content) {
@@ -41,9 +42,9 @@ class LLMService {
 				}
 			},
 			{
-				name: 'ollama-ministral-3:8b',
+				name: 'ollama-gemma3:27b-it-qat',
 				method: async (options) => {
-					options.model = "ministral-3:8b";
+					options.model = "gemma3:27b-it-qat";
 					options.timeout = 30000;
 					const response = await this.ollamaCompletion({customEndpoint: "http://192.168.3.200:12345", ...options});
 					if (response && response.message && response.message.content) {
