@@ -295,7 +295,7 @@ async function generateImage(bot, message, args, group, skipNotify = true) {
                 chatId: chatId,
                 content: `📷 Gerando imagem para '${prompt}', isso pode levar alguns segundos...`,
                 reaction: process.env.LOADING_EMOJI ?? "🌀"
-            }));
+            }), group);
         }
 
         message.origin.react(process.env.LOADING_EMOJI ?? "🌀");

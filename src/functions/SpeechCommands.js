@@ -177,7 +177,7 @@ async function textToSpeech(bot, message, args, group, char = "ravena") {
           quotedMessageId: message.origin.id._serialized,
           evoReply: message.origin
         }
-      }));
+      }), group);
     }
 
     logger.debug(`Convertendo texto para voz (${JSON.stringify(character)}): ${text}`);
@@ -386,7 +386,7 @@ async function speechToText(bot, message, args, group, optimizeWithLLM = true) {
               quotedMessageId: message.origin.id._serialized,
               evoReply: message.origin
             }
-          }));
+          }), group);
         }
 
         let finalResult = null;
@@ -427,7 +427,7 @@ async function speechToText(bot, message, args, group, optimizeWithLLM = true) {
           quotedMessageId: message.origin.id._serialized,
           evoReply: message.origin
         }
-      }));
+      }), group);
 
       // Existing local Whisper execution logic
       wavPath = audioPath.replace(/\.[^/.]+$/, '') + '.wav';
@@ -645,7 +645,7 @@ async function processAutoSTT(bot, message, group, opts) {
 
       logger.info(`[processAutoSTT] Resultado STT enviado: ${transcribedText}`);
 
-      await bot.sendReturnMessages(returnMessage);
+      await bot.sendReturnMessages(returnMessage, group);
 
       // Log detailed usage
       cmdUsage.logFixedCommandUsage({

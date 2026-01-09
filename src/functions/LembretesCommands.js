@@ -555,13 +555,11 @@ async function dispararLembrete(bot, lembreteId) {
     
     const lembrete = dbToLembrete(row);
     
-    // Marca o lembrete como inativo
-    await database.dbRun(dbName, `UPDATE lembretes SET ativo = 0 WHERE id = ?`, [lembreteId]);
-    
     // Se o chat for um grupo, verifica se está pausado
+    let group = null;
     if (lembrete.chatId.endsWith('@g.us')) {
       // Obtém o grupo do banco de dados (assumindo que existe esse método no Database)
-      const group = await database.getGroup(lembrete.chatId);
+      group = await database.getGroup(lembrete.chatId);
       
       // Se o grupo estiver pausado, não envia o lembrete
       if (group && group.paused) {
@@ -603,7 +601,7 @@ ${lembrete.mensagem || ''}`;
         });
         
         // Envia a mensagem
-        await bot.sendReturnMessages(returnMessage);
+        await bot.sendReturnMessages(returnMessage, group);
         
         // Exclui o arquivo de mídia após enviar
         try {
@@ -619,7 +617,7 @@ ${lembrete.mensagem || ''}`;
           content: `${textoLembrete}\n\n_(Não foi possível enviar a mídia)_`
         });
         
-        await bot.sendReturnMessages(returnMessage);
+        await bot.sendReturnMessages(returnMessage, group);
       }
     } else {
       // Envia apenas o texto
@@ -628,7 +626,7 @@ ${lembrete.mensagem || ''}`;
         content: textoLembrete
       });
       
-      await bot.sendReturnMessages(returnMessage);
+      await bot.sendReturnMessages(returnMessage, group);
     }
     
     logger.info(`Lembrete ${lembreteId} disparado com sucesso`);

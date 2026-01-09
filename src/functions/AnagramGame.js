@@ -264,6 +264,7 @@ async function endGame(bot, groupId, reason) {
   const game = activeGames[groupId];
   if (!game) return;
 
+  const group = game.group;
   clearTimeout(game.timer);
   delete activeGames[groupId];
 
@@ -303,7 +304,7 @@ async function endGame(bot, groupId, reason) {
   }
 
   if (messageContent) {
-    bot.sendReturnMessages(new ReturnMessage({ chatId: groupId, content: messageContent }));
+    bot.sendReturnMessages(new ReturnMessage({ chatId: groupId, content: messageContent }), group);
   }
 }
 
@@ -360,7 +361,7 @@ async function startNewRound(bot, message, group, isFirstRound = true) {
     chatId: groupId,
     content: media,
     options: { sendMediaAsSticker: true, stickerAuthor: "Ravena", stickerName: group.name }
-  }));
+  }), group);
 
   if (isFirstRound) {
     const hintsLeft = game.maxHints - game.hintsUsed;
@@ -368,7 +369,7 @@ async function startNewRound(bot, message, group, isFirstRound = true) {
     let startMessage = `Use *!ana <palpite>* para responder.\n`;
     startMessage += `Você tem ${GAME_DURATION_SECONDS} segundos!\n\n`;
     startMessage += `> 💡 Dicas: ${hintsLeft} | 🐇 Pulos: ${skipsLeft}`;
-    bot.sendReturnMessages(new ReturnMessage({ chatId: groupId, content: startMessage }));
+    bot.sendReturnMessages(new ReturnMessage({ chatId: groupId, content: startMessage }), group);
   }
 }
 
@@ -412,7 +413,8 @@ async function startGameCommand(bot, message, args, group) {
     round: 1,
     hintsUsed: 0,
     skipsUsed: 0,
-    maxHints: HINTS_PER_ROUND
+    maxHints: HINTS_PER_ROUND,
+    group: group
   };
 
   startNewRound(bot, message, group, true);
@@ -461,7 +463,7 @@ async function guessCommand(bot, message, args, group) {
     bot.sendReturnMessages(new ReturnMessage({
       chatId: message.group,
       content: `${successMessage}\n\n🔄 Iniciando próxima rodada... 🌟 *Level ${game.round}*`
-    }));
+    }), group);
 
     setTimeout(() => {
       startNewRound(bot, message, group, false);
@@ -538,7 +540,7 @@ async function skipCommand(bot, message, args, group) {
   bot.sendReturnMessages(new ReturnMessage({
     chatId: groupId,
     content: `⏭️ A palavra *"${skippedWord}"* foi pulada!\n\n> 🐇 Pulos restantes: ${skipsLeft}\n\n🔄 Carregando nova palavra para a *rodada ${game.round}*...`
-  }));
+  }), group);
 
   // Inicia a próxima rodada (com uma nova palavra, mas no mesmo nível)
   setTimeout(() => {

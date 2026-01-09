@@ -241,3 +241,4 @@ cleanup-*
 gha-creds-*.json
 /.github/workflows
 /.github
+/src/scripts

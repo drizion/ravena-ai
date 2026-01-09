@@ -414,7 +414,7 @@ async function ytCommand(bot, message, args, group) {
         quotedMessageId: message.origin.id._serialized,
         evoReply: message.origin
       }
-    }));
+    }), group);
     
     videoId = await searchYoutubeVideo(input);
     
@@ -449,7 +449,7 @@ async function ytCommand(bot, message, args, group) {
           }
         });
         
-        await bot.sendReturnMessages(errorMsg);
+        await bot.sendReturnMessages(errorMsg, group);
         resolve(returnMessages);
         return;
       }
@@ -469,7 +469,7 @@ async function ytCommand(bot, message, args, group) {
           }
         });
         
-        await bot.sendReturnMessages(videoMsg);
+        await bot.sendReturnMessages(videoMsg, group);
         resolve(returnMessages);
       } catch (sendError) {
         logger.error('Erro ao enviar vídeo:', sendError);
@@ -483,7 +483,7 @@ async function ytCommand(bot, message, args, group) {
           }
         });
         
-        await bot.sendReturnMessages(errorMsg);
+        await bot.sendReturnMessages(errorMsg, group);
         resolve(returnMessages);
       }
     });
@@ -549,7 +549,7 @@ async function srCommand(bot, message, args, group) {
         quotedMessageId: message.origin.id._serialized,
         evoReply: message.origin
       }
-    }));
+    }), group);
     
     videoId = await searchYoutubeVideo(input);
     
@@ -584,7 +584,7 @@ async function srCommand(bot, message, args, group) {
           }
         });
         
-        await bot.sendReturnMessages(errorMsg);
+        await bot.sendReturnMessages(errorMsg, group);
         resolve(returnMessages);
         return;
       }
@@ -604,7 +604,7 @@ async function srCommand(bot, message, args, group) {
           }
         });
         
-        await bot.sendReturnMessages(audioMsg);
+        await bot.sendReturnMessages(audioMsg, group);
         resolve(returnMessages);
       } catch (sendError) {
         logger.error('Erro ao enviar áudio:', sendError);
@@ -614,7 +614,7 @@ async function srCommand(bot, message, args, group) {
           content: 'Erro ao enviar áudio.'
         });
         
-        await bot.sendReturnMessages(errorMsg);
+        await bot.sendReturnMessages(errorMsg, group);
         resolve(returnMessages);
       }
     });

@@ -8,6 +8,7 @@ const mysql = require('mysql2/promise');
 const AdminUtils = require('../utils/AdminUtils');
 
 const logger = new Logger('ragnarok-commands');
+const database = Database.getInstance();
 const adminUtils = AdminUtils.getInstance();
 
 // Database configuration
@@ -37,7 +38,30 @@ function generatePassword(length = 8) {
   return retVal;
 }
 
+async function ragnarokInfoCommand(bot, message, args, group) {
+  const chatId = message.group ?? message.author;
+
+  try {
+    const ragnaPath = path.join(database.databasePath, 'textos', 'ragnarok.txt');
+    const ragnaContent = await fs.readFile(ragnaPath, 'utf8');
+
+    return new ReturnMessage({
+      chatId: chatId,
+      content: ragnaContent.trim()
+    });
+
+  } catch (error) {
+    logger.warn('Erro ao ler ragnarok.txt:', error);
+    return new ReturnMessage({
+      chatId: chatId,
+      content: `Erro buscando as infos do Ragnavena!`
+    });
+  }
+}
+
 async function ragnarokCommand(bot, message, args, group) {
+
+  logger.debug(`[ragnarokResetCommand] `, {message, args});
   const chatId = message.author;
   const authorId = message.author ?? message.authorAlt;
   const sanitizedUser = sanitize(authorId.split('@')[0]);
@@ -75,11 +99,12 @@ async function ragnarokCommand(bot, message, args, group) {
         let rawName = message.name ?? message.pushName ?? message.pushname ?? message.authorName;
         let charName = sanitize(rawName);
         
-        // Logic: if sanitized name has valid length (< 5 according to your instruction), use it. 
-        // Otherwise use Player_username
-        if (!charName || charName.length >= 5 || charName.length === 0) {
+        if (!charName || charName.length <= 3 || charName.length === 0) {
+          logger.info(`[ragnarokCommand] '${rawName}' -> '${charName}' invalido?`);
           charName = sanitize("Player_" + user).substring(0, 23);
         }
+
+        charName = charName.substring(0, 23);
 
         try {
           await connection.execute(
@@ -101,11 +126,15 @@ async function ragnarokCommand(bot, message, args, group) {
   const loginLink = `${process.env.RAGNAROK_URL}/?auth=${authPayload}`;
 
   let responseText = isNew ? "*Sua conta foi criada com sucesso!* ⚔️\n\n" : "*Aqui estão seus dados de acesso:* 🛡️\n\n";
-  responseText += `*Usuário:* ${user}\n`;
-  responseText += `*Senha:* ${pass}\n\n`;
-  responseText += "*Link de Acesso Direto:*\n";
-  responseText += `${loginLink}\n\n`;
-  responseText += "⚠️ *ATENÇÃO:* Nunca compartilhe este link com ninguém. Ele permite acesso direto à sua conta e personagens.";
+  responseText += `- *Usuário:* ${user}
+- *Senha:* ${pass}
+
+- *Link de Acesso Direto:*
+- ${loginLink}
+> ⚠️ *ATENÇÃO:* Nunca compartilhe este link com ninguém. Ele permite acesso direto à sua conta e personagens.
+
+Para saber, envie: \`!rag-info\`
+`;
 
   return new ReturnMessage({
     chatId: chatId,
@@ -158,6 +187,14 @@ async function ragnarokResetCommand(bot, message, args, group) {
 }
 
 const commands = [
+  new Command({
+    name: 'rag-info',
+    description: 'Ragnarok da ravena, no navegador!',
+    category: "jogos",
+    hidden: true,
+    reactions: { after: "🛡️" },
+    method: ragnarokInfoCommand
+  }),
   new Command({
     name: 'ragnavena',
     description: 'Ragnarok da ravena, no navegador!',

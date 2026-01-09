@@ -27,6 +27,7 @@ const Database = require('./utils/Database');
 const LoadReport = require('./LoadReport');
 const Logger = require('./utils/Logger');
 const { toOpus, toMp3 } = require('./utils/Conversions');
+const { llmTranslate } = require('./utils/LLMTranslate');
 
 // Utils
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -912,7 +913,7 @@ class WhatsAppBotEvoGo {
     }
   }
 
-  async sendReturnMessages(returnMessages) {
+  async sendReturnMessages(returnMessages, group = null) {
     if (!Array.isArray(returnMessages)) {
       returnMessages = [returnMessages];
     }
@@ -921,6 +922,23 @@ class WhatsAppBotEvoGo {
       this.logger.warn(`[${this.id}] Sem ReturnMessages válidas pra enviar.`);
       return [];
     }
+
+    // Auto-translate logic
+    if (group && group.autoTranslateTo) {
+      for (const message of validMessages) {
+        try {
+          if (message.content && typeof message.content === 'string') {
+            message.content = await llmTranslate(message.content, group.autoTranslateTo, this.llmService);
+          }
+          if (message.caption && typeof message.caption === 'string') {
+            message.caption = await llmTranslate(message.caption, group.autoTranslateTo, this.llmService);
+          }
+        } catch (e) {
+          this.logger.error(`[sendReturnMessages] Translation error`, e);
+        }
+      }
+    }
+
     const results = [];
     for (const message of validMessages) {
       if (message.delay > 0) {

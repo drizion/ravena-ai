@@ -244,7 +244,7 @@ ${listGroups}`;
     }
   }
 
-  async testeMsg(bot, message, args) {
+  async testeMsg(bot, message, args, group) {
     const chatId = message.group ?? message.author;
     try {
       if (!this.isSuperAdmin(message.author)) return;
@@ -252,7 +252,7 @@ ${listGroups}`;
       const resMsgValida = await bot.sendReturnMessages(new ReturnMessage({
         chatId: chatId,
         content: `\`\`\`\n${JSON.stringify(message, null, "  ")}\`\`\``
-      }));
+      }), group);
 
     } catch (error) {
       this.logger.error('Erro no comando testeMsg:', error);
@@ -264,7 +264,7 @@ ${listGroups}`;
     }
   }
 
-  async sendMsg(bot, message, args) {
+  async sendMsg(bot, message, args, group) {
     try {
       const chatId = message.group ?? message.author;
 
@@ -313,7 +313,7 @@ ${listGroups}`;
           chatId: chatToSend,
           content: msg,
           caption
-        }));
+        }), group);
 
         return new ReturnMessage({
           chatId: chatId,

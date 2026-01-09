@@ -43,6 +43,9 @@ class Group {
       cooldown: 30,
       chance: 100,
     };
+    
+    // Auto translate todas returnMessage
+    this.autoTranslateTo = data.autoTranslateTo ?? false;
 
     // Outras config
     this.autoStt = data.autoStt ?? false;
@@ -81,6 +84,7 @@ class Group {
       greetings: this.greetings,
       farewells: this.farewells,
       interact: this.interact,
+      autoTranslateTo: this.autoTranslateTo,
       autoStt: this.autoStt,
       ignoredNumbers: this.ignoredNumbers,
       ignoredUsers: this.ignoredUsers, 
@@ -157,6 +161,7 @@ class Group {
     }
     
     // Atualiza outras configurações
+    if(data.autoTranslateTo)  this.autoTranslateTo = data.autoTranslateTo;
     if (typeof data.autoStt === 'boolean') this.autoStt = data.autoStt;
     if (data.ignoredNumbers) this.ignoredNumbers = data.ignoredNumbers;
     if (data.ignoredUsers) this.ignoredUsers = data.ignoredUsers;

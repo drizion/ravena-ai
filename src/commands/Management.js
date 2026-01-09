@@ -49,6 +49,22 @@ class Management {
         method: 'deleteFarewellMessage',
         description: 'Remove um tipo de mídia específico da mensagem de despedida (text, image, audio, video, sticker)'
       },
+      'autoStt': {
+        method: 'toggleAutoStt',
+        description: 'Ativa/desativa conversão automática de voz para texto'
+      },
+      'info': {
+        method: 'showGroupInfo',
+        description: 'Mostra informações detalhadas do grupo (debug)'
+      },
+      'manage': {
+        method: 'manageCommand',
+        description: 'Ativa o gerenciamento do grupo pelo PV do bot'
+      },
+      'setAutoTranslate': {
+        method: 'setAutoTranslate',
+        description: 'Define o idioma para tradução automática de todas as respostas do bot (Ex: Spanish (ES))'
+      },
 
       // Controles de comandos personalizados
       'addCmd': {
@@ -99,18 +115,6 @@ class Management {
       'cmd-setDias': {
         method: 'setCmdAllowedDays',
         description: 'Define dias permitidos para um comando'
-      },
-      'autoStt': {
-        method: 'toggleAutoStt',
-        description: 'Ativa/desativa conversão automática de voz para texto'
-      },
-      'info': {
-        method: 'showGroupInfo',
-        description: 'Mostra informações detalhadas do grupo (debug)'
-      },
-      'manage': {
-        method: 'manageCommand',
-        description: 'Ativa o gerenciamento do grupo pelo PV do bot'
       },
       'filtro-palavra': {
         method: 'filterWord',
@@ -327,6 +331,33 @@ class Management {
     }
     
     return commands;
+  }
+  
+  async setAutoTranslate(bot, message, args, group) {
+    if (!group) {
+      return new ReturnMessage({
+        chatId: message.author,
+        content: 'Este comando só pode ser usado em grupos.'
+      });
+    }
+
+    if (args.length === 0) {
+      group.autoTranslateTo = false;
+      await this.database.saveGroup(group);
+      return new ReturnMessage({
+        chatId: group.id,
+        content: 'Tradução automática desativada.'
+      });
+    }
+
+    const targetLanguage = args.join(' ');
+    group.autoTranslateTo = targetLanguage;
+    await this.database.saveGroup(group);
+
+    return new ReturnMessage({
+      chatId: group.id,
+      content: `O bot agora irá tentar traduzir todas as mensagens para '${targetLanguage}'.\n\nRecomendado usar o nome do idioma em inglês seguido da sigla de 2 letras entre parênteses para melhor funcionamento do fallback.\nExemplo: "Spanish (ES)"`
+    });
   }
   
   /**

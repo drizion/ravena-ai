@@ -524,7 +524,7 @@ async function processAutoSticker(bot, message, group) {
     });
     
     // Envia o sticker
-    await bot.sendReturnMessages(returnMessage);
+    await bot.sendReturnMessages(returnMessage, group);
     
     logger.info(`[processAutoSticker] Sticker automático enviado para ${message.author}`);
     

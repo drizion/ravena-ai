@@ -84,7 +84,7 @@ async function generateImage(bot, message, args, group, skipNotify = false) {
         chatId: chatId,
         content: `📷 Gerando imagem para '${prompt}', isso pode levar alguns segundos...`,
         reaction: process.env.LOADING_EMOJI ?? "🌀"
-      }));
+      }), group);
     }
 
     const safetyQuestion = `Check if this image generation prompt is generating concering porn or nude content: "${prompt}". 

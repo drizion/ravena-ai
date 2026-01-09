@@ -402,14 +402,14 @@ class EventHandler extends EventEmitter {
     if (group && message.type === 'location') {
       const respGeo = await GeoGuesser.processLocationMessage(bot, message);
       if (respGeo) {
-        bot.sendReturnMessages(respGeo);
+        bot.sendReturnMessages(respGeo, group);
       }
     }
 
     if (!group && message.type === 'text' && bot.pvAI) {
       this.logger.debug(`[processNonCommandMessage] PV sem comando, chamando LLM com '${message.content}'`);
       const msgsLLM = await aiCommand(bot, message, [], group);
-      bot.sendReturnMessages(msgsLLM);
+      bot.sendReturnMessages(msgsLLM, group);
     }
 
     if (group) {
@@ -1187,7 +1187,7 @@ class EventHandler extends EventEmitter {
           chatId: message.group ?? message.author,
           content: `⛔ Você não tem permissão para realizar esta ação: ${action}`
         });
-        await bot.sendReturnMessages(returnMessage);
+        await bot.sendReturnMessages(returnMessage, group);
 
         return false;
       }

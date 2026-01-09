@@ -455,7 +455,7 @@ async function downloadCommand(bot, message, args, group) {
   bot.sendReturnMessages(new ReturnMessage({
     chatId: chatId,
     content: `🔄 Processando download da URL: ${url}\nEste processo pode levar alguns segundos...`
-  }));
+  }), group);
   
   return new Promise((resolve) => {
     downloadSocialMedia(url, message.author, async (error, result) => {
@@ -467,7 +467,7 @@ async function downloadCommand(bot, message, args, group) {
           content: `❌ Erro ao baixar conteúdo: ${error.message}`
         });
         
-        await bot.sendReturnMessages(errorMsg);
+        await bot.sendReturnMessages(errorMsg, group);
         resolve(returnMessages);
         return;
       }
@@ -500,7 +500,7 @@ async function downloadCommand(bot, message, args, group) {
           // Limpa a legenda após o primeiro arquivo para não repetir
           caption = '';
           
-          await bot.sendReturnMessages(mediaMsg);
+          await bot.sendReturnMessages(mediaMsg, group);
         }
         
         // Se há conteúdo de texto e mais de 1 arquivo de mídia, envia o texto como mensagem separada
@@ -510,7 +510,7 @@ async function downloadCommand(bot, message, args, group) {
             content: `*SocialMediaDownloader* - Descrição do conteúdo:\n\n${result.textContent}`
           });
           
-          await bot.sendReturnMessages(textMsg);
+          await bot.sendReturnMessages(textMsg, group);
         }
         
         // Se não houver arquivos de mídia, envia uma mensagem informativa
@@ -520,7 +520,7 @@ async function downloadCommand(bot, message, args, group) {
             content: `⚠️ Nenhum arquivo de mídia encontrado na URL: ${result.url}`
           });
           
-          await bot.sendReturnMessages(noMediaMsg);
+          await bot.sendReturnMessages(noMediaMsg, group);
         }
         
         resolve(returnMessages);
@@ -532,7 +532,7 @@ async function downloadCommand(bot, message, args, group) {
           content: `❌ Erro ao enviar mídia: ${sendError.message}`
         });
         
-        await bot.sendReturnMessages(errorMsg);
+        await bot.sendReturnMessages(errorMsg, group);
         resolve(returnMessages);
       }
     });

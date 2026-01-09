@@ -497,7 +497,7 @@ async function startGeoguesserGame(bot, message, args, group) {
     const returnMessages = [];
 
 
-    bot.sendReturnMessages(new ReturnMessage({chatId: chatId, content: "🌎 *Inicializando _Geoguesser_*, aguarde as imagens! 🌀"}));
+    bot.sendReturnMessages(new ReturnMessage({chatId: chatId, content: "🌎 *Inicializando _Geoguesser_*, aguarde as imagens! 🌀"}), group);
 
     try{
 
@@ -511,7 +511,8 @@ async function startGeoguesserGame(bot, message, args, group) {
         locationInfo: `${localEmoji} ${localRandom.placeName}`,
         guesses: [],
         startTime: Date.now(),
-        endTime: Date.now() + GAME_DURATION
+        endTime: Date.now() + GAME_DURATION,
+        group: group
       };
 
       logger.info(`[startGeoguesserGame][${groupId}] Dados do jogo iniciado: `, activeGames[groupId]);
@@ -809,7 +810,7 @@ async function endGame(bot, groupId) {
     logger.info(`[endGame] `, resultsMessage);
 
     // Envia mensagem com os resultados
-    bot.sendReturnMessages(msgFim);
+    bot.sendReturnMessages(msgFim, game.group);
     
     // Salva os resultados do jogo no histórico
     try {
