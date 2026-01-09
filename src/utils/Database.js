@@ -232,21 +232,6 @@ class Database {
     }
   }
 
-  // --- Custom Variables (Still JSON File for now? Or migrate?)
-  // The plan didn't explicitly mention custom-variables.json, but it was in the file structure.
-  // The user said "custom-cmd/{group-id}.json", "groups.json", "load-reports", "donations", "pendingJoins", "softblocks".
-  // "custom-variables.json" was not explicitly listed for migration but it is small.
-  // I will check if it exists in my previous ls. It does: `data/custom-variables.json`.
-  // I'll keep it as file-based OR migrate it. The prompt said "The project in this folder is a whatsapp bot... data manipulation... methods should be implemented".
-  // To stay safe and strictly follow the plan which listed specific files, I will keep custom-variables as is (or migrate it if I missed it in the plan).
-  // The plan says "Migrate groups.json, custom-cmd/*.json, donations.json, pending-joins.json, soft-blocks.json, and load-reports.json".
-  // It does NOT mention custom-variables.json. I will leave it as file-based or memory-based for now to avoid scope creep, but ideally it should be in DB. 
-  // actually, let's just stick to the requested files. But I removed `loadJSON` helper. I should probably re-add `loadJSON` helper OR migrate it. 
-  // Given I am removing `persistCachedData`, I should probably migrate it to a key-value store in SQLite or just keep `loadJSON`.
-  // I'll implement `getCustomVariables` using the file system to be safe, but since I removed the general JSON helpers, I'll add a specific helper or just migrate it to a generic KV table?
-  // I'll implement it reading the file directly to avoid breaking it, but I won't create a table for it unless I'm sure.
-  // Actually, I'll add a simple `key_value` table for miscellaneous configs if needed, but for now I'll just read/write the file directly for `custom-variables.json`.
-
   async getCustomVariables() {
     try {
         const filePath = path.join(this.databasePath, 'custom-variables.json');
@@ -284,34 +269,6 @@ class Database {
   }
 
   async saveLoadReports(reports) {
-    // This receives an ARRAY of reports.
-    // In the old code, it replaced the whole file. 
-    // Here we probably want to insert new ones? 
-    // BUT the old code `saveLoadReports` replaced `this.cache.loadReports` with the passed array.
-    // Use case: likely appending or cleaning up.
-    // To match behavior: We should probably clear and insert? Or just Insert?
-    // Looking at the data volume (200k reports), `saveLoadReports` is probably not called with ALL reports every time, or it would be huge.
-    // Let's check how it's used. It's likely used to save the *current* state.
-    // The previous implementation: `this.cache.loadReports = reports; this.dirtyFlags.loadReports = true;`
-    // And persist writes the whole array.
-    // If I strictly follow this, I should `DELETE FROM load_reports` and insert all.
-    // BUT that's inefficient for 200k rows.
-    // Use case assumption: The bot appends to the list in memory and saves.
-    // I should provide an `addLoadReport` method? The interface `saveLoadReports(reports)` suggests replacing the state.
-    // I will implement it as: Transaction -> Delete All -> Insert All. 
-    // LIMITATION: If the array passed is partial, we lose data.
-    // However, since `getLoadReports` returns all (filtered by since), the caller likely has all.
-    // NOTE: This might be slow.
-    // BETTER APPROACH: If the caller is just appending, we should expose `addLoadReport`.
-    // BUT I must adhere to existing method signatures.
-    // I will optimize: 
-    // If the caller is just adding one, they should use `addLoadReport` (if I create it).
-    // If I can't change the caller, I must support `saveLoadReports`.
-    // I'll stick to Delete/Insert for correctness, but warn or optimize if possible.
-    // Actually, `load-reports.json` is 130MB. Rewriting it every minute is heavy.
-    // The old code did exactly that (write file).
-    // So `DELETE FROM load_reports; INSERT ...` is actually likely faster or similar to `fs.writeFile`.
-    
     try {
       // Start transaction
       await this.run('BEGIN TRANSACTION');
@@ -378,10 +335,6 @@ class Database {
 
   async addDonation(name, amount, numero = undefined) {
     try {
-        // Find existing using SQLite (case insensitive match via code or SQL?)
-        // We'll fetch the specific one using SQL for efficiency if possible, 
-        // but `name` in DB is the exact string.
-        // We need case insensitive search.
         const row = await this.get('SELECT name, json_data FROM donations WHERE name = ? COLLATE NOCASE', [name]);
         
         let donor;
