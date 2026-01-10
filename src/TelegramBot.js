@@ -15,6 +15,7 @@ const StreamSystem = require('./StreamSystem');
 const Database = require('./utils/Database');
 const LoadReport = require('./LoadReport');
 const Logger = require('./utils/Logger');
+const SkipGroups = require('./utils/SkipGroups');
 const { promisify } = require('util');
 
 // Utils
@@ -74,8 +75,6 @@ class WhatsAppBotTelegram {
     this.grupoInvites = options.grupoInvites;
     this.userAgent = options.userAgent;
     this.stabilityMonitor = options.stabilityMonitor;
-
-    this.skipGroupsPath = path.join(__dirname, '..', 'data', `skip-groups-${this.id}.json`);
 
     this.streamIgnoreGroups = [];
     this.skipGroupInfo = [];
@@ -821,45 +820,22 @@ class WhatsAppBotTelegram {
 
   async _loadSkipGroupInfo() {
     try {
-        const data = await readFileAsync(this.skipGroupsPath, 'utf8');
-        const allSkips = JSON.parse(data);
-        this.skipGroupInfo = allSkips[this.id] ?? [];
+        this.skipGroupInfo = await SkipGroups.getInstance().getSkippedGroups(this.id);
         this.logger.info(`[SkipGroups] Loaded ${this.skipGroupInfo.length} skipped groups for bot ${this.id}.`);
     } catch (error) {
-        if (error.code === 'ENOENT') {
-            this.logger.info(`[SkipGroups] ${this.skipGroupsPath} not found. Initializing empty skip list.`);
-            this.skipGroupInfo = [];
-            await this._saveSkipGroupInfo();
-        } else {
-            this.logger.error(`[SkipGroups] Error loading skip groups file:`, error);
-        }
+        this.logger.error(`[SkipGroups] Error loading skip groups:`, error);
+        this.skipGroupInfo = [];
     }
   }
 
   async _saveSkipGroupInfo() {
-      let allSkips = {};
-      try {
-          const data = await readFileAsync(this.skipGroupsPath, 'utf8');
-          allSkips = JSON.parse(data);
-      } catch (error) {
-          if (error.code !== 'ENOENT') {
-              this.logger.error(`[SkipGroups] Error reading skip groups file before saving:`, error);
-              return;
-          }
-      }
-      allSkips[this.id] = this.skipGroupInfo;
-      try {
-          await writeFileAsync(this.skipGroupsPath, JSON.stringify(allSkips, null, 2));
-          this.logger.info(`[SkipGroups] Saved ${this.skipGroupInfo.length} skipped groups for bot ${this.id}.`);
-      } catch (error) {
-          this.logger.error(`[SkipGroups] Error saving skip groups file:`, error);
-      }
+      // Deprecated: No longer needed as we save incrementally to DB
   }
 
   async addSkipGroup(groupId) {
       if (!this.skipGroupInfo.includes(groupId)) {
           this.skipGroupInfo.push(groupId);
-          await this._saveSkipGroupInfo();
+          await SkipGroups.getInstance().addSkippedGroup(this.id, groupId);
           this.logger.info(`[SkipGroups] Added ${groupId} to skip list.`);
       }
   }
@@ -868,7 +844,7 @@ class WhatsAppBotTelegram {
       const initialLength = this.skipGroupInfo.length;
       this.skipGroupInfo = this.skipGroupInfo.filter(id => id !== groupId);
       if (this.skipGroupInfo.length < initialLength) {
-          await this._saveSkipGroupInfo();
+          await SkipGroups.getInstance().removeSkippedGroup(this.id, groupId);
           this.logger.info(`[SkipGroups] Removed ${groupId} from skip list.`);
       }
   }

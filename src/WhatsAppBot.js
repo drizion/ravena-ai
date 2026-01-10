@@ -249,7 +249,7 @@ class WhatsAppBot {
       this.status = "PAIRING";
       this.lastQR = qr;
       this.lastPairingCode = "";
-      const qrCodeLocal = path.join(this.database.databasePath, `qrcode_${this.id}.png`);
+      const qrCodeLocal = path.join(this.database.databasePath, "qrcodes", `qrcode_${this.id}.png`);
       let qr_png = qrimg.image(qr, { type: 'png' });
       qr_png.pipe(fs.createWriteStream(qrCodeLocal));
 

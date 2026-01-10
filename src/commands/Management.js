@@ -5,10 +5,9 @@ const Database = require('../utils/Database');
 const AdminUtils = require('../utils/AdminUtils');
 const NSFWPredict = require('../utils/NSFWPredict');
 const ReturnMessage = require('../models/ReturnMessage');
+const Command = require('../models/Command');
+const WebManagement = require('../utils/WebManagement');
 
-/**
- * Manipula comandos de gerenciamento para grupos
- */
 class Management {
   constructor() {
     this.logger = new Logger('management');
@@ -5524,25 +5523,11 @@ async setWelcomeMessage(bot, message, args, group) {
   }  
   
   async saveWebManagementToken(tokenData) {  
-      const fs = require('fs').promises;  
-      const path = require('path');  
-        
-      const dbPath = path.join(this.database.databasePath, 'webmanagement.json');  
-        
-      // Create directory if needed  
-      await fs.mkdir(path.dirname(dbPath), { recursive: true }).catch(() => {});  
-        
-      // Read existing data or create new  
-      let webManagement = [];  
-      try {  
-          const data = await fs.readFile(dbPath, 'utf8');  
-          webManagement = JSON.parse(data);  
-      } catch (error) {  
-          // File doesn't exist, start with empty array  
-      }  
-        
-      webManagement.push(tokenData);  
-      await fs.writeFile(dbPath, JSON.stringify(webManagement, null, 2), 'utf8');  
+      try {
+          await WebManagement.getInstance().saveToken(tokenData);
+      } catch (error) {
+          this.logger.error('Error saving web management token:', error);
+      }
   }  
     
 }

@@ -26,6 +26,7 @@ const StreamSystem = require('./StreamSystem');
 const Database = require('./utils/Database');
 const LoadReport = require('./LoadReport');
 const Logger = require('./utils/Logger');
+const SkipGroups = require('./utils/SkipGroups');
 const { toOpus, toMp3 } = require('./utils/Conversions');
 const { llmTranslate } = require('./utils/LLMTranslate');
 
@@ -71,8 +72,6 @@ class WhatsAppBotEvoGo {
     this.redisDB = options.redisDB ?? 0;
     this.redisTTL = options.redisTTL ?? 604800;
     this.maxCacheSize = 3000;
-
-    this.skipGroupsPath = path.join(__dirname, '..', 'data', `skip-groups-${this.id}.json`);
 
     this.streamIgnoreGroups = [];
     this.skipGroupInfo = [];
@@ -1223,13 +1222,11 @@ class WhatsAppBotEvoGo {
 
           if (extra.connectData.pairingCode) {
             this.logger.info(`[${this.id}] PAIRING CODE: ${extra.connectData.pairingCode}`);
-            const pairingCodeLocation = path.join(this.database.databasePath, `pairingcode_${this.id}.txt`);
-            fs.writeFileSync(pairingCodeLocation, `[${new Date().toUTCString()}] ${extra.connectData.pairingCode}`);
           } else if (extra.connectData.code || extra.connectData.qrcode) {
             const qrBase64 = extra.connectData.code ?? extra.connectData.qrcode;
             if (qrBase64) {
               this.logger.info(`[${this.id}] QR Code received.`);
-              const qrCodeLocal = path.join(this.database.databasePath, `qrcode_${this.id}.png`);
+              const qrCodeLocal = path.join(this.database.databasePath, "qrcodes", `qrcode_${this.id}.png`);
               const base64Data = qrBase64.replace(/^data:image\/png;base64,/, "");
               fs.writeFileSync(qrCodeLocal, base64Data, 'base64');
             }
@@ -2031,45 +2028,22 @@ class WhatsAppBotEvoGo {
 
   async _loadSkipGroupInfo() {
     try {
-        const data = await readFileAsync(this.skipGroupsPath, 'utf8');
-        const allSkips = JSON.parse(data);
-        this.skipGroupInfo = allSkips[this.id] ?? [];
+        this.skipGroupInfo = await SkipGroups.getInstance().getSkippedGroups(this.id);
         this.logger.info(`[SkipGroups] Loaded ${this.skipGroupInfo.length} skipped groups for bot ${this.id}.`);
     } catch (error) {
-        if (error.code === 'ENOENT') {
-            this.logger.info(`[SkipGroups] ${this.skipGroupsPath} not found. Initializing empty skip list.`);
-            this.skipGroupInfo = [];
-            await this._saveSkipGroupInfo();
-        } else {
-            this.logger.error(`[SkipGroups] Error loading skip groups file:`, error);
-        }
+        this.logger.error(`[SkipGroups] Error loading skip groups:`, error);
+        this.skipGroupInfo = [];
     }
   }
 
   async _saveSkipGroupInfo() {
-      let allSkips = {};
-      try {
-          const data = await readFileAsync(this.skipGroupsPath, 'utf8');
-          allSkips = JSON.parse(data);
-      } catch (error) {
-          if (error.code !== 'ENOENT') {
-              this.logger.error(`[SkipGroups] Error reading skip groups file before saving:`, error);
-              return;
-          }
-      }
-      allSkips[this.id] = this.skipGroupInfo;
-      try {
-          await writeFileAsync(this.skipGroupsPath, JSON.stringify(allSkips, null, 2));
-          this.logger.info(`[SkipGroups] Saved ${this.skipGroupInfo.length} skipped groups for bot ${this.id}.`);
-      } catch (error) {
-          this.logger.error(`[SkipGroups] Error saving skip groups file:`, error);
-      }
+      // Deprecated
   }
 
   async addSkipGroup(groupId) {
       if (!this.skipGroupInfo.includes(groupId)) {
           this.skipGroupInfo.push(groupId);
-          await this._saveSkipGroupInfo();
+          await SkipGroups.getInstance().addSkippedGroup(this.id, groupId);
           this.logger.info(`[SkipGroups] Added ${groupId} to skip list.`);
       }
   }
@@ -2078,11 +2052,10 @@ class WhatsAppBotEvoGo {
       const initialLength = this.skipGroupInfo.length;
       this.skipGroupInfo = this.skipGroupInfo.filter(id => id !== groupId);
       if (this.skipGroupInfo.length < initialLength) {
-          await this._saveSkipGroupInfo();
+          await SkipGroups.getInstance().removeSkippedGroup(this.id, groupId);
           this.logger.info(`[SkipGroups] Removed ${groupId} from skip list.`);
       }
   }
-
   async fetchPushNameFromCache(id){
     return await this.cacheManager.getPushnameFromCache(id);
   }
