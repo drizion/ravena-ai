@@ -3,6 +3,26 @@ let lastHealthData = null;
 let isAdminMode = false;
 let selectedBots = [];
 let activePeriod = 'today';
+let messageTimestamps = [];
+let averageMsgsHr = 0;
+let hasInitializedRealtime = false;
+
+function updateRealtimeCounter() {
+    const now = Date.now();
+    // Keep timestamps from the last 60 seconds
+    messageTimestamps = messageTimestamps.filter(t => now - t <= 60000);
+    
+    const count = messageTimestamps.length;
+    const realtimeRate = count * 60;
+    
+    const msgsCounterDiv = document.getElementById('msgsCounter');
+    if (msgsCounterDiv) {
+        msgsCounterDiv.innerHTML = `
+            <span>Processando no momento</span>
+            <span class="count">${realtimeRate} msgs/h (média de ${averageMsgsHr} msgs/h)</span>
+        `;
+    }
+}
 
 // Função para formatar a hora
 function formatTime(timestamp) {
@@ -222,14 +242,21 @@ function renderBots(data) {
         totalMsgsHr += Math.round(bot.msgsHr || 0);
     });
     
-    // Cria o contador de mensagens total
-    const msgsCounterDiv = document.getElementById('msgsCounter');
-    if (msgsCounterDiv) {
-        msgsCounterDiv.innerHTML = `
-            <span>Processando no momento</span>
-            <span class="count">${totalMsgsHr} msgs/h</span>
-        `;
+    averageMsgsHr = totalMsgsHr;
+
+    // Initialize realtime counter with average data on first load
+    if (!hasInitializedRealtime) {
+        const initialCount = Math.round(averageMsgsHr / 60);
+        const now = Date.now();
+        messageTimestamps = [];
+        for (let i = 0; i < initialCount; i++) {
+            // Distribute randomly over the last 60 seconds
+            messageTimestamps.push(now - Math.floor(Math.random() * 60000));
+        }
+        hasInitializedRealtime = true;
     }
+
+    updateRealtimeCounter();
     
     // Ordena os bots: Normais, comunitarios, VIP
     const botsNormais = data.bots.filter(b => !b.comunitario && !b.vip);
@@ -826,6 +853,9 @@ document.addEventListener('DOMContentLoaded', () => {
         socket.on('activity', (data) => {
             if (data && data.type === 'message') {
                 lastActivity = Date.now();
+                messageTimestamps.push(Date.now());
+                updateRealtimeCounter();
+
                 if (activityLight) {
                     // Force flash
                     activityLight.classList.remove('activity-idle', 'activity-warning', 'activity-danger');
@@ -839,6 +869,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
+
+        // Update realtime counter every second to decay count
+        setInterval(updateRealtimeCounter, 1000);
 
         socket.on('service-status', (services) => {
             // Update Evolution Status
