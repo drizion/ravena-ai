@@ -237,20 +237,9 @@ class EventHandler extends EventEmitter {
           const nickData = group.nicks.find(nick => nick.numero === message.author);
           if (nickData && nickData.apelido) {
             try {
-              // Obtém o contato e atualiza o nome em message para uso em comandos
-              const contact = await message.origin.getContact();
-              // Salva o nome original para possível uso futuro
-              if (!message.originalName) {
-                message.originalName = contact.name ?? contact.pushname ?? 'Desconhecido';
-              }
-              // Atualiza o nome com o apelido
-              contact.name = nickData.apelido;
-              contact.pushname = nickData.apelido;
-
               // Atualiza também o nome no objeto message para uso em comandos
               // ATENÇÃO: TRIPA DE CÓDIGO ADIANTE
               message.name = message.pushname = message.pushName = message.authorName = message.origin.name = message.origin.pushname = message.origin.pushName = message.origin.authorName = nickData.apelido;
-
             } catch (error) {
               this.logger.error('Erro ao aplicar apelido:', error);
             }
