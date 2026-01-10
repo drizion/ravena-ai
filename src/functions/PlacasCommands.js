@@ -5,33 +5,19 @@ const Command = require('../models/Command');
 const Database = require('../utils/Database');
 const ReturnMessage = require('../models/ReturnMessage');
 const path = require('path');
-const fs = require('fs').promises;
 require('dotenv').config();
 
 const logger = new Logger('placas-commands');
 const database = Database.getInstance();
-const cachePlacasPath = path.join(database.databasePath, "placas-cache.json");
-let placasCache = {};
+const DB_NAME = 'placas';
 
-// Load cache from file at startup
-(async () => {
-  try {
-    const data = await fs.readFile(cachePlacasPath, 'utf8');
-    placasCache = JSON.parse(data);
-    logger.info('[PlacasCommands] Cache de placas carregado com sucesso.');
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      logger.info('[PlacasCommands] Arquivo de cache de placas não encontrado. Um novo será criado.');
-      try {
-        await fs.writeFile(cachePlacasPath, JSON.stringify({}));
-      } catch (writeError) {
-        logger.error('[PlacasCommands] Erro ao criar o arquivo de cache de placas:', writeError);
-      }
-    } else {
-      logger.error('[PlacasCommands] Erro ao carregar o cache de placas:', error);
-    }
-  }
-})();
+// Initialize Database
+database.getSQLiteDb(DB_NAME, `
+  CREATE TABLE IF NOT EXISTS placas (
+    placa TEXT PRIMARY KEY,
+    json_data TEXT
+  );
+`);
 
 /**
  * Valida e normaliza uma placa de carro brasileira
@@ -129,7 +115,7 @@ async function buscarPlaca(bot, message, args, group) {
     if (!resultado || !resultado.msg) {
       retorno =  new ReturnMessage({
         chatId: chatId,
-        content: `❌ Não foi possível consultar a placa "${placa}". Tente novamente mais tarde.`,
+        content: `❌ Não foi possível consultar a placa "${placa}". Tente novamente mais tarde.`, 
         options: {
           quotedMessageId: message.origin.id._serialized,
           evoReply: message.origin
@@ -186,16 +172,25 @@ async function buscarPlaca(bot, message, args, group) {
  * @param {boolean} premium - Se deve usar API premium
  * @param {Function} callback - Callback para retornar resultado
  */
-function apiPlacas(msg, numeroAutor, placa, premium, callback) {
+async function apiPlacas(msg, numeroAutor, placa, premium, callback) {
   const cacheKey = `${placa}_${premium}`;
   const now = new Date().getTime();
   const threeMonths = 3 * 30 * 24 * 60 * 60 * 1000; // 3 months in milliseconds
 
-  // Check in-memory cache first
-  if (placasCache[cacheKey] && (now - placasCache[cacheKey].timestamp < threeMonths)) {
-    logger.info(`[apiPlacas_cache] Usando cache para a placa: ${placa}`);
-    callback(placasCache[cacheKey].data);
-    return;
+  try {
+    // Check DB cache first
+    const row = await database.dbGet(DB_NAME, 'SELECT json_data FROM placas WHERE placa = ?', [cacheKey]);
+    
+    if (row) {
+      const cached = JSON.parse(row.json_data);
+      if (now - cached.timestamp < threeMonths) {
+        logger.info(`[apiPlacas_cache] Usando cache para a placa: ${placa}`);
+        callback(cached.data);
+        return;
+      }
+    }
+  } catch (error) {
+    logger.error('Erro ao ler cache de placas:', error);
   }
 
   // Configura a URL da API baseada no tipo de acesso
@@ -236,7 +231,15 @@ function apiPlacas(msg, numeroAutor, placa, premium, callback) {
         const municipio = dados.extra?.municipio ?? dados.municipio ?? "-";
         const estado = dados.extra?.uf ?? dados.uf ?? "-";
 
-        retorno.msg = `🔎 Resultado para *${dados.placa}/${dados.placa_alternativa}* _(${dados.extra?.tipo_veiculo ?? "?"})_:\n\n   🚘 *Modelo:* ${nomeCarro} (${dados.cor})\n   📅 *Ano:* ${dados.ano} / ${dados.anoModelo} (${dados.origem})\n   📍 *Localidade:* ${municipio} - ${estado}\n   🔢 *Chassi/Motor:* ${dados.extra?.chassi ?? "-"} / ${dados.extra?.motor ?? "-"}\n   🧍 *Passageiros:* ${dados.extra?.quantidade_passageiro ?? "-"}\n   ⚡️ *Performance:* (${dados.extra?.cilindradas ?? "-"} cc) | ${dados.extra?.combustivel ?? "-"}\n\n   🪙 *FIPE:* ${fipe.texto_valor} (${fipe.texto_modelo} (${fipe.codigo_fipe}), ${fipe.mes_referencia})${renavam}\n   ⚠️ *Obs:* ${dados.extra?.tipo_doc_prop ?? "-"}, ${restricoes}`;
+        retorno.msg = `🔎 Resultado para *${dados.placa}/${dados.placa_alternativa}* _(${dados.extra?.tipo_veiculo ?? "?"})_:\n\n   🚘 *Modelo:* ${nomeCarro} (${dados.cor})
+   📅 *Ano:* ${dados.ano} / ${dados.anoModelo} (${dados.origem})
+   📍 *Localidade:* ${municipio} - ${estado}
+   🔢 *Chassi/Motor:* ${dados.extra?.chassi ?? "-"} / ${dados.extra?.motor ?? "-"}
+   🧍 *Passageiros:* ${dados.extra?.quantidade_passageiro ?? "-"}
+   ⚡️ *Performance:* (${dados.extra?.cilindradas ?? "-"} cc) | ${dados.extra?.combustivel ?? "-"}
+
+   🪙 *FIPE:* ${fipe.texto_valor} (${fipe.texto_modelo} (${fipe.codigo_fipe}), ${fipe.mes_referencia})${renavam}
+   ⚠️ *Obs:* ${dados.extra?.tipo_doc_prop ?? "-"}, ${restricoes}`;
 
         // Verifica se é um Honda Civic Si entre 2006 e 2011
         if (nomeCarro.toLowerCase().includes("honda civic si") && (2006 <= ano && ano <= 2011)) {
@@ -262,14 +265,18 @@ function apiPlacas(msg, numeroAutor, placa, premium, callback) {
       }
       
       // Update cache
-      placasCache[cacheKey] = {
+      const cacheEntry = {
         timestamp: now,
         data: retorno,
         fullData: dados
       };
-      fs.writeFile(cachePlacasPath, JSON.stringify(placasCache, null, 2)).catch(error => {
-        logger.error('Erro ao salvar o cache de placas:', error);
-      });
+      
+      try {
+        await database.dbRun(DB_NAME, 'INSERT OR REPLACE INTO placas (placa, json_data) VALUES (?, ?)', 
+          [cacheKey, JSON.stringify(cacheEntry)]);
+      } catch (dbError) {
+        logger.error('Erro ao salvar o cache de placas:', dbError);
+      }
 
       // Retorna resultado via callback
       callback(retorno);
@@ -307,7 +314,7 @@ function convertToWhatsAppMarkup(html) {
   // Convert <i> and <em> tags to underscores
   result = result.replace(/<(i|em)>(.*?)<\/\1>/gi, '_$2_');
 
-  // Convert <u> tags to tilde (~)
+  // Convert <u> tags to tilde (~) 
   result = result.replace(/<u>(.*?)<\/u>/gi, '~$1~');
 
   // Convert <a> tags to plain text links
@@ -336,7 +343,7 @@ async function getSiPtPlaca(placa, usuario) {
   placa = placa.substring(0, 10);
 
   // Create JSON payload
-  const payload = JSON.stringify({ 
+  const payload = JSON.stringify({
     placa: placa.toLowerCase(), 
     usuario: usuario 
   });
@@ -408,7 +415,7 @@ async function consultarSiPt(bot, message, args, group) {
     if (!resultados || resultados.length === 0 || !resultados[0].msg) {
       return new ReturnMessage({
         chatId: chatId,
-        content: `❌ Não foi possível consultar a placa "${placa}" no SiPt. Tente novamente mais tarde.`,
+        content: `❌ Não foi possível consultar a placa "${placa}" no SiPt. Tente novamente mais tarde.`, 
         options: {
           quotedMessageId: message.origin.id._serialized,
           evoReply: message.origin

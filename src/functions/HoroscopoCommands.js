@@ -1,4 +1,3 @@
-const fs = require('fs').promises;
 const path = require('path');
 const Logger = require('../utils/Logger');
 const Command = require('../models/Command');
@@ -8,57 +7,17 @@ const Database = require('../utils/Database');
 
 const database = Database.getInstance();
 const logger = new Logger('horoscopo-commands');
+const DB_NAME = 'horoscopo';
 
-let horoscopoWriteQueue = {};
-let writeTimeout = null;
-const WRITE_DEBOUNCE_MS = 2000; // 2 segundos
-
-/**
- * Escreve a fila de horóscopos em disco de forma assíncrona.
- * Agrupa múltiplas escritas rápidas em uma única operação.
- */
-async function flushHoroscopoToFile() {
-    const dates = Object.keys(horoscopoWriteQueue);
-    if (dates.length === 0) return;
-
-    logger.info(`Iniciando escrita de horóscopos em disco para as datas: ${dates.join(', ')}`);
-
-    // Copia e limpa a fila imediatamente para não perder dados que cheguem durante a escrita
-    const queueToProcess = horoscopoWriteQueue;
-    horoscopoWriteQueue = {};
-    clearTimeout(writeTimeout);
-    writeTimeout = null;
-
-    for (const date of dates) {
-        const dataToWrite = queueToProcess[date];
-        if (!dataToWrite || Object.keys(dataToWrite).length === 0) continue;
-
-        const filePath = path.join(horoscopoDir, `${date}.json`);
-
-        try {
-            await fs.mkdir(horoscopoDir, { recursive: true });
-            let existingData = {};
-            try {
-                const currentContent = await fs.readFile(filePath, 'utf8');
-                existingData = JSON.parse(currentContent);
-            } catch (error) {
-                // Arquivo não existe ou é inválido, será sobrescrito
-            }
-
-            const mergedData = { ...existingData, ...dataToWrite };
-
-            await fs.writeFile(filePath, JSON.stringify(mergedData, null, 2));
-            logger.info(`Sucesso ao escrever ${Object.keys(dataToWrite).length} horóscopo(s) para ${date}`);
-
-        } catch (error) {
-            logger.error(`Falha ao escrever horóscopos para a data ${date}:`, error);
-            // Opcional: Adicionar lógica para tentar novamente depois
-        }
-    }
-}
-
-
-const horoscopoDir = path.join(database.databasePath, 'horoscopo');
+// Initialize Database
+database.getSQLiteDb(DB_NAME, `
+  CREATE TABLE IF NOT EXISTS horoscopo (
+    data TEXT,
+    signo TEXT,
+    texto TEXT,
+    PRIMARY KEY (data, signo)
+  );
+`);
 
 const signos = {
   'áries': { emoji: '♈', nome: 'Áries' },
@@ -126,17 +85,12 @@ async function detectHoroscopo(msgBody, groupId) {
         const day = String(today.getDate()).padStart(2, '0');
         const date = `${year}-${month}-${day}`;
 
-        // Adiciona na fila de escrita
-        if (!horoscopoWriteQueue[date]) {
-          horoscopoWriteQueue[date] = {};
-        }
-        horoscopoWriteQueue[date][signoNormalizado] = texto;
+        await database.dbRun(DB_NAME, 
+          'INSERT OR REPLACE INTO horoscopo (data, signo, texto) VALUES (?, ?, ?)',
+          [date, signoNormalizado, texto]
+        );
 
-        // Agenda a escrita em disco
-        if (writeTimeout) clearTimeout(writeTimeout);
-        writeTimeout = setTimeout(flushHoroscopoToFile, WRITE_DEBOUNCE_MS);
-
-        logger.info(`Horóscopo de ${signoNormalizado} para ${date} adicionado à fila de escrita.`);
+        logger.info(`Horóscopo de ${signoNormalizado} para ${date} salvo no banco.`);
         return true;
       }
     }
@@ -192,13 +146,14 @@ async function horoscopoCommand(bot, message, args, group) {
     const date = `${year}-${month}-${day}`;
     const formattedDate = `${day}/${month}/${year}`;
 
-    const filePath = path.join(horoscopoDir, `${date}.json`);
-    let horoscoposDoDia;
+    // Get from DB
+    const rows = await database.dbAll(DB_NAME, 'SELECT signo, texto FROM horoscopo WHERE data = ?', [date]);
+    const horoscoposDoDia = {};
+    rows.forEach(row => {
+      horoscoposDoDia[row.signo] = row.texto;
+    });
 
-    try {
-      const data = await fs.readFile(filePath, 'utf8');
-      horoscoposDoDia = JSON.parse(data);
-    } catch (error) {
+    if (rows.length === 0) {
       return new ReturnMessage({
         chatId: chatId,
         content: `😴 Nenhum horóscopo encontrado para ${formattedDate}.`,
@@ -207,7 +162,9 @@ async function horoscopoCommand(bot, message, args, group) {
     }
 
     let signoAlvo = normalizeSigno(signoQuery);
-    let responseText = `🔮 *Horóscopo para ${formattedDate}*\n\n`;
+    let responseText = `🔮 *Horóscopo para ${formattedDate}*
+
+`;
     let showAll = false;
 
     if (signoAlvo) {

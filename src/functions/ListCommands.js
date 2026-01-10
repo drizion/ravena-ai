@@ -9,6 +9,15 @@ const ReturnMessage = require('../models/ReturnMessage');
 
 const logger = new Logger('list-commands');
 const database = Database.getInstance();
+const DB_NAME = 'lists';
+
+// Initialize Database
+database.getSQLiteDb(DB_NAME, `
+  CREATE TABLE IF NOT EXISTS lists (
+    group_id TEXT PRIMARY KEY,
+    json_data TEXT
+  );
+`);
 
 // Emoji numbers for reactions
 const NUMBER_EMOJIS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
@@ -106,25 +115,8 @@ async function processListReaction(bot, message, args, group) {
  */
 async function getGroupLists(groupId) {
   try {
-    const listsDir = path.join(database.databasePath, 'lists');
-
-    // Create lists directory if it doesn't exist
-    try {
-      await fs.mkdir(listsDir, { recursive: true });
-    } catch (error) {
-      // Ignore if directory already exists
-    }
-
-    const listsPath = path.join(listsDir, `${groupId}.json`);
-
-    try {
-      // Try to read existing lists file
-      const data = await fs.readFile(listsPath, 'utf8');
-      return JSON.parse(data);
-    } catch (error) {
-      // If file doesn't exist or can't be parsed, return empty array
-      return [];
-    }
+    const row = await database.dbGet(DB_NAME, 'SELECT json_data FROM lists WHERE group_id = ?', [groupId]);
+    return row ? JSON.parse(row.json_data) : [];
   } catch (error) {
     logger.error(`Error getting lists for group ${groupId}:`, error);
     return [];
@@ -139,20 +131,8 @@ async function getGroupLists(groupId) {
  */
 async function saveGroupLists(groupId, lists) {
   try {
-    const listsDir = path.join(database.databasePath, 'lists');
-
-    // Create lists directory if it doesn't exist
-    try {
-      await fs.mkdir(listsDir, { recursive: true });
-    } catch (error) {
-      // Ignore if directory already exists
-    }
-
-    const listsPath = path.join(listsDir, `${groupId}.json`);
-
-    // Save lists to file
-    await fs.writeFile(listsPath, JSON.stringify(lists, null, 2), 'utf8');
-
+    await database.dbRun(DB_NAME, 'INSERT OR REPLACE INTO lists (group_id, json_data) VALUES (?, ?)', 
+      [groupId, JSON.stringify(lists, null, 2)]);
     return true;
   } catch (error) {
     logger.error(`Error saving lists for group ${groupId}:`, error);

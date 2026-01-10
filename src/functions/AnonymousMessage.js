@@ -1,12 +1,24 @@
-﻿const path = require('path');
+const path = require('path');
 const Logger = require('../utils/Logger');
 const ReturnMessage = require('../models/ReturnMessage');
 const Command = require('../models/Command');
 const Database = require('../utils/Database');
-const fs = require('fs');
 
 const logger = new Logger('anonymous-message');
 const database = Database.getInstance();
+const DB_NAME = 'anon_msgs';
+
+// Initialize Database
+database.getSQLiteDb(DB_NAME, `
+  CREATE TABLE IF NOT EXISTS anon_msgs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sender_id TEXT,
+    target_group_name TEXT,
+    timestamp INTEGER,
+    message TEXT,
+    json_data TEXT
+  );
+`);
 
 const LLMService = require('../services/LLMService');
 const llmService = new LLMService({});
@@ -15,23 +27,14 @@ const llmService = new LLMService({});
 const COOLDOWN_HOURS = 2;
 const COOLDOWN_MS = COOLDOWN_HOURS * 60 * 60 * 1000; // Cooldown em milissegundos
 
-// Caminho para o arquivo de mensagens anônimas
-const ANON_MSGS_PATH = path.join(database.databasePath, 'anon-msgs.json');
-
 /**
- * Obtém as mensagens anônimas armazenadas
- * @returns {Array} - Lista de mensagens anônimas
+ * Obtém as mensagens anônimas armazenadas (Limitado a 100 para compatibilidade se necessário, mas melhor usar queries específicas)
+ * @returns {Promise<Array>} - Lista de mensagens anônimas
  */
-function getAnonMessages() {
+async function getAnonMessages() {
   try {
-    if (!fs.existsSync(ANON_MSGS_PATH)) {
-      // Se o arquivo não existir, cria com um array vazio
-      fs.writeFileSync(ANON_MSGS_PATH, JSON.stringify([], null, 2), 'utf8');
-      return [];
-    }
-    
-    const data = fs.readFileSync(ANON_MSGS_PATH, 'utf8');
-    return JSON.parse(data ?? '[]');
+    const rows = await database.dbAll(DB_NAME, 'SELECT json_data FROM anon_msgs ORDER BY timestamp DESC LIMIT 100');
+    return rows.map(r => JSON.parse(r.json_data));
   } catch (error) {
     logger.error('Erro ao carregar mensagens anônimas:', error);
     return [];
@@ -39,78 +42,35 @@ function getAnonMessages() {
 }
 
 /**
- * Salva as mensagens anônimas no arquivo
- * @param {Array} messages - Lista de mensagens anônimas
- * @returns {boolean} - Status de sucesso
- */
-function saveAnonMessages(messages) {
-  try {
-    // Limita o histórico a 100 mensagens, mantendo as mais recentes
-    if (messages.length > 100) {
-      messages = messages.slice(-100);
-    }
-    
-    // Cria diretório se não existir
-    const dir = path.dirname(ANON_MSGS_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    
-    // Use sistema de escrita segura
-    const tempFilePath = `${ANON_MSGS_PATH}.temp`;
-    fs.writeFileSync(tempFilePath, JSON.stringify(messages, null, 2), 'utf8');
-    
-    // Verifica se a escrita foi bem-sucedida
-    try {
-      const testRead = fs.readFileSync(tempFilePath, 'utf8');
-      JSON.parse(testRead); // Verifica se é JSON válido
-    } catch (readError) {
-      logger.error(`Erro na verificação do arquivo temporário:`, readError);
-      if (fs.existsSync(tempFilePath)) {
-        fs.unlinkSync(tempFilePath);
-      }
-      return false;
-    }
-    
-    // Renomeia o arquivo temporário para o arquivo final
-    if (fs.existsSync(ANON_MSGS_PATH)) {
-      fs.unlinkSync(ANON_MSGS_PATH);
-    }
-    fs.renameSync(tempFilePath, ANON_MSGS_PATH);
-    
-    return true;
-  } catch (error) {
-    logger.error('Erro ao salvar mensagens anônimas:', error);
-    return false;
-  }
-}
-
-/**
  * Verifica o cooldown de um usuário
  * @param {string} userId - ID do usuário
- * @returns {object} - Objeto com status e tempo restante em horas
+ * @param {string} targetGroup - Nome do grupo alvo
+ * @returns {Promise<object>} - Objeto com status e tempo restante em horas
  */
-function checkUserCooldown(userId, targetGroup) {
-  const messages = getAnonMessages();
-  const now = Date.now();
-  
-  // Encontra a mensagem mais recente do usuário
-  const lastMessage = messages
-    .filter(msg => msg.senderId === userId && msg.targetGroupName.toLowerCase() === targetGroup.toLowerCase())
-    .sort((a, b) => b.timestamp - a.timestamp)[0];
-  
-  if (!lastMessage) {
+async function checkUserCooldown(userId, targetGroup) {
+  try {
+    const row = await database.dbGet(DB_NAME, 
+      'SELECT timestamp FROM anon_msgs WHERE sender_id = ? AND target_group_name = ? ORDER BY timestamp DESC LIMIT 1', 
+      [userId, targetGroup]
+    );
+
+    if (!row) {
+      return { onCooldown: false, timeLeft: 0 };
+    }
+
+    const now = Date.now();
+    const timeSinceLastMessage = now - row.timestamp;
+    
+    if (timeSinceLastMessage < COOLDOWN_MS) {
+      const timeLeft = Math.ceil((COOLDOWN_MS - timeSinceLastMessage) / (1000 * 60 * 60));
+      return { onCooldown: true, timeLeft };
+    }
+    
+    return { onCooldown: false, timeLeft: 0 };
+  } catch (error) {
+    logger.error('Erro ao verificar cooldown:', error);
     return { onCooldown: false, timeLeft: 0 };
   }
-  
-  const timeSinceLastMessage = now - lastMessage.timestamp;
-  
-  if (timeSinceLastMessage < COOLDOWN_MS) {
-    const timeLeft = Math.ceil((COOLDOWN_MS - timeSinceLastMessage) / (1000 * 60 * 60));
-    return { onCooldown: true, timeLeft };
-  }
-  
-  return { onCooldown: false, timeLeft: 0 };
 }
 
 function cleanId(id){
@@ -144,7 +104,7 @@ async function anonymousMessage(bot, message, args, group) {
 
     
     // Verifica cooldown
-    const cooldownCheck = checkUserCooldown(senderIds[0], targetGroupName);
+    const cooldownCheck = await checkUserCooldown(senderIds[0], targetGroupName);
     if (cooldownCheck.onCooldown) {
       return new ReturnMessage({
         chatId: senderIds[0],
@@ -213,7 +173,6 @@ async function anonymousMessage(bot, message, args, group) {
     
     // Registra a mensagem anônima
     const now = Date.now();
-    const anonMessages = getAnonMessages();
     
     let anonimizedMessage = null;
     try {
@@ -230,23 +189,32 @@ async function anonymousMessage(bot, message, args, group) {
       anonimizedMessage = anonymousText;
     }
 
-    // Adiciona nova mensagem ao registro
-    anonMessages.push({
+    // Objeto da mensagem
+    const msgObj = {
       senderId: senderIds[0],
       targetGroupId: targetGroup.id,
       targetGroupName: targetGroup.name,
       message: anonymousText,
       anonimizedMessage: anonimizedMessage,
       timestamp: now
-    });
+    };
     
-    // Salva as mensagens atualizadas
-    saveAnonMessages(anonMessages);
+    // Salva no banco de dados
+    try {
+      await database.dbRun(DB_NAME, `
+        INSERT INTO anon_msgs (sender_id, target_group_name, timestamp, message, json_data)
+        VALUES (?, ?, ?, ?, ?)
+      `, [msgObj.senderId, msgObj.targetGroupName, msgObj.timestamp, msgObj.message, JSON.stringify(msgObj)]);
+    } catch (dbError) {
+      logger.error('Erro ao salvar mensagem anônima no banco:', dbError);
+    }
     
     // Envia a mensagem para o grupo alvo
     try {
       // Formata a mensagem anônima
-      const formattedMessage = `👻 *Um membro anônimo enviou:*\n\n> ${anonimizedMessage ?? anonymousText}`;
+      const formattedMessage = `👻 *Um membro anônimo enviou:*
+
+> ${anonimizedMessage ?? anonymousText}`;
       
       // Envia para o grupo alvo
       await bot.sendMessage(targetGroup.id, formattedMessage);
@@ -292,11 +260,10 @@ async function adminAnonMessages(bot, message, args) {
       });
     }
     
-    // Obtém as mensagens anônimas
-    const anonMessages = getAnonMessages();
-    
     if (args.length === 0 || args[0] === 'list') {
       // Lista as últimas 10 mensagens anônimas
+      const anonMessages = await getAnonMessages(); // Already limits to 100, we slice 10.
+      
       if (anonMessages.length === 0) {
         return new ReturnMessage({
           chatId: message.author,
@@ -305,7 +272,7 @@ async function adminAnonMessages(bot, message, args) {
       }
       
       const lastMessages = anonMessages
-        .slice(-10)
+        .slice(0, 10) // First 10 (since ordered DESC)
         .map((msg, index) => {
           const date = new Date(msg.timestamp).toLocaleString('pt-BR');
           return `*${index + 1}.* De: ${msg.senderId}\nPara: ${msg.targetGroupName}\nData: ${date}\nMensagem: "${msg.message}"`;
@@ -314,11 +281,13 @@ async function adminAnonMessages(bot, message, args) {
       
       return new ReturnMessage({
         chatId: message.author,
-        content: `📝 *Últimas mensagens anônimas:*\n\n${lastMessages}`
+        content: `📝 *Últimas mensagens anônimas:*
+
+${lastMessages}`
       });
     } else if (args[0] === 'clear') {
       // Limpa todas as mensagens anônimas
-      saveAnonMessages([]);
+      await database.dbRun(DB_NAME, 'DELETE FROM anon_msgs');
       
       return new ReturnMessage({
         chatId: message.author,
@@ -327,7 +296,11 @@ async function adminAnonMessages(bot, message, args) {
     } else if (args[0] === 'find' && args.length > 1) {
       // Busca mensagens por ID do usuário
       const userId = args[1];
-      const userMessages = anonMessages.filter(msg => msg.senderId.includes(userId));
+      const rows = await database.dbAll(DB_NAME, 
+        `SELECT json_data FROM anon_msgs WHERE sender_id LIKE ? ORDER BY timestamp DESC LIMIT 5`,
+        [`%${userId}%`]
+      );
+      const userMessages = rows.map(r => JSON.parse(r.json_data));
       
       if (userMessages.length === 0) {
         return new ReturnMessage({
@@ -337,7 +310,6 @@ async function adminAnonMessages(bot, message, args) {
       }
       
       const formattedMessages = userMessages
-        .slice(-5) // Apenas as 5 mais recentes
         .map((msg, index) => {
           const date = new Date(msg.timestamp).toLocaleString('pt-BR');
           return `*${index + 1}.* Para: ${msg.targetGroupName}\nData: ${date}\nMensagem: "${msg.message}"`;
@@ -346,16 +318,22 @@ async function adminAnonMessages(bot, message, args) {
       
       return new ReturnMessage({
         chatId: message.author,
-        content: `🔍 *Mensagens do usuário ${userId}:*\n\n${formattedMessages}`
+        content: `🔍 *Mensagens do usuário ${userId}:*
+
+${formattedMessages}`
       });
     }
     
     // Instruções para o comando
     return new ReturnMessage({
       chatId: message.author,
-      content: `📋 *Comandos disponíveis:*\n\n` +
-        `!adminanon list - Lista as últimas mensagens anônimas\n` +
-        `!adminanon find [id] - Busca mensagens por ID do usuário\n` +
+      content: `📋 *Comandos disponíveis:*
+
+` +
+        `!adminanon list - Lista as últimas mensagens anônimas
+` +
+        `!adminanon find [id] - Busca mensagens por ID do usuário
+` +
         `!adminanon clear - Remove todas as mensagens anônimas`
     });
   } catch (error) {

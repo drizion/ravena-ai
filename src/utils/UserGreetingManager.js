@@ -8,75 +8,42 @@ class UserGreetingManager {
   constructor() {
     this.logger = new Logger('user-greeting');
     this.database = Database.getInstance();
-    // Modificar a estrutura para armazenar por bot
-    this.greetedUsers = {}; // { userId: { botId1: timestamp1, botId2: timestamp2, ... } }
-    this.greetedUsersPath = path.join(this.database.databasePath, 'greeted-ids.json');
-    this.greetingTextPath = path.join(this.database.databasePath, 'textos', 'bot-greeting.txt');
+    this.DB_NAME = 'greeted_users';
     
-    // Carrega os usuários já saudados na inicialização
-    this.loadGreetedUsers();
-  }
-  
-  /**
-   * Carrega a lista de usuários já saudados do arquivo
-   */
-  async loadGreetedUsers() {
-    try {
-      try {
-        const data = await fs.readFile(this.greetedUsersPath, 'utf8');
-        this.greetedUsers = JSON.parse(data);
-        this.logger.info(`Carregados ${Object.keys(this.greetedUsers).length} usuários já saudados`);
-      } catch (error) {
-        if (error.code !== 'ENOENT') {
-          this.logger.error('Erro ao carregar usuários saudados:', error);
-        } else {
-          this.logger.info('Arquivo de usuários saudados não encontrado, iniciando com lista vazia');
-        }
-        this.greetedUsers = {};
-      }
-    } catch (error) {
-      this.logger.error('Erro ao inicializar usuários saudados:', error);
-      this.greetedUsers = {};
-    }
-  }
-  
-  
-  /**
-   * Salva a lista de usuários saudados no arquivo
-   */
-  async saveGreetedUsers() {
-    try {
-      // Cria o diretório se não existir
-      const dir = path.dirname(this.greetedUsersPath);
-      await fs.mkdir(dir, { recursive: true }).catch(() => {});
-      
-      await fs.writeFile(this.greetedUsersPath, JSON.stringify(this.greetedUsers, null, 2));
-      this.logger.debug('Usuários saudados salvos com sucesso');
-    } catch (error) {
-      this.logger.error('Erro ao salvar usuários saudados:', error);
-    }
+    // Initialize Database
+    this.database.getSQLiteDb(this.DB_NAME, `
+      CREATE TABLE IF NOT EXISTS greeted_users (
+        user_id TEXT,
+        bot_id TEXT,
+        timestamp INTEGER,
+        PRIMARY KEY (user_id, bot_id)
+      );
+    `);
+
+    this.greetingTextPath = path.join(this.database.databasePath, 'textos', 'bot-greeting.txt');
   }
   
   /**
    * Verifica se um usuário já foi saudado recentemente por um bot específico
    * @param {string} userId - ID do usuário
    * @param {string} botId - ID do bot
-   * @returns {boolean} - True se o usuário já foi saudado recentemente por este bot
+   * @returns {Promise<boolean>} - True se o usuário já foi saudado recentemente por este bot
    */
-  wasGreetedRecently(userId, botId) {
-    if (!this.greetedUsers[userId]) {
+  async wasGreetedRecently(userId, botId) {
+    try {
+      const row = await this.database.dbGet(this.DB_NAME, 'SELECT timestamp FROM greeted_users WHERE user_id = ? AND bot_id = ?', [userId, botId]);
+      
+      if (!row) return false;
+      
+      const lastGreeted = row.timestamp;
+      const now = Date.now();
+      const oneWeekMs = 7 * 24 * 60 * 60 * 1000; // Uma semana em milissegundos
+      
+      return (now - lastGreeted) < oneWeekMs;
+    } catch (error) {
+      this.logger.error('Erro ao verificar saudação:', error);
       return false;
     }
-    
-    if (!this.greetedUsers[userId][botId]) {
-      return false;
-    }
-    
-    const lastGreeted = this.greetedUsers[userId][botId];
-    const now = Date.now();
-    const oneWeekMs = 7 * 24 * 60 * 60 * 1000; // Uma semana em milissegundos
-    
-    return (now - lastGreeted) < oneWeekMs;
   }
   
   /**
@@ -85,15 +52,13 @@ class UserGreetingManager {
    * @param {string} botId - ID do bot
    */
   async markAsGreeted(userId, botId) {
-    if (!this.greetedUsers[userId]) {
-      this.greetedUsers[userId] = {};
+    try {
+      await this.database.dbRun(this.DB_NAME, 'INSERT OR REPLACE INTO greeted_users (user_id, bot_id, timestamp) VALUES (?, ?, ?)', 
+        [userId, botId, Date.now()]);
+    } catch (error) {
+      this.logger.error('Erro ao marcar saudação:', error);
     }
-    
-    this.greetedUsers[userId][botId] = Date.now();
-    await this.saveGreetedUsers();
   }
-  
-  
   
   /**
    * Lê o texto de saudação do arquivo
@@ -143,7 +108,7 @@ class UserGreetingManager {
       const botId = bot.id;
       
       // Verificar se o usuário já foi saudado recentemente por este bot
-      if (this.wasGreetedRecently(userId, botId)) {
+      if (await this.wasGreetedRecently(userId, botId)) {
         this.logger.debug(`Usuário ${userId} já foi saudado recentemente pelo bot ${botId}`);
         return false;
       } else {

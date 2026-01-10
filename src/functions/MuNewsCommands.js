@@ -1,4 +1,3 @@
-const fs = require('fs').promises;
 const path = require('path');
 const Logger = require('../utils/Logger');
 const Command = require('../models/Command');
@@ -7,9 +6,16 @@ const chrono = require('chrono-node');
 const Database = require('../utils/Database');
 
 const database = Database.getInstance();
-
-// Cria novo logger
 const logger = new Logger('munews-commands');
+const DB_NAME = 'munews';
+
+// Initialize Database
+database.getSQLiteDb(DB_NAME, `
+  CREATE TABLE IF NOT EXISTS munews (
+    data TEXT PRIMARY KEY,
+    news TEXT
+  );
+`);
 
 /**
  * Extrai a data de uma string no formato "dd de mês de yyyy"
@@ -65,25 +71,16 @@ async function detectNews(msgBody, groupId) {
         const data = extractDate(header);
         
         if (data) {
-          // Cria o diretório de MuNews se não existir
-          const munewsDir = path.join(database.databasePath, 'munews');
-          await fs.mkdir(munewsDir, { recursive: true });
+          // Verifica se já existe uma entrada para essa data
+          const existing = await database.dbGet(DB_NAME, 'SELECT 1 FROM munews WHERE data = ?', [data]);
           
-          // Nome do arquivo baseado na data
-          const fileName = `${data}.news`;
-          const filePath = path.join(munewsDir, fileName);
-          
-          // Verifica se já existe um arquivo para essa data
-          try {
-            await fs.access(filePath);
+          if (existing) {
             logger.info(`MuNews para data ${data} já existe, ignorando`);
             return false;
-          } catch (error) {
-            // Arquivo não existe, podemos continuar
           }
           
-          // Salva o conteúdo da mensagem no arquivo
-          await fs.writeFile(filePath, msgBody);
+          // Salva o conteúdo da mensagem no banco
+          await database.dbRun(DB_NAME, 'INSERT INTO munews (data, news) VALUES (?, ?)', [data, msgBody]);
           logger.info(`MuNews salva com sucesso para data ${data}, detectado em grupo '${groupId}'`);
           
           // Se a MuNews for detectada de um grupo específico definido em .env, informa o grupo
@@ -104,24 +101,13 @@ async function detectNews(msgBody, groupId) {
 }
 
 /**
- * Obtém todas as datas de MuNews disponíveis
+ * Obtém todas as datas de MuNews disponíveis do banco de dados
  * @returns {Promise<Array<string>>} - Array de datas no formato YYYY-MM-DD, ordenadas cronologicamente
  */
 async function getAllNewsDates() {
   try {
-    // Caminho para o diretório de MuNews
-    const munewsDir = path.join(database.databasePath, 'munews');
-    
-    // Lista todos os arquivos no diretório
-    const files = await fs.readdir(munewsDir);
-    
-    // Filtra apenas os arquivos .news e extrai as datas (YYYY-MM-DD)
-    const dates = files
-      .filter(file => file.endsWith('.news'))
-      .map(file => file.replace('.news', ''))
-      .sort(); // Ordena cronologicamente
-    
-    return dates;
+    const rows = await database.dbAll(DB_NAME, 'SELECT data FROM munews ORDER BY data ASC');
+    return rows.map(row => row.data);
   } catch (error) {
     logger.error('Erro ao obter datas de MuNews:', error);
     return [];
@@ -147,31 +133,6 @@ async function getStringMunewsDisponiveis(){
   }
   
   return `A MuNews mais antiga que tenho é ${primeiraNews} e a mais recente ${ultimaNews}. Nem todas as datas tiveram MuNews.`;
-}
-
-/**
- * Obtém todas as datas de MuNews disponíveis
- * @returns {Promise<Array<string>>} - Array de datas no formato YYYY-MM-DD, ordenadas cronologicamente
- */
-async function getAllNewsDates() {
-  try {
-    // Caminho para o diretório de MuNews
-    const munewsDir = path.join(database.databasePath, 'munews');
-    
-    // Lista todos os arquivos no diretório
-    const files = await fs.readdir(munewsDir);
-    
-    // Filtra apenas os arquivos .news e extrai as datas (YYYY-MM-DD)
-    const dates = files
-      .filter(file => file.endsWith('.news'))
-      .map(file => file.replace('.news', ''))
-      .sort(); // Ordena cronologicamente
-    
-    return dates;
-  } catch (error) {
-    logger.error('Erro ao obter datas de MuNews:', error);
-    return [];
-  }
 }
 
 /**
@@ -238,36 +199,37 @@ async function newsCommand(bot, message, args, group) {
       date = `${year}-${month}-${day}`;
     }
     
-    // Caminho para o arquivo de MuNews
-    const filePath = path.join(database.databasePath, 'munews', `${date}.news`);
-    
+    // Busca no banco de dados
     try {
-      // Tenta ler o arquivo
-      const newsContent = await fs.readFile(filePath, 'utf8');
+      const row = await database.dbGet(DB_NAME, 'SELECT news FROM munews WHERE data = ?', [date]);
       
-      return new ReturnMessage({
-        chatId: chatId,
-        content: newsContent,
-        reaction: "📰",
-        options: {
-          quotedMessageId: message.origin.id._serialized,
-          evoReply: message.origin
-        }
-      });
-    } catch (error) {
-      // Arquivo não encontrado ou erro de leitura
-      const formattedDate = date.split('-').reverse().join('/');
-      const stringDatasDisponiveis = await getStringMunewsDisponiveis();
+      if (row) {
+        return new ReturnMessage({
+          chatId: chatId,
+          content: row.news,
+          reaction: "📰",
+          options: {
+            quotedMessageId: message.origin.id._serialized,
+            evoReply: message.origin
+          }
+        });
+      } else {
+        // News não encontrada
+        const formattedDate = date.split('-').reverse().join('/');
+        const stringDatasDisponiveis = await getStringMunewsDisponiveis();
 
-      return new ReturnMessage({
-        chatId: chatId,
-        content: `ℹ️ *MuNews não encontrada para ${formattedDate}*\n\nAs MuNews geralmente chegam entre 06:00 e 7:30 da manhã. Tente novamente mais tarde ou verifique a data informada.\n\n${stringDatasDisponiveis}`,
-        reaction: "😴",
-        options: {
-          quotedMessageId: message.origin.id._serialized,
-          evoReply: message.origin
-        }
-      });
+        return new ReturnMessage({
+          chatId: chatId,
+          content: `ℹ️ *MuNews não encontrada para ${formattedDate}*\n\nAs MuNews geralmente chegam entre 06:00 e 7:30 da manhã. Tente novamente mais tarde ou verifique a data informada.\n\n${stringDatasDisponiveis}`,
+          reaction: "😴",
+          options: {
+            quotedMessageId: message.origin.id._serialized,
+            evoReply: message.origin
+          }
+        });
+      }
+    } catch (error) {
+      throw error;
     }
   } catch (error) {
     logger.error('Erro ao executar comando news:', error);

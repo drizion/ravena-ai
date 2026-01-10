@@ -1,4 +1,3 @@
-const fs = require('fs').promises;
 const path = require('path');
 const Logger = require('../utils/Logger');
 const Database = require('../utils/Database');
@@ -9,20 +8,15 @@ const ReturnMessage = require('../models/ReturnMessage');
 const logger = new Logger('summary-commands');
 const database = Database.getInstance();
 const llmService = new LLMService({});
+const DB_NAME = 'summaries';
 
-// Diretório para armazenar mensagens recentes
-const dataDir = path.join(database.databasePath, 'conversations');
-
-// Garante que o diretório exista
-fs.mkdir(dataDir, { recursive: true })
-  .then(() => {
-    logger.info(`Diretório de conversas criado: ${dataDir}`);
-  })
-  .catch(error => {
-    logger.error('Erro ao criar diretório de conversas:', error);
-  });
-
-//logger.info('Módulo SummaryCommands carregado');
+// Initialize Database
+database.getSQLiteDb(DB_NAME, `
+  CREATE TABLE IF NOT EXISTS conversations (
+    group_id TEXT PRIMARY KEY,
+    json_data TEXT
+  );
+`);
 
 /**
  * Resume conversa de grupo
@@ -68,7 +62,7 @@ async function summarizeConversation(bot, message, args, group) {
     const prompt = `Abaixo está uma conversa recente de um grupo de WhatsApp. ${customPersonalidade}. Por favor, resuma os principais pontos discutidos de forma concisa:
 ${formattedMessages}
 
-Resumo:`;
+Resumo:`
     
 
     
@@ -83,12 +77,14 @@ Resumo:`;
     }
     
     // Já que deu certo, limpa o historico
-    clearRecentMessages(message.group);
+    await clearRecentMessages(message.group);
 
     // Envia o resumo
     return new ReturnMessage({
       chatId: message.group,
-      content: `📋 *Resumo da conversa:*\n\n${summary}`
+      content: `📋 *Resumo da conversa:*
+
+${summary}`
     });
     
     logger.info(`[${group.id}]Resumo de conversa enviado com sucesso para ${message.group}`);
@@ -188,7 +184,7 @@ ${formattedMessages}`;
       logger.info(`[${group.id}] Mensagem de interação gerada com sucesso para '${message.group}'`);
 
       // Já que deu certo, limpa o historico
-      clearRecentMessages(message.group);
+      await clearRecentMessages(message.group);
         
       //logger.info(`[${group.id}] Limpas mensagens recentes de  '${message.group}'`);
       return resultado;
@@ -214,17 +210,8 @@ ${formattedMessages}`;
  */
 async function storeMessage(message, chatId) {
   try {  
-    const conversationFile = path.join(dataDir, `latest-messages-${chatId}.json`);
-    
     // Carrega mensagens existentes
-    let messages = [];
-    try {
-      const data = await fs.readFile(conversationFile, 'utf8');
-      messages = JSON.parse(data);
-    } catch (error) {
-      // Arquivo provavelmente não existe ainda, tudo bem
-      logger.debug(`Nenhum arquivo de conversa existente para ${chatId}`);
-    }
+    let messages = await getRecentMessages(chatId);
     
     // Adiciona nova mensagem
     let textContent = message.type === 'text' ? message.content : message.caption;
@@ -268,7 +255,9 @@ async function storeMessage(message, chatId) {
       }
       
       // Salva mensagens atualizadas
-      await fs.writeFile(conversationFile, JSON.stringify(messages, null, 2), 'utf8');
+      await database.dbRun(DB_NAME, 'INSERT OR REPLACE INTO conversations (group_id, json_data) VALUES (?, ?)', 
+        [chatId, JSON.stringify(messages, null, 2)]);
+      
       //logger.debug(`Mensagem armazenada no arquivo de conversa para ${chatId}`);
     }
   } catch (error) {
@@ -283,16 +272,8 @@ async function storeMessage(message, chatId) {
  */
 async function getRecentMessages(chatId) {
   try {
-    const conversationFile = path.join(dataDir, `latest-messages-${chatId}.json`);
-    
-    // Carrega mensagens existentes
-    try {
-      const data = await fs.readFile(conversationFile, 'utf8');
-      return JSON.parse(data);
-    } catch (error) {
-      logger.debug(`Nenhum arquivo de conversa existente para ${chatId}`);
-      return [];
-    }
+    const row = await database.dbGet(DB_NAME, 'SELECT json_data FROM conversations WHERE group_id = ?', [chatId]);
+    return row ? JSON.parse(row.json_data) : [];
   } catch (error) {
     logger.error('Erro ao obter mensagens recentes:', error);
     return [];
@@ -304,21 +285,13 @@ async function getRecentMessages(chatId) {
  * @param {string} chatId - O ID do grupo
  * @returns {Promise<Bool>} - Se deu certo ou não
  */
-function clearRecentMessages(chatId) {
+async function clearRecentMessages(chatId) {
   try {
-    const conversationFile = path.join(dataDir, `latest-messages-${chatId}.json`);
-    
-    // Carrega mensagens existentes
-    try {
-      fs.writeFile(conversationFile, "[]", 'utf8');
-      return true;
-    } catch (error) {
-      logger.debug(`Nenhum arquivo de conversa existente para ${chatId}`);
-      return true;
-    }
+    await database.dbRun(DB_NAME, 'INSERT OR REPLACE INTO conversations (group_id, json_data) VALUES (?, ?)', [chatId, "[]"]);
+    return true;
   } catch (error) {
     logger.error('Erro ao limpar mensagens recentes:', error);
-    returnfalse;
+    return false;
   }
 }
 
@@ -365,4 +338,4 @@ module.exports.clearRecentMessages = clearRecentMessages;
 module.exports.formatMessagesForPrompt = formatMessagesForPrompt;
 
 // Exporta comandos
-module.exports.commands = commands
+module.exports.commands = commands;

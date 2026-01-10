@@ -10,6 +10,7 @@ const qrcode = require("qr-base64");
 const { exec, spawn } = require('child_process');
 const { Server } = require("socket.io");
 const axios = require('axios');
+const WebManagement = require('./utils/WebManagement');
 
 /**
  * Servidor API para o bot WhatsApp
@@ -164,15 +165,10 @@ class BotAPI {
 
   // Helper function to read tokens
   async readWebManagementToken(token) {
-    const dbPath = path.join(this.database.databasePath, 'webmanagement.json');
-
     try {
-      const data = await fs.readFile(dbPath, 'utf8');
-      const webManagement = JSON.parse(data);
-
-      return webManagement.find(item => item.token === token);
+      return await WebManagement.getInstance().getToken(token);
     } catch (error) {
-      this.logger.error('Error reading webmanagement.json:', error);
+      this.logger.error('Error reading web management token:', error);
       return null;
     }
   }
@@ -740,24 +736,6 @@ class BotAPI {
         // Save the updated group
         await this.database.saveGroup(groupData);
 
-        // Signal bots to reload the group config
-        const updatesPath = path.join(this.database.databasePath, 'group_updates.json');
-        let updates = {};
-
-        try {
-          const updatesData = await fs.readFile(updatesPath, 'utf8');
-          updates = JSON.parse(updatesData);
-        } catch (error) {
-          // File might not exist, continue with empty object
-        }
-
-        updates[groupId] = {
-          timestamp: groupData.lastUpdated,
-          updatedBy: 'webmanagement'
-        };
-
-        await fs.writeFile(updatesPath, JSON.stringify(updates, null, 2), 'utf8');
-
         this.eventHandler.loadGroups(); // Recarrega os grupos em memória
 
         return res.json({ success: true });
@@ -821,25 +799,7 @@ class BotAPI {
         // Save the updated group  
         await this.database.saveGroup(groupData);
 
-        // Signal bots to reload the group config  
-        const updatesPath = path.join(this.database.databasePath, 'group_updates.json');
-        let updates = {};
-
-        try {
-          const updatesData = await fs.readFile(updatesPath, 'utf8');
-          updates = JSON.parse(updatesData);
-        } catch (error) {
-          // File might not exist, continue with empty object  
-        }
-
-        updates[groupId] = {
-          timestamp: groupData.lastUpdated,
-          updatedBy: 'webmanagement'
-        };
-
         this.logger.info(`[management][${token}][${groupId}] Media '${type}' uplodaded: ${fileName}`);
-
-        await fs.writeFile(updatesPath, JSON.stringify(updates, null, 2), 'utf8');
 
         return res.json({ success: true, fileName });
       } catch (error) {
@@ -866,7 +826,7 @@ class BotAPI {
     // Serve media files
     this.app.get('/qrimg/:botId', authenticateBasic, async (req, res) => {
       const { botId } = req.params;
-      const filePath = path.join(this.database.databasePath, `qrcode_${botId}.png`);
+      const filePath = path.join(this.database.databasePath, "qrcodes", `qrcode_${botId}.png`);
 
       await fs.access(filePath).catch(() => {
         return res.status(404).send(`QRCode para '${botId}' não disponível.`);
