@@ -21,8 +21,22 @@ class Database {
     // Bot instances for cleanup on exit
     this.botInstances = [];
 
+    // Backup Configuration
+    this.maxBackups = parseInt(process.env.MAX_BACKUPS) || 120;
+    this.scheduledBackupHours = [0, 6, 12, 18];
+    this.backupRetentionDays = parseInt(process.env.BACKUP_RETENTION_DAYS) || 30;
+    
+    // Directories/Files to backup
+    this.backupTargets = [
+      path.join(this.databasePath, 'sqlites')
+    ];
+
     // Setup cleanup handlers
     this.setupCleanupHandlers();
+    
+    // Setup scheduled backups
+    this.setupScheduledBackups();
+    this.lastScheduledBackup = this.getLastScheduledBackupTime();
   }
 
   /**
@@ -96,6 +110,151 @@ class Database {
       cleanup();
       process.exit(0);
     });
+  }
+
+  // --- Backup System ---
+
+  setupScheduledBackups() {
+    setInterval(() => {
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      if (this.scheduledBackupHours.includes(currentHour)) {
+        const lastBackupDate = new Date(this.lastScheduledBackup);
+        
+        if (
+          lastBackupDate.getDate() !== now.getDate() ||
+          lastBackupDate.getMonth() !== now.getMonth() ||
+          lastBackupDate.getFullYear() !== now.getFullYear() ||
+          lastBackupDate.getHours() !== currentHour
+        ) {
+          this.createScheduledBackup();
+          this.lastScheduledBackup = now.getTime();
+        }
+      }
+    }, 60000); // Check every minute
+  }
+
+  getLastScheduledBackupTime() {
+    try {
+      const backupInfoPath = path.join(this.backupPath, 'backup-info.json');
+      if (fs.existsSync(backupInfoPath)) {
+        const backupInfo = JSON.parse(fs.readFileSync(backupInfoPath, 'utf8'));
+        return backupInfo.lastScheduledBackup || 0;
+      }
+    } catch (error) {
+      this.logger.error('Error getting last backup info:', error);
+    }
+    return 0;
+  }
+
+  saveLastScheduledBackupTime(timestamp) {
+    try {
+      const backupInfoPath = path.join(this.backupPath, 'backup-info.json');
+      const backupInfo = fs.existsSync(backupInfoPath)
+        ? JSON.parse(fs.readFileSync(backupInfoPath, 'utf8'))
+        : {};
+      
+      backupInfo.lastScheduledBackup = timestamp;
+      fs.writeFileSync(backupInfoPath, JSON.stringify(backupInfo, null, 2), 'utf8');
+    } catch (error) {
+      this.logger.error('Error saving backup info:', error);
+    }
+  }
+
+  createScheduledBackup() {
+    try {
+      const now = new Date();
+      const timestamp = now.toISOString().replace(/[:.]/g, '-');
+      const backupDir = path.join(this.backupPath, timestamp);
+      
+      if (!fs.existsSync(backupDir)) {
+        fs.mkdirSync(backupDir, { recursive: true });
+      }
+      
+      // Backup targeted files/directories
+      for (const target of this.backupTargets) {
+          if (fs.existsSync(target)) {
+              const dest = path.join(backupDir, path.basename(target));
+              this.backupDirectory(target, dest);
+          }
+      }
+      
+      this.logger.info(`Scheduled backup created: ${backupDir}`);
+      this.saveLastScheduledBackupTime(now.getTime());
+      this.cleanupOldScheduledBackups();
+    } catch (error) {
+      this.logger.error('Error creating scheduled backup:', error);
+    }
+  }
+
+  backupDirectory(source, target) {
+      try {
+          const stats = fs.statSync(source);
+          if (stats.isDirectory()) {
+              if (!fs.existsSync(target)) {
+                  fs.mkdirSync(target, { recursive: true });
+              }
+              const items = fs.readdirSync(source);
+              for (const item of items) {
+                  this.backupDirectory(path.join(source, item), path.join(target, item));
+              }
+          } else if (stats.isFile()) {
+               fs.copyFileSync(source, target);
+          }
+      } catch (error) {
+          this.logger.error(`Error backing up ${source}:`, error);
+      }
+  }
+
+  cleanupOldScheduledBackups() {
+    try {
+      const now = Date.now();
+      const retentionPeriod = this.backupRetentionDays * 24 * 60 * 60 * 1000;
+      
+      const backupDirs = fs.readdirSync(this.backupPath)
+        .filter(item => {
+          const fullPath = path.join(this.backupPath, item);
+          return fs.statSync(fullPath).isDirectory() && /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}/.test(item);
+        })
+        .map(dir => ({
+          name: dir,
+          path: path.join(this.backupPath, dir),
+          date: new Date(dir.replace(/-/g, (m, i) => i <= 10 ? m : i === 11 ? ':' : i === 14 ? ':' : '.')).getTime()
+        }))
+        .sort((a, b) => b.date - a.date);
+      
+      if (backupDirs.length > this.maxBackups) {
+        const dirsToDelete = backupDirs.slice(this.maxBackups);
+        for (const dir of dirsToDelete) {
+          if (now - dir.date > retentionPeriod) {
+            this.deleteDirectory(dir.path);
+            this.logger.info(`Old backup removed: ${dir.name}`);
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.error('Error cleaning up old backups:', error);
+    }
+  }
+
+  deleteDirectory(dirPath) {
+    try {
+      if (fs.existsSync(dirPath)) {
+        const items = fs.readdirSync(dirPath);
+        for (const item of items) {
+          const itemPath = path.join(dirPath, item);
+          if (fs.statSync(itemPath).isDirectory()) {
+            this.deleteDirectory(itemPath);
+          } else {
+            fs.unlinkSync(itemPath);
+          }
+        }
+        fs.rmdirSync(dirPath);
+      }
+    } catch (error) {
+      this.logger.error(`Error deleting directory ${dirPath}:`, error);
+    }
   }
 
   // --- Core SQLite Helpers ---
