@@ -478,7 +478,7 @@ class StreamMonitor extends EventEmitter {
 
   logErrorToFile(filename, error){
     try{
-      const logErrorFile = path.join(this.database.databasePath, filename);
+      const logErrorFile = path.join(this.database.databasePath, 'errors-debug', filename);
       fs.writeFileSync(logErrorFile, error, 'utf8');
     } catch(e){
       this.logger.error(`[logErrorFile] Erro gravando log em arquivo`, e.message);
