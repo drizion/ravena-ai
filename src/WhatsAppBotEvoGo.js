@@ -1304,13 +1304,14 @@ class WhatsAppBotEvoGo {
               // ravena só processa se VIER uma reaction (campo 'text')
               if (reactionData.text !== "" && !reactionData.key.fromMe) {
 
-                //this.logger.debug(`[${this.id}] Received reaction:`, { reactionData });
+                //this.logger.debug(`[${this.id}] Received reaction:`, { msgData, reactionData });
                 // reactionData.text -> emoji
                 // reactionData.key.participant -> @lid da pessoa que RECEBEU a reaction
                 // reactionData.key.remoteJID -> chat que veio a reaction
                 this.reactionHandler.processReaction(this, {
                   reaction: reactionData.text,
                   senderId: info.Sender ?? info.SenderAlt,
+                  userName: info.PushName,
                   msgId: { _serialized: reactionData.key.ID }
                 });
               }

@@ -44,13 +44,13 @@ async function processListReaction(bot, message, args, group) {
     if (emojiIndex === -1) return false;
 
     // Get the original message
-    const message = await bot.client.getMessageById(reaction.msgId._serialized);
-    if (!message) return false;
+    const targetMessage = await bot.client.getMessageById(reaction.msgId._serialized);
+    if (!targetMessage) return false;
 
     // Check if the message is from the bot and contains lists
-    if (message.fromMe && message.body.startsWith('*Listas disponíveis*')) {
+    if (targetMessage.fromMe && targetMessage.body.startsWith('*Listas disponíveis*')) {
       // Get the chat
-      const chat = await message.getChat();
+      const chat = await targetMessage.getChat();
       if (!chat.isGroup) return false;
 
       // Get group data
@@ -67,9 +67,8 @@ async function processListReaction(bot, message, args, group) {
       const list = lists[emojiIndex];
 
       // Get user info
-      const user = await message.getContact();
-      const userName = user.pushname || user.name || 'Usuário';
-      const userId = user.id._serialized;
+      const userName = message.originReaction.userName;
+      const userId = message.originReaction.senderId;
 
       // Check if user is already in the list
       const isInList = list.members.some(member => member.id === userId);
@@ -147,7 +146,7 @@ async function saveGroupLists(groupId, lists) {
  * @param {string} userId - User ID
  * @returns {Promise<string>} User's name or nickname
  */
-async function getUserDisplayName(bot, group, userId) {
+async function getUserDisplayName(bot, group, message, userId) {
   try {
     // Check if user has a nickname in this group
     if (group.nicks && Array.isArray(group.nicks)) {
@@ -157,17 +156,23 @@ async function getUserDisplayName(bot, group, userId) {
       }
     }
 
+    const userName = message?.name ?? message?.pushName ?? message?.pushname ?? message?.authorName ?? false;
+
+    if(userName){
+      return userName;
+    }
+
     // Get contact info as fallback
     try {
       const contact = await bot.client.getContactById(userId);
       return contact.pushname || contact.name || 'Usuário';
     } catch (error) {
       logger.error(`Error getting contact for ${userId}:`, error);
-      return 'Usuário';
+      return `Usuário_${userId}`;
     }
   } catch (error) {
     logger.error(`Error getting display name for ${userId}:`, error);
-    return 'Usuário';
+    return `Usuário_${userId}`;
   }
 }
 
@@ -221,7 +226,7 @@ async function showLists(bot, message, args, group) {
 
         for (const member of list.members) {
           // Get display name (with possible nickname)
-          const displayName = await getUserDisplayName(bot, group, member.id);
+          const displayName = await getUserDisplayName(bot, group, message, member.id);
           memberNames.push(displayName);
         }
 
@@ -558,21 +563,7 @@ async function joinList(bot, message, args, group) {
       }
 
       // Get user name
-      let userName = 'Usuário';
-      try {
-        const contact = await message.origin.getContact();
-        userName = contact.pushname || contact.name || 'Usuário';
-
-        // Check if user has a nickname in this group
-        if (group.nicks && Array.isArray(group.nicks)) {
-          const nickData = group.nicks.find(nick => nick.numero === message.author);
-          if (nickData && nickData.apelido) {
-            userName = nickData.apelido;
-          }
-        }
-      } catch (error) {
-        logger.error('Error getting contact name:', error);
-      }
+      let userName = message.name ?? message.pushName ?? message.pushname ?? message.authorName ?? `Pessoa_${messages.author}`;
 
       // Check if user is already in the list
       if (!list.members) list.members = [];
@@ -644,20 +635,7 @@ async function leaveList(bot, message, args, group) {
 
     let lists = await getGroupLists(message.group);
 
-    let userName = 'Usuário';
-    try {
-      const contact = await message.origin.getContact();
-      userName = contact.pushname || contact.name || 'Usuário';
-
-      if (group.nicks && Array.isArray(group.nicks)) {
-        const nickData = group.nicks.find(nick => nick.numero === message.author);
-        if (nickData && nickData.apelido) {
-          userName = nickData.apelido;
-        }
-      }
-    } catch (error) {
-      logger.error('Error getting contact name:', error);
-    }
+    let userName = message.name ?? message.pushName ?? message.pushname ?? message.authorName ?? `Pessoa_${messages.author}`;
 
     const leftLists = [];
     const errors = [];
@@ -982,7 +960,7 @@ const commands = [
     name: 'reactionListHelper',
     description: 'Invocado apenas pelo ReactionsHandler',
     reactions: {
-      trigger: Object.keys(NUMBER_EMOJIS)
+      trigger: NUMBER_EMOJIS
     },
     usage: '',
     hidden: true,
