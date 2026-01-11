@@ -3,12 +3,12 @@ const Logger = require('../utils/Logger');
 const Database = require('../utils/Database');
 
 const CACHE_CONFIG = {
-  'pushName': { ttl: 30 * 24 * 60 * 60 }, // 30 days
-  'chat': { ttl: 4 * 60 * 60 },           // 4 hours
-  'message': { ttl: 1 * 60 * 60 },        // 1 hour
-  'contact': { ttl: 7 * 24 * 60 * 60 },   // 7 days
-  'tg_name': { ttl: 30 * 24 * 60 * 60 },  // 30 days
-  'app_cooldowns_data_v1': { ttl: 24 * 60 * 60 } // 24 hours
+  'pushName': { ttl: 30 * 24 * 60 * 60, table: 'pushnames' }, // 30 days
+  'chat': { ttl: 4 * 60 * 60, table: 'chats' },           // 4 hours
+  'message': { ttl: 1 * 60 * 60, table: 'messages' },        // 1 hour
+  'contact': { ttl: 7 * 24 * 60 * 60, table: 'contacts' },   // 7 days
+  'tg_name': { ttl: 30 * 24 * 60 * 60, table: 'tg_names' },  // 30 days
+  'app_cooldowns_data_v1': { ttl: 24 * 60 * 60, table: 'cooldowns' } // 24 hours
 };
 
 class CacheManager {
@@ -28,7 +28,9 @@ class CacheManager {
     this.telegramNameCache = [];
 
     // Pending writes for SQLite batching
-    this.pendingWrites = new Map(); // key -> { value, expiresAt }
+    // Map<table_name, Map<key, { value, expiresAt, ...extraFields }>>
+    this.pendingWrites = new Map(); 
+    
     this.unsavedChangesCount = 0;
     this.FLUSH_THRESHOLD = 100;
     this.FLUSH_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
@@ -37,6 +39,7 @@ class CacheManager {
     this.database = Database.getInstance();
     this.DB_NAME = 'cache';
     
+    // Initialize Tables
     this.database.getSQLiteDb(this.DB_NAME, `
       CREATE TABLE IF NOT EXISTS kv_store (
         key TEXT PRIMARY KEY,
@@ -44,6 +47,48 @@ class CacheManager {
         expires_at INTEGER
       );
       CREATE INDEX IF NOT EXISTS idx_expires ON kv_store(expires_at);
+
+      CREATE TABLE IF NOT EXISTS pushnames (
+        id TEXT PRIMARY KEY,
+        pushname TEXT,
+        expires_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_pushnames_expires ON pushnames(expires_at);
+
+      CREATE TABLE IF NOT EXISTS chats (
+        key TEXT PRIMARY KEY,
+        json_data TEXT,
+        expires_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_chats_expires ON chats(expires_at);
+
+      CREATE TABLE IF NOT EXISTS messages (
+        key TEXT PRIMARY KEY,
+        json_data TEXT,
+        expires_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_messages_expires ON messages(expires_at);
+
+      CREATE TABLE IF NOT EXISTS contacts (
+        key TEXT PRIMARY KEY,
+        json_data TEXT,
+        expires_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_contacts_expires ON contacts(expires_at);
+
+      CREATE TABLE IF NOT EXISTS tg_names (
+        key TEXT PRIMARY KEY,
+        json_data TEXT,
+        expires_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_tgnames_expires ON tg_names(expires_at);
+
+      CREATE TABLE IF NOT EXISTS cooldowns (
+        key TEXT PRIMARY KEY,
+        json_data TEXT,
+        expires_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_cooldowns_expires ON cooldowns(expires_at);
     `);
 
     // Redis setup (optional)
@@ -90,35 +135,62 @@ class CacheManager {
 
   // --- Persistence Helpers ---
 
-  async _dbGet(key) {
+  async _dbGet(key, tableOverride = null) {
+    const config = this.getCacheConfig(key);
+    let table = tableOverride || (config ? config.table : 'kv_store');
+    
+    // Fallback to kv_store if config not found (though existing code skips writes if no config)
+    if (!config && !tableOverride) table = 'kv_store';
+
+    // Handle special case for pushnames (different column names)
+    const isPushname = table === 'pushnames';
+    const keyCol = isPushname ? 'id' : 'key';
+    const valCol = isPushname ? 'pushname' : (table === 'kv_store' ? 'value' : 'json_data');
+
     try {
-      const row = await this.database.dbGet(this.DB_NAME, 'SELECT value, expires_at FROM kv_store WHERE key = ?', [key]);
+      const row = await this.database.dbGet(this.DB_NAME, `SELECT ${valCol}, expires_at FROM ${table} WHERE ${keyCol} = ?`, [key]);
       if (row) {
         if (row.expires_at && row.expires_at < Date.now()) {
-          // Lazy expiration
-          this.database.dbRun(this.DB_NAME, 'DELETE FROM kv_store WHERE key = ?', [key]).catch(()=>{});
+          this.database.dbRun(this.DB_NAME, `DELETE FROM ${table} WHERE ${keyCol} = ?`, [key]).catch(()=>{});
           return null;
         }
-        return JSON.parse(row.value);
+        
+        if (isPushname) {
+             return { id: key, pushName: row[valCol] };
+        }
+
+        return JSON.parse(row[valCol]);
       }
       return null;
     } catch (e) {
-      this.logger.error(`Error reading from DB cache for ${key}:`, e);
+      this.logger.error(`Error reading from DB (${table}) for ${key}:`, e);
       return null;
     }
   }
 
-  _scheduleWrite(key, value) {
-    // Determine TTL from config
+  _scheduleWrite(key, value, explicitTable = null) {
     const config = this.getCacheConfig(key);
+    const table = explicitTable || (config ? config.table : null);
     
-    // If no config found, do NOT persist to SQLite
-    if (!config) return;
+    // If no config/table found, do NOT persist to SQLite (as per previous instructions)
+    if (!table) return;
 
-    const ttlSeconds = config.ttl;
+    const ttlSeconds = config ? config.ttl : this.redisTTL;
     const expiresAt = ttlSeconds ? Date.now() + (ttlSeconds * 1000) : null;
     
-    this.pendingWrites.set(key, { value: JSON.stringify(value), expiresAt });
+    if (!this.pendingWrites.has(table)) {
+        this.pendingWrites.set(table, new Map());
+    }
+
+    // Special handling for pushnames structure
+    if (table === 'pushnames') {
+         const nameStr = (value && value.pushName) ? value.pushName : '';
+         this.pendingWrites.get(table).set(key, { value: nameStr, expiresAt });
+    } else {
+        // Generic JSON storage
+        this.pendingWrites.get(table).set(key, { value: JSON.stringify(value), expiresAt });
+    }
+    
     this.unsavedChangesCount++;
 
     if (this.unsavedChangesCount >= this.FLUSH_THRESHOLD) {
@@ -129,19 +201,29 @@ class CacheManager {
   async flushPendingWrites() {
     if (this.pendingWrites.size === 0) return;
 
-    this.logger.debug(`Flushing ${this.pendingWrites.size} cache items to disk...`);
-    const batch = Array.from(this.pendingWrites.entries());
+    this.logger.debug(`Flushing cache items to disk...`);
+    
+    // Clone map for processing
+    const writesToProcess = new Map(this.pendingWrites);
     this.pendingWrites.clear();
     this.unsavedChangesCount = 0;
 
     try {
       await this.database.dbRun(this.DB_NAME, 'BEGIN TRANSACTION');
-      for (const [key, data] of batch) {
-        await this.database.dbRun(this.DB_NAME, 
-          'INSERT OR REPLACE INTO kv_store (key, value, expires_at) VALUES (?, ?, ?)',
-          [key, data.value, data.expiresAt]
-        );
+
+      for (const [table, items] of writesToProcess) {
+          const isPushname = table === 'pushnames';
+          const keyCol = isPushname ? 'id' : 'key';
+          const valCol = isPushname ? 'pushname' : (table === 'kv_store' ? 'value' : 'json_data');
+
+          for (const [key, data] of items) {
+              await this.database.dbRun(this.DB_NAME, 
+                  `INSERT OR REPLACE INTO ${table} (${keyCol}, ${valCol}, expires_at) VALUES (?, ?, ?)`,
+                  [key, data.value, data.expiresAt]
+              );
+          }
       }
+
       await this.database.dbRun(this.DB_NAME, 'COMMIT');
     } catch (e) {
       this.logger.error('Error flushing cache to disk:', e);
@@ -151,7 +233,12 @@ class CacheManager {
 
   async cleanExpired() {
     try {
-      await this.database.dbRun(this.DB_NAME, 'DELETE FROM kv_store WHERE expires_at < ?', [Date.now()]);
+      const now = Date.now();
+      const tables = ['kv_store', 'pushnames', 'chats', 'messages', 'contacts', 'tg_names', 'cooldowns'];
+      
+      for(const table of tables) {
+          await this.database.dbRun(this.DB_NAME, `DELETE FROM ${table} WHERE expires_at < ?`, [now]);
+      }
     } catch (e) {
       this.logger.error('Error cleaning expired cache:', e);
     }
@@ -162,8 +249,9 @@ class CacheManager {
   async putPushnameInCache(data) {
     if (!data || typeof data.id === 'undefined') return;
     const userId = data.id;
-    const redisKey = `pushName:${userId}`;
-    const config = this.getCacheConfig(redisKey);
+    const redisKey = `pushName:${userId}`; // Keep redis key format for consistency
+    const tableKey = userId; // Use ID as key for specific table
+    const config = CACHE_CONFIG['pushName'];
     const ttl = config ? config.ttl : this.redisTTL;
 
     // Redis
@@ -179,12 +267,13 @@ class CacheManager {
     if (this.pushnameCache.length > this.maxCacheSize) this.pushnameCache.shift();
 
     // SQLite Persistence
-    this._scheduleWrite(redisKey, data);
+    this._scheduleWrite(tableKey, data, 'pushnames');
   }
 
   async getPushnameFromCache(id) {
     if (!id) return null;
     const redisKey = `pushName:${id}`;
+    const tableKey = id;
 
     // Redis
     if (this.redisClient) {
@@ -199,7 +288,7 @@ class CacheManager {
     if (memItem) return memItem;
 
     // SQLite
-    const dbItem = await this._dbGet(redisKey);
+    const dbItem = await this._dbGet(tableKey, 'pushnames');
     if (dbItem) {
       // Promote to memory
       this.pushnameCache.push(dbItem);
@@ -213,7 +302,8 @@ class CacheManager {
     if (!data || !data.id || typeof data.id._serialized === 'undefined') return;
     const chatId = data.id._serialized;
     const redisKey = `chat:${chatId}`;
-    const config = this.getCacheConfig(redisKey);
+    const tableKey = redisKey; // 'chat:ID'
+    const config = CACHE_CONFIG['chat'];
     const ttl = config ? config.ttl : this.redisTTL;
 
     if (this.redisClient) {
@@ -226,12 +316,13 @@ class CacheManager {
     this.chatCache.push(data);
     if (this.chatCache.length > this.maxCacheSize) this.chatCache.shift();
 
-    this._scheduleWrite(redisKey, data);
+    this._scheduleWrite(tableKey, data, 'chats');
   }
 
   async getChatFromCache(id) {
     if (!id) return null;
     const redisKey = `chat:${id}`;
+    const tableKey = redisKey;
 
     if (this.redisClient) {
       try {
@@ -244,7 +335,7 @@ class CacheManager {
     
     if (memItem) return memItem;
 
-    const dbItem = await this._dbGet(redisKey);
+    const dbItem = await this._dbGet(tableKey, 'chats');
     if (dbItem) {
       this.chatCache.push(dbItem);
       if (this.chatCache.length > this.maxCacheSize) this.chatCache.shift();
@@ -257,7 +348,8 @@ class CacheManager {
     if (!data || !data.key || typeof data.key.id === 'undefined') return;
     const messageId = data.key.id;
     const redisKey = `message:${messageId}`;
-    const config = this.getCacheConfig(redisKey);
+    const tableKey = redisKey;
+    const config = CACHE_CONFIG['message'];
     const ttl = config ? config.ttl : this.redisTTL;
 
     if (this.redisClient) {
@@ -270,14 +362,15 @@ class CacheManager {
     this.messageCache.push(data);
     if (this.messageCache.length > this.maxCacheSize) this.messageCache.shift();
 
-    this._scheduleWrite(redisKey, data);
+    this._scheduleWrite(tableKey, data, 'messages');
   }
 
   async putSentMessageInCache(key) {
     if (!key || !key.id) return;
     const messageId = key.id;
     const redisKey = `message:${messageId}`;
-    const config = this.getCacheConfig(redisKey);
+    const tableKey = redisKey;
+    const config = CACHE_CONFIG['message'];
     const ttl = config ? config.ttl : this.redisTTL;
 
     if (this.redisClient) {
@@ -290,12 +383,13 @@ class CacheManager {
     this.messageCache.push(key);
     if (this.messageCache.length > this.maxCacheSize) this.messageCache.shift();
 
-    this._scheduleWrite(redisKey, key);
+    this._scheduleWrite(tableKey, key, 'messages');
   }
 
   async getMessageFromCache(id) {
     if (!id) return null;
     const redisKey = `message:${id}`;
+    const tableKey = redisKey;
 
     if (this.redisClient) {
       try {
@@ -307,7 +401,7 @@ class CacheManager {
     const memItem = this.messageCache.find(m => m.key && m.key.id == id);
     if (memItem) return memItem;
 
-    const dbItem = await this._dbGet(redisKey);
+    const dbItem = await this._dbGet(tableKey, 'messages');
     if (dbItem) {
       this.messageCache.push(dbItem);
       if (this.messageCache.length > this.maxCacheSize) this.messageCache.shift();
@@ -321,7 +415,8 @@ class CacheManager {
     if (!data || !data.id) return;
     const messageId = data.id;
     const redisKey = `message:${messageId}`;
-    const config = this.getCacheConfig(redisKey);
+    const tableKey = redisKey;
+    const config = CACHE_CONFIG['message'];
     const ttl = config ? config.ttl : this.redisTTL;
 
     if (this.redisClient) {
@@ -334,7 +429,7 @@ class CacheManager {
     this.messageCache.push(data);
     if (this.messageCache.length > this.maxCacheSize) this.messageCache.shift();
 
-    this._scheduleWrite(redisKey, data);
+    this._scheduleWrite(tableKey, data, 'messages');
   }
 
   async putGoSentMessageInCache(message) {
@@ -342,7 +437,8 @@ class CacheManager {
     const messageId = typeof message.id === 'object' ? message.id._serialized : message.id;
     if (!messageId) return;
     const redisKey = `message:${messageId}`;
-    const config = this.getCacheConfig(redisKey);
+    const tableKey = redisKey;
+    const config = CACHE_CONFIG['message'];
     const ttl = config ? config.ttl : this.redisTTL;
 
     if (this.redisClient) {
@@ -355,12 +451,13 @@ class CacheManager {
     this.messageCache.push(message);
     if (this.messageCache.length > this.maxCacheSize) this.messageCache.shift();
 
-    this._scheduleWrite(redisKey, message);
+    this._scheduleWrite(tableKey, message, 'messages');
   }
 
   async getGoMessageFromCache(id) {
     if (!id) return null;
     const redisKey = `message:${id}`;
+    const tableKey = redisKey;
 
     if (this.redisClient) {
       try {
@@ -372,7 +469,7 @@ class CacheManager {
     const memItem = this.messageCache.find(m => m.id == id || (m.key && m.key.id == id));
     if (memItem) return memItem;
 
-    const dbItem = await this._dbGet(redisKey);
+    const dbItem = await this._dbGet(tableKey, 'messages');
     if (dbItem) {
       this.messageCache.push(dbItem);
       if (this.messageCache.length > this.maxCacheSize) this.messageCache.shift();
@@ -385,7 +482,8 @@ class CacheManager {
     if (!data || typeof data.number === 'undefined') return;
     const contactNumber = data.number;
     const redisKey = `contact:${contactNumber}`;
-    const config = this.getCacheConfig(redisKey);
+    const tableKey = redisKey;
+    const config = CACHE_CONFIG['contact'];
     const ttl = config ? config.ttl : this.redisTTL;
 
     if (this.redisClient) {
@@ -398,12 +496,13 @@ class CacheManager {
     this.contactCache.push(data);
     if (this.contactCache.length > this.maxCacheSize) this.contactCache.shift();
 
-    this._scheduleWrite(redisKey, data);
+    this._scheduleWrite(tableKey, data, 'contacts');
   }
 
   async getContactFromCache(id) {
     if (!id) return null;
     const redisKey = `contact:${id}`;
+    const tableKey = redisKey;
 
     if (this.redisClient) {
       try {
@@ -415,7 +514,7 @@ class CacheManager {
     const memItem = this.contactCache.find(c => c.number == id);
     if (memItem) return memItem;
 
-    const dbItem = await this._dbGet(redisKey);
+    const dbItem = await this._dbGet(tableKey, 'contacts');
     if (dbItem) {
       this.contactCache.push(dbItem);
       if (this.contactCache.length > this.maxCacheSize) this.contactCache.shift();
@@ -427,7 +526,8 @@ class CacheManager {
   async putTelegramNameInCache(userId, name) {
     if (!userId || !name) return;
     const redisKey = `tg_name:${userId}`;
-    const config = this.getCacheConfig(redisKey);
+    const tableKey = redisKey;
+    const config = CACHE_CONFIG['tg_name'];
     const ttl = config ? config.ttl : 86400; // 24h default fallback
 
     if (this.redisClient) {
@@ -443,12 +543,14 @@ class CacheManager {
     this.telegramNameCache.push({ id: userId, name, timestamp: Date.now() });
     if (this.telegramNameCache.length > this.maxCacheSize) this.telegramNameCache.shift();
 
-    this._scheduleWrite(redisKey, name);
+    // Store as JSON string in value/json_data to be consistent
+    this._scheduleWrite(tableKey, name, 'tg_names');
   }
 
   async getTelegramNameFromCache(userId) {
     if (!userId) return null;
     const redisKey = `tg_name:${userId}`;
+    const tableKey = redisKey;
 
     if (this.redisClient) {
       try {
@@ -463,7 +565,7 @@ class CacheManager {
       return item.name;
     }
 
-    const dbName = await this._dbGet(redisKey);
+    const dbName = await this._dbGet(tableKey, 'tg_names');
     if (dbName) {
         // Promote to memory
         this.telegramNameCache.push({ id: userId, name: dbName, timestamp: Date.now() });
@@ -475,6 +577,7 @@ class CacheManager {
 
   async getCooldowns() {
     const redisKey = 'app_cooldowns_data_v1';
+    const tableKey = redisKey;
     
     if (this.redisClient) {
       try {
@@ -485,13 +588,14 @@ class CacheManager {
       }
     }
 
-    const dbData = await this._dbGet(redisKey);
+    const dbData = await this._dbGet(tableKey, 'cooldowns');
     return dbData || {};
   }
 
   async saveCooldowns(cooldownsData) {
     if (typeof cooldownsData !== 'object' || cooldownsData === null) return;
     const redisKey = 'app_cooldowns_data_v1';
+    const tableKey = redisKey;
     // config handled in _scheduleWrite
 
     if (this.redisClient) {
@@ -502,7 +606,7 @@ class CacheManager {
       }
     }
 
-    this._scheduleWrite(redisKey, cooldownsData);
+    this._scheduleWrite(tableKey, cooldownsData, 'cooldowns');
   }
 
   async disconnectRedis() {
