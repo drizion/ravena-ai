@@ -30,6 +30,7 @@ class Database {
     this.backupTargets = [
       path.join(this.databasePath, 'sqlites')
     ];
+    this.backupIgnoreFiles = ['cache.db'];
 
     // Setup cleanup handlers
     this.setupCleanupHandlers();
@@ -190,6 +191,8 @@ class Database {
 
   backupDirectory(source, target) {
       try {
+          if (this.backupIgnoreFiles.includes(path.basename(source))) return;
+
           const stats = fs.statSync(source);
           if (stats.isDirectory()) {
               if (!fs.existsSync(target)) {
