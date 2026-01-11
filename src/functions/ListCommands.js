@@ -21,6 +21,10 @@ database.getSQLiteDb(DB_NAME, `
 
 // Emoji numbers for reactions
 const NUMBER_EMOJIS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+const NUMBER_EMOJIS2 = ['1⃣', '2⃣', '3⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']; // 0⃣
+const NUMBER_EMOJIS3 = ['1️','2️','3️','4️','5️','6️','7️','8️','9️','🔟'];
+
+
 
 //logger.info('Módulo ListCommands carregado');
 
@@ -31,6 +35,7 @@ const NUMBER_EMOJIS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6
  * @returns {Promise<boolean>} True if reaction was processed
  */
 async function processListReaction(bot, message, args, group) {
+  //logger.debug(`[processListReaction] `, { message });
   try {
     if (!message.originReaction) {
       logger.error(`[processListReaction] Fui chamado sem uma originReaction.`);
@@ -40,7 +45,9 @@ async function processListReaction(bot, message, args, group) {
     const reaction = message.originReaction;
 
     // Check if reaction is a number emoji
-    const emojiIndex = NUMBER_EMOJIS.indexOf(reaction.reaction);
+    let emojiIndex = NUMBER_EMOJIS.indexOf(reaction.reaction);
+    if (emojiIndex === -1) emojiIndex = NUMBER_EMOJIS2.indexOf(reaction.reaction);
+    if (emojiIndex === -1) emojiIndex = NUMBER_EMOJIS3.indexOf(reaction.reaction);
     if (emojiIndex === -1) return false;
 
     // Get the original message
@@ -48,7 +55,7 @@ async function processListReaction(bot, message, args, group) {
     if (!targetMessage) return false;
 
     // Check if the message is from the bot and contains lists
-    if (targetMessage.fromMe && targetMessage.body.startsWith('*Listas disponíveis*')) {
+    if (targetMessage.fromMe && (['listas disponíveis', 'listas disponibles'].some(ldpf => targetMessage.body?.toLowerCase().includes(ldpf)))) {
       // Get the chat
       const chat = await targetMessage.getChat();
       if (!chat.isGroup) return false;
@@ -960,7 +967,7 @@ const commands = [
     name: 'reactionListHelper',
     description: 'Invocado apenas pelo ReactionsHandler',
     reactions: {
-      trigger: NUMBER_EMOJIS
+      trigger: NUMBER_EMOJIS.concat(NUMBER_EMOJIS2, NUMBER_EMOJIS3)
     },
     usage: '',
     hidden: true,
