@@ -1295,6 +1295,15 @@ class WhatsAppBotEvoGo {
             const msg = msgData.Message;
             const reactionData = msg?.reactionMessage;
 
+            if(info.PushName && info.PushName.length > 0){
+              if(info.Sender){
+                this.cacheManager.putPushnameInCache({id: info.Sender, pushName: info.PushName});
+              }
+              if(info.SenderAlt){
+                this.cacheManager.putPushnameInCache({id: info.SenderAlt, pushName: info.PushName});
+              }
+            }
+
             const chatToFilter = info.Chat;
             if (chatToFilter === this.grupoLogs || chatToFilter === this.grupoAnuncios || chatToFilter === this.grupoInvites || chatToFilter === this.grupoEstabilidade) {
               break;
@@ -1303,6 +1312,7 @@ class WhatsAppBotEvoGo {
             if(reactionData){
               // ravena só processa se VIER uma reaction (campo 'text')
               if (reactionData.text !== "" && !reactionData.key.fromMe) {
+
 
                 //this.logger.debug(`[${this.id}] Received reaction:`, { msgData, reactionData });
                 // reactionData.text -> emoji
