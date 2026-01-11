@@ -2,6 +2,15 @@ const Redis = require('ioredis');
 const Logger = require('../utils/Logger');
 const Database = require('../utils/Database');
 
+const CACHE_CONFIG = {
+  'pushName': { ttl: 30 * 24 * 60 * 60 }, // 30 days
+  'chat': { ttl: 4 * 60 * 60 },           // 4 hours
+  'message': { ttl: 1 * 60 * 60 },        // 1 hour
+  'contact': { ttl: 7 * 24 * 60 * 60 },   // 7 days
+  'tg_name': { ttl: 30 * 24 * 60 * 60 },  // 30 days
+  'app_cooldowns_data_v1': { ttl: 24 * 60 * 60 } // 24 hours
+};
+
 class CacheManager {
   constructor(redisURL, redisDB, redisTTL, maxCacheSize) {
     this.useRedis = (process.env.USE_REDIS === 'true');
@@ -70,6 +79,15 @@ class CacheManager {
     };    
   }
 
+  // --- Helper to get Config ---
+  
+  getCacheConfig(key) {
+    if (CACHE_CONFIG[key]) return CACHE_CONFIG[key];
+    const prefix = key.split(':')[0];
+    if (CACHE_CONFIG[prefix]) return CACHE_CONFIG[prefix];
+    return null;
+  }
+
   // --- Persistence Helpers ---
 
   async _dbGet(key) {
@@ -90,8 +108,16 @@ class CacheManager {
     }
   }
 
-  _scheduleWrite(key, value, ttlSeconds) {
+  _scheduleWrite(key, value) {
+    // Determine TTL from config
+    const config = this.getCacheConfig(key);
+    
+    // If no config found, do NOT persist to SQLite
+    if (!config) return;
+
+    const ttlSeconds = config.ttl;
     const expiresAt = ttlSeconds ? Date.now() + (ttlSeconds * 1000) : null;
+    
     this.pendingWrites.set(key, { value: JSON.stringify(value), expiresAt });
     this.unsavedChangesCount++;
 
@@ -137,11 +163,13 @@ class CacheManager {
     if (!data || typeof data.id === 'undefined') return;
     const userId = data.id;
     const redisKey = `pushName:${userId}`;
+    const config = this.getCacheConfig(redisKey);
+    const ttl = config ? config.ttl : this.redisTTL;
 
     // Redis
     if (this.redisClient) {
       try {
-        await this.redisClient.set(redisKey, JSON.stringify(data), 'EX', this.redisTTL);
+        await this.redisClient.set(redisKey, JSON.stringify(data), 'EX', ttl);
         return;
       } catch (err) {}
     }
@@ -151,7 +179,7 @@ class CacheManager {
     if (this.pushnameCache.length > this.maxCacheSize) this.pushnameCache.shift();
 
     // SQLite Persistence
-    this._scheduleWrite(redisKey, data, this.redisTTL);
+    this._scheduleWrite(redisKey, data);
   }
 
   async getPushnameFromCache(id) {
@@ -185,10 +213,12 @@ class CacheManager {
     if (!data || !data.id || typeof data.id._serialized === 'undefined') return;
     const chatId = data.id._serialized;
     const redisKey = `chat:${chatId}`;
+    const config = this.getCacheConfig(redisKey);
+    const ttl = config ? config.ttl : this.redisTTL;
 
     if (this.redisClient) {
       try {
-        await this.redisClient.set(redisKey, JSON.stringify(data), 'EX', this.redisTTL);
+        await this.redisClient.set(redisKey, JSON.stringify(data), 'EX', ttl);
         return;
       } catch (err) {}
     }
@@ -196,7 +226,7 @@ class CacheManager {
     this.chatCache.push(data);
     if (this.chatCache.length > this.maxCacheSize) this.chatCache.shift();
 
-    this._scheduleWrite(redisKey, data, this.redisTTL);
+    this._scheduleWrite(redisKey, data);
   }
 
   async getChatFromCache(id) {
@@ -227,10 +257,12 @@ class CacheManager {
     if (!data || !data.key || typeof data.key.id === 'undefined') return;
     const messageId = data.key.id;
     const redisKey = `message:${messageId}`;
+    const config = this.getCacheConfig(redisKey);
+    const ttl = config ? config.ttl : this.redisTTL;
 
     if (this.redisClient) {
       try {
-        await this.redisClient.set(redisKey, JSON.stringify(data), 'EX', this.redisTTL);
+        await this.redisClient.set(redisKey, JSON.stringify(data), 'EX', ttl);
         return;
       } catch (err) {}
     }
@@ -238,17 +270,19 @@ class CacheManager {
     this.messageCache.push(data);
     if (this.messageCache.length > this.maxCacheSize) this.messageCache.shift();
 
-    this._scheduleWrite(redisKey, data, this.redisTTL);
+    this._scheduleWrite(redisKey, data);
   }
 
   async putSentMessageInCache(key) {
     if (!key || !key.id) return;
     const messageId = key.id;
     const redisKey = `message:${messageId}`;
+    const config = this.getCacheConfig(redisKey);
+    const ttl = config ? config.ttl : this.redisTTL;
 
     if (this.redisClient) {
       try {
-        await this.redisClient.set(redisKey, JSON.stringify(key), 'EX', this.redisTTL);
+        await this.redisClient.set(redisKey, JSON.stringify(key), 'EX', ttl);
         return;
       } catch (err) {}
     }
@@ -256,7 +290,7 @@ class CacheManager {
     this.messageCache.push(key);
     if (this.messageCache.length > this.maxCacheSize) this.messageCache.shift();
 
-    this._scheduleWrite(redisKey, key, this.redisTTL);
+    this._scheduleWrite(redisKey, key);
   }
 
   async getMessageFromCache(id) {
@@ -287,10 +321,12 @@ class CacheManager {
     if (!data || !data.id) return;
     const messageId = data.id;
     const redisKey = `message:${messageId}`;
+    const config = this.getCacheConfig(redisKey);
+    const ttl = config ? config.ttl : this.redisTTL;
 
     if (this.redisClient) {
       try {
-        await this.redisClient.set(redisKey, JSON.stringify(data), 'EX', this.redisTTL);
+        await this.redisClient.set(redisKey, JSON.stringify(data), 'EX', ttl);
         return;
       } catch (err) {}
     }
@@ -298,7 +334,7 @@ class CacheManager {
     this.messageCache.push(data);
     if (this.messageCache.length > this.maxCacheSize) this.messageCache.shift();
 
-    this._scheduleWrite(redisKey, data, this.redisTTL);
+    this._scheduleWrite(redisKey, data);
   }
 
   async putGoSentMessageInCache(message) {
@@ -306,10 +342,12 @@ class CacheManager {
     const messageId = typeof message.id === 'object' ? message.id._serialized : message.id;
     if (!messageId) return;
     const redisKey = `message:${messageId}`;
+    const config = this.getCacheConfig(redisKey);
+    const ttl = config ? config.ttl : this.redisTTL;
 
     if (this.redisClient) {
       try {
-        await this.redisClient.set(redisKey, JSON.stringify(message), 'EX', this.redisTTL);
+        await this.redisClient.set(redisKey, JSON.stringify(message), 'EX', ttl);
         return;
       } catch (err) {}
     }
@@ -317,7 +355,7 @@ class CacheManager {
     this.messageCache.push(message);
     if (this.messageCache.length > this.maxCacheSize) this.messageCache.shift();
 
-    this._scheduleWrite(redisKey, message, this.redisTTL);
+    this._scheduleWrite(redisKey, message);
   }
 
   async getGoMessageFromCache(id) {
@@ -347,10 +385,12 @@ class CacheManager {
     if (!data || typeof data.number === 'undefined') return;
     const contactNumber = data.number;
     const redisKey = `contact:${contactNumber}`;
+    const config = this.getCacheConfig(redisKey);
+    const ttl = config ? config.ttl : this.redisTTL;
 
     if (this.redisClient) {
       try {
-        await this.redisClient.set(redisKey, JSON.stringify(data), 'EX', this.redisTTL);
+        await this.redisClient.set(redisKey, JSON.stringify(data), 'EX', ttl);
         return;
       } catch (err) {}
     }
@@ -358,7 +398,7 @@ class CacheManager {
     this.contactCache.push(data);
     if (this.contactCache.length > this.maxCacheSize) this.contactCache.shift();
 
-    this._scheduleWrite(redisKey, data, this.redisTTL);
+    this._scheduleWrite(redisKey, data);
   }
 
   async getContactFromCache(id) {
@@ -387,7 +427,8 @@ class CacheManager {
   async putTelegramNameInCache(userId, name) {
     if (!userId || !name) return;
     const redisKey = `tg_name:${userId}`;
-    const ttl = 86400; // 24 hours
+    const config = this.getCacheConfig(redisKey);
+    const ttl = config ? config.ttl : 86400; // 24h default fallback
 
     if (this.redisClient) {
       try {
@@ -402,7 +443,7 @@ class CacheManager {
     this.telegramNameCache.push({ id: userId, name, timestamp: Date.now() });
     if (this.telegramNameCache.length > this.maxCacheSize) this.telegramNameCache.shift();
 
-    this._scheduleWrite(redisKey, name, ttl);
+    this._scheduleWrite(redisKey, name);
   }
 
   async getTelegramNameFromCache(userId) {
@@ -451,6 +492,7 @@ class CacheManager {
   async saveCooldowns(cooldownsData) {
     if (typeof cooldownsData !== 'object' || cooldownsData === null) return;
     const redisKey = 'app_cooldowns_data_v1';
+    // config handled in _scheduleWrite
 
     if (this.redisClient) {
       try {
@@ -460,8 +502,7 @@ class CacheManager {
       }
     }
 
-    // Cooldowns persist indefinitely (no TTL)
-    this._scheduleWrite(redisKey, cooldownsData, null);
+    this._scheduleWrite(redisKey, cooldownsData);
   }
 
   async disconnectRedis() {
