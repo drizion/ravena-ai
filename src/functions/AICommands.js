@@ -6,6 +6,7 @@ const LLMService = require('../services/LLMService');
 const ReturnMessage = require('../models/ReturnMessage');
 const Command = require('../models/Command');
 const Database = require('../utils/Database');
+const { extractFrames } = require('../utils/Conversions');
 
 
 const logger = new Logger('ai-commands');
@@ -106,6 +107,8 @@ async function aiCommand(bot, message, args, group) {
     systemContext: ctxContent
   };
 
+  let tempPathsToRemove = [];
+
   if (media && media.data) {
     logger.debug(`[aiCommand] Comando AI com mídia detectada: ${media.mimetype}`);
     if(media.mimetype.includes("image")){
@@ -121,10 +124,50 @@ async function aiCommand(bot, message, args, group) {
       const ctxPath = path.join(database.databasePath, 'textos', 'llm_context_images.txt');
       completionOptions.systemContext = await fs.readFile(ctxPath, 'utf8') ?? "Você se chama ravenabot e deve inter esta imagem enviada no WhatsApp";
       completionOptions.systemContext += customPersonalidade;
+    } else if (media.mimetype.includes("video")) {
+      if(completionOptions.prompt.length < 4){
+        completionOptions.prompt = "Analise este vídeo e entregue um resumo detalhado do que acontece nele"
+      }
+
+      try {
+        const tempDirBase = path.join(__dirname, '../../temp');
+        const tempDir = path.join(tempDirBase, `ai_video_${Date.now()}`);
+        const videoPath = path.join(tempDirBase, `ai_video_${Date.now()}.mp4`);
+        
+        await fs.mkdir(tempDirBase, { recursive: true });
+        await fs.writeFile(videoPath, Buffer.from(media.data, 'base64'));
+        
+        tempPathsToRemove.push(videoPath);
+        tempPathsToRemove.push(tempDir);
+
+        const framePaths = await extractFrames(videoPath, tempDir, 20);
+        const frames = [];
+        for (const filePath of framePaths) {
+          const data = await fs.readFile(filePath, 'base64');
+          frames.push(data);
+        }
+
+        completionOptions.images = frames;
+        completionOptions.timeout = 60000;
+        
+        // Contexto para vídeo (pode ser o mesmo de imagem ou adaptado)
+        const ctxPath = path.join(database.databasePath, 'textos', 'llm_context_videos.txt'); // Reutilizando contexto de imagens por enquanto
+        completionOptions.systemContext = await fs.readFile(ctxPath, 'utf8') ?? "Você se chama ravenabot e deve interpretar este vídeo enviado no WhatsApp";
+        completionOptions.systemContext += customPersonalidade;
+
+      } catch (videoError) {
+        logger.error('[aiCommand] Erro ao processar vídeo:', videoError);
+        return new ReturnMessage({
+          chatId: chatId,
+          content: `Ocorreu um erro ao processar o vídeo: ${videoError.message}`,
+          options: { quotedMessageId: message.origin.id._serialized, evoReply: message.origin }
+        });
+      }
+
     } else {
       return new ReturnMessage({
         chatId: chatId,
-        content: `Ainda não processo este tipo de arquivo (${media.mimetype}) 😟 Consigo apenas analisar imagens!`,
+        content: `Ainda não processo este tipo de arquivo (${media.mimetype}) 😟 Consigo apenas analisar imagens e vídeos!`,
         options: {
           quotedMessageId: message.origin.id._serialized,
           evoReply: message.origin
@@ -172,6 +215,20 @@ async function aiCommand(bot, message, args, group) {
         evoReply: message.origin
       }
     });
+  } finally {
+    // Limpeza de arquivos temporários de vídeo
+    for (const pathToRemove of tempPathsToRemove) {
+      try {
+        const stats = await fs.stat(pathToRemove);
+        if (stats.isDirectory()) {
+          await fs.rm(pathToRemove, { recursive: true, force: true });
+        } else {
+          await fs.unlink(pathToRemove);
+        }
+      } catch (cleanupError) {
+        logger.error(`[aiCommand] Erro ao limpar arquivo temporário ${pathToRemove}:`, cleanupError);
+      }
+    }
   }
 }
 

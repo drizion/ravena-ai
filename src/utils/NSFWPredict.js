@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const Logger = require('./Logger');
 const LLMService = require('../services/LLMService');
+const { extractFrames } = require('./Conversions');
 
 /**
  * Utilitário para detecção de conteúdo NSFW em imagens usando LLM
@@ -14,14 +15,14 @@ class NSFWPredict {
   }
 
   /**
-   * Verifica se uma imagem contém conteúdo NSFW usando um LLM.
-   * @param {string} imageBase64 - A imagem em formato base64.
+   * Verifica se uma imagem ou video contém conteúdo NSFW usando um LLM.
+   * @param {string|Array<string>} imagesInput - A imagem (base64) ou lista de imagens.
    * @returns {Promise<{isNSFW: boolean, reason: String}>} - Resultado da detecção.
    */
-  async detectNSFW(imageBase64) {
-    this.logger.info(`Detectando NSFW em imagem...`);
+  async detectNSFW(imagesInput) {
+    this.logger.info(`Detectando NSFW em mídia...`);
 
-    const prompt = `Analyze the image with a focus on strict content safety classification. Your goal is to distinguish between general skin exposure (Safe) and explicit sexual content (NSFW).
+    const prompt = `Analyze the provided image(s) with a focus on strict content safety classification. Your goal is to distinguish between general skin exposure (Safe) and explicit sexual content (NSFW).
 
 Classification Criteria:
 - SAFE: Everyday clothing, summer wear, sleeveless tops, bare shoulders, legs, standard swimwear (in a beach/pool context), and artistic non-sexual portraits.
@@ -54,7 +55,7 @@ Return the result in JSON format.`;
     try {
       const completionOptions = {
         prompt: prompt,
-        image: imageBase64,
+        images: Array.isArray(imagesInput) ? imagesInput : [imagesInput],
         response_format: nsfwSchema,
         temperature: 0.2,
         systemContext: `You are an expert bot in image processing and analysis`,
@@ -82,6 +83,51 @@ Return the result in JSON format.`;
     } catch (error) {
       this.logger.error('Erro ao executar detecção NSFW com LLM.', { response });
       return { isNSFW: false, reason: "", error: error.message };
+    }
+  }
+
+  /**
+   * Detecta NSFW em um vídeo extraindo frames.
+   * @param {string} videoPath - Caminho do arquivo de vídeo.
+   * @returns {Promise<{isNSFW: boolean, reason: String}>} - Resultado da detecção.
+   */
+  async detectNSFWVideo(videoPath) {
+    let tempDir = null;
+    
+    try {
+      this.logger.info(`Extraindo frames do vídeo para análise NSFW: ${videoPath}`);
+      
+      const framePaths = await extractFrames(videoPath, undefined, 15);
+      if (framePaths.length > 0) {
+        tempDir = path.dirname(framePaths[0]);
+      }
+
+      const frames = [];
+      for (const filePath of framePaths) {
+        const data = await fs.promises.readFile(filePath, 'base64');
+        frames.push(data);
+      }
+      
+      if (frames.length === 0) {
+        return { isNSFW: false, reason: "No frames extracted", error: "No frames extracted" };
+      }
+      
+      this.logger.info(`Analisando ${frames.length} frames do vídeo...`);
+      const result = await this.detectNSFW(frames);
+      return result;
+      
+    } catch (error) {
+      this.logger.error('Erro ao processar vídeo para NSFW:', error);
+      return { isNSFW: false, reason: "", error: error.message };
+    } finally {
+      // Limpeza
+      if (tempDir) {
+        try {
+          await fs.promises.rm(tempDir, { recursive: true, force: true });
+        } catch (e) {
+          this.logger.error(`Erro ao limpar diretório temporário ${tempDir}:`, e);
+        }
+      }
     }
   }
 

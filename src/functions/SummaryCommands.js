@@ -4,6 +4,8 @@ const Database = require('../utils/Database');
 const LLMService = require('../services/LLMService');
 const Command = require('../models/Command');
 const ReturnMessage = require('../models/ReturnMessage');
+const fs = require('fs').promises;
+const { extractFrames } = require('../utils/Conversions');
 
 const logger = new Logger('summary-commands');
 const database = Database.getInstance();
@@ -17,6 +19,70 @@ database.getSQLiteDb(DB_NAME, `
     json_data TEXT
   );
 `);
+
+/**
+ * Analisa um vídeo e retorna uma descrição
+ * @param {Object} message - A mensagem contendo o vídeo
+ * @returns {Promise<string|boolean>} - Descrição do vídeo ou false
+ */
+async function analyzeVideo(message) {
+  const tempDirBase = path.join(__dirname, '../../temp');
+  const tempDir = path.join(tempDirBase, `video_analysis_${Date.now()}`);
+  const videoPath = path.join(tempDirBase, `video_${Date.now()}.mp4`);
+  
+  try {
+    // Garante diretórios
+    await fs.mkdir(tempDirBase, { recursive: true });
+    
+    // Baixa a mídia
+    if (!message.downloadMedia) {
+      return false;
+    }
+    
+    const media = await message.downloadMedia();
+    if (!media || !media.data) {
+      return false;
+    }
+    
+    await fs.writeFile(videoPath, Buffer.from(media.data, 'base64'));
+    
+    // Extrai frames usando a função utilitária
+    const framePaths = await extractFrames(videoPath, tempDir, 30);
+    
+    // Lê os frames
+    const frames = [];
+    for (const filePath of framePaths) {
+      const data = await fs.readFile(filePath, 'base64');
+      frames.push(data);
+    }
+    
+    if (frames.length === 0) return false;
+    
+    // Chama LLM
+    const completionOptions = {
+      prompt: "Analyze the video frames provided and return a brief description ((in pt-BR, portuguese brazil)) in the following format: Video[xxxx xxxx xxx]. Describe the main actions and events in the video.",
+      systemContext: `You are an expert bot in video processing and analysis`,
+      images: frames,
+      debugPrompt: false,
+      timeout: 60000
+    };
+    
+    const response = await llmService.getCompletion(completionOptions);
+    return response;
+    
+  } catch (error) {
+    logger.error('Erro ao analisar vídeo:', error);
+    return false;
+  } finally {
+    // Limpeza
+    try {
+      await fs.unlink(videoPath).catch(() => {});
+      await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    } catch (e) {
+      logger.error('Erro na limpeza de análise de vídeo:', e);
+    }
+  }
+}
 
 /**
  * Resume conversa de grupo
@@ -216,6 +282,8 @@ async function storeMessage(message, chatId) {
     // Adiciona nova mensagem
     let textContent = message.type === 'text' ? message.content : message.caption;
 
+    // Mensagens de áudio são interpretadas também, usando transcrição do whisper, mas ficam no EventHandler - pra poder usar msg de voz no pv também!
+    
     if(message.type === 'image'){
       // Tenta interpretar a imagem usando Vision AI, menos se for pedido de sticker pra aliviar  a GPU
       if(message.content && !message.caption?.startsWith("!s")){
@@ -235,6 +303,16 @@ async function storeMessage(message, chatId) {
           logger.info(`[${chatId}][storeMessage] Imagem interpretada: ${textContent}`);
         }
       }
+    } else if (message.type === 'video') {
+       // Tenta interpretar o video usando Vision AI
+       if (message.content && !message.caption?.startsWith("!s")) {
+         const response = await analyzeVideo(message);
+         
+         if(response && !response.includes("Não foi poss") && !response.includes("Ocorreu um erro")){
+          textContent = message.caption ? `${response}\nLegenda: ${message.caption}` : response;
+          logger.info(`[${chatId}][storeMessage] Vídeo interpretado: ${textContent}`);
+        }
+       }
     }
 
     if (textContent) {

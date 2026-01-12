@@ -231,4 +231,51 @@ async function messageMediaToMp3(messageMedia) {
   }
 }
 
-module.exports = { toOpus, messageMediaToOpus, toMp3, messageMediaToMp3 };
+/**
+ * Extrai frames de um vídeo usando ffmpeg.
+ * @param {string} videoPath - Caminho do arquivo de vídeo.
+ * @param {string} [outputDir] - Diretório onde os frames serão salvos. Se omitido, cria um temporário.
+ * @param {number} count - Número de frames a extrair.
+ * @param {string} size - Resolução dos frames (ex: '896x896', '?x480').
+ * @returns {Promise<string[]>} - Lista de caminhos dos arquivos de frames extraídos, ordenados.
+ */
+async function extractFrames(videoPath, outputDir = path.join(tempDir, `frames_${crypto.randomUUID()}`), count = 30, size = '896x896') {
+  try {
+    await fs.mkdir(outputDir, { recursive: true });
+
+    return new Promise((resolve, reject) => {
+      ffmpeg(videoPath)
+        .on('end', async () => {
+          try {
+            const files = await fs.readdir(outputDir);
+            const frames = files
+              .filter(f => f.endsWith('.jpg'))
+              .map(f => path.join(outputDir, f));
+
+            // Ordena arquivos para garantir sequência correta (frame_1, frame_2...)
+            frames.sort((a, b) => {
+              const numA = parseInt(a.match(/frame_(\d+)/)?.[1] || 0);
+              const numB = parseInt(b.match(/frame_(\d+)/)?.[1] || 0);
+              return numA - numB;
+            });
+
+            resolve(frames);
+          } catch (e) {
+            reject(e);
+          }
+        })
+        .on('error', reject)
+        .screenshots({
+          count: count,
+          folder: outputDir,
+          filename: 'frame_%i.jpg',
+          size: size
+        });
+    });
+  } catch (error) {
+    logger.error('[extractFrames] Erro ao extrair frames:', error);
+    throw error;
+  }
+}
+
+module.exports = { toOpus, messageMediaToOpus, toMp3, messageMediaToMp3, extractFrames };

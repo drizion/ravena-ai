@@ -459,19 +459,27 @@ class LLMService {
 				content: options.prompt,
 			};
 
-			if (options.image) {
-				let base64Image;
+			if (options.images || options.image) {
+				const imagesToProcess = options.images ? options.images : [options.image];
+				const processedImages = [];
 
-				if (options.image.startsWith('data:image')) {
-					base64Image = options.image.split(',')[1];
-				} else if (fs.existsSync(options.image)) {
-					base64Image = fs.readFileSync(options.image, 'base64');
-				} else {
-					base64Image = options.image;
+				for (const img of imagesToProcess) {
+					let base64Image;
+					if (img.startsWith('data:image')) {
+						base64Image = img.split(',')[1];
+					} else if (fs.existsSync(img)) {
+						base64Image = fs.readFileSync(img, 'base64');
+					} else {
+						base64Image = img;
+					}
+
+					if (base64Image) {
+						processedImages.push(base64Image);
+					}
 				}
 
-				if (base64Image) {
-					userMessage.images = [base64Image];
+				if (processedImages.length > 0) {
+					userMessage.images = processedImages;
 				}
 			}
 
