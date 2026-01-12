@@ -1,6 +1,6 @@
 *Código da Ravenabot* 🐦‍⬛
 
-A nova versão da ravena, gerada praticamente toda com inteligência artificial _(Claude Sonnet 3.7)_, tem todo seu código liberado.
+A nova versão da ravena, gerada praticamente toda com inteligência artificial _(claude e gemini-cli)_, tem todo seu código liberado.
 _Rode sua própria, entenda o código e contribua para a ravena!_
 
 O código que está aqui é *exatamente* o que roda as ravenas, sem tirar nem por, ou seja, esse código é funcional, apesar dos eventuais bugs.

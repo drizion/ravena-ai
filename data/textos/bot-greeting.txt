@@ -9,7 +9,7 @@
 
 • *Transcrever áudios* - Basta me enviar um áudio ou mensagem de voz
 • *Criar figurinhas* - Envie uma imagem ou vídeo que eu faço automaticamente aqui
-• *Figurinhas Extra*: Experimente colocar na legenda da foto/vídeo ```!sbg``` para figurinhas sem fundo e ```!sq```, ```!sqc```, ```!sqb``` para stickers quadrados
+• *Figurinhas Extra*: Experimente colocar na legenda da foto/vídeo ```!sbg``` para figurinhas sem fundo e ```!sq```, ```!sqc```, ```!sqb```, ```!sqe``` para stickers quadrados
 
 
 ✨ *Dica rápida:* Para gerenciar um grupo sem poluí-lo com comandos, você pode me enviar mensagens aqui no PV usando o comando ```!g-manage``` seguido do nome do grupo (se não souber, envie apenas ```!g-manage``` dentro do seu grupo uma vez).
