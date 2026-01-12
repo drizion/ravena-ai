@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs').promises;
 const Logger = require('../utils/Logger');
-const { getRecentMessages, formatMessagesForPrompt } = require('./SummaryCommands');
+const { getRecentMessages, formatMessagesForPrompt, storeMessage } = require('./SummaryCommands');
 const LLMService = require('../services/LLMService');
 const ReturnMessage = require('../models/ReturnMessage');
 const Command = require('../models/Command');
@@ -108,10 +108,11 @@ async function aiCommand(bot, message, args, group) {
   };
 
   let tempPathsToRemove = [];
-
+  let tipoMedia = false;
   if (media && media.data) {
     logger.debug(`[aiCommand] Comando AI com mídia detectada: ${media.mimetype}`);
     if(media.mimetype.includes("image")){
+      tipoMedia = "Imagem";
 
       if(completionOptions.prompt.length < 4){
         completionOptions.prompt = "Analise esta imagem e entregue um resumo detalhado"
@@ -125,6 +126,7 @@ async function aiCommand(bot, message, args, group) {
       completionOptions.systemContext = await fs.readFile(ctxPath, 'utf8') ?? "Você se chama ravenabot e deve inter esta imagem enviada no WhatsApp";
       completionOptions.systemContext += customPersonalidade;
     } else if (media.mimetype.includes("video")) {
+      tipoMedia = "Video";
       if(completionOptions.prompt.length < 4){
         completionOptions.prompt = "Analise este vídeo e entregue um resumo detalhado do que acontece nele"
       }
@@ -140,7 +142,7 @@ async function aiCommand(bot, message, args, group) {
         tempPathsToRemove.push(videoPath);
         tempPathsToRemove.push(tempDir);
 
-        const framePaths = await extractFrames(videoPath, tempDir, 20);
+        const framePaths = await extractFrames(videoPath, tempDir, 75);
         const frames = [];
         for (const filePath of framePaths) {
           const data = await fs.readFile(filePath, 'base64');
@@ -188,6 +190,15 @@ async function aiCommand(bot, message, args, group) {
     const response = await llmService.getCompletion(completionOptions);
     
     logger.debug('[aiCommand] Resposta LLM obtida, processando variaveis', response);
+
+
+    // Guarda também no historico
+    if(tipoMedia){
+      message.content = `${tipoMedia}[${response}]`;
+      message.caption = `${tipoMedia}[${response}]`;
+      storeMessage(message, message.author);
+    }
+
 
     let processedResponse;
     try{

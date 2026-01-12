@@ -30,7 +30,7 @@ class LLMService {
 				method: async (options) => {
 					//options.model = "ministral-3:14b";
 					options.model = "gemma3:27b";
-					options.timeout = 15000;
+					options.timeout = options.timeout ?? 15000;
 					const response = await this.ollamaCompletion({customEndpoint: "http://192.168.195.211:11434", ...options});
 					if (response && response.message && response.message.content) {
 						return response.message.content;
@@ -45,7 +45,7 @@ class LLMService {
 				name: 'ollama-gemma3:27b-it-qat',
 				method: async (options) => {
 					options.model = "gemma3:27b-it-qat";
-					options.timeout = 30000;
+					options.timeout = options.timeout ?? 30000;
 					const response = await this.ollamaCompletion({customEndpoint: "http://192.168.3.200:12345", ...options});
 					if (response && response.message && response.message.content) {
 						return response.message.content;
