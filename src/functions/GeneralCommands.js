@@ -412,9 +412,33 @@ async function statusCommand(bot, message, args, group) {
   const url = `http://localhost:${process.env.API_PORT ?? 5000}/health`;
 
   try {
+    // Carrega status dos serviços externos
+    let servicesHeader = "";
+    try {
+      const servicesPath = path.join(database.databasePath, 'services-status.json');
+      const servicesData = JSON.parse(await fs.readFile(servicesPath, 'utf8'));
+      
+      const getEmoji = (status) => {
+          if (status === 'up') return '🟢';
+          if (status === 'backup') return '🟠';
+          if (status === 'down') return '🔴';
+          return '⚫';
+      };
+
+      servicesHeader = `📡 *Serviços Externos*\n`;
+      servicesHeader += `\t${getEmoji(servicesData.imagine)} Imagine _(geração de imagens)_\n`;
+      servicesHeader += `\t${getEmoji(servicesData.llm)} LLM _(inteligência artificial)_\n`;
+      servicesHeader += `\t${getEmoji(servicesData.whisper)} Whisper _(voz para texto)_\n`;
+      servicesHeader += `\t${getEmoji(servicesData.alltalk)} AllTalk _(texto para voz)_\n`;
+      servicesHeader += `\n\n`;
+
+    } catch (e) {
+      // Ignora erro se não conseguir ler arquivo de status
+    }
+
     const response = await axios.get(url);
 
-    let statusMessage = '🕸 *Status das Ravenas* 🔄\n> https://ravena.moothz.win\n\n';
+    let statusMessage = '🕸 *Status das Ravenas* 🔄\n> https://ravena.moothz.win\n\n'+servicesHeader;
 
     const botsNormais = response.data.bots.filter(b => !b.comunitario && !b.vip);
     const botsComunitarios = response.data.bots.filter(b => b.comunitario);

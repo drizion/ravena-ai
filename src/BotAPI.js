@@ -87,7 +87,7 @@ class BotAPI {
    * Verifica o status dos serviços externos e emite via Socket.IO
    */
   async checkServices() {
-    if (!this.io) return;
+    // if (!this.io) return; // Allow running without io to save status file
 
     const services = {
       evolutiongo: 'unknown',
@@ -158,7 +158,16 @@ class BotAPI {
     }
 
     this.lastServicesStatus = services;
-    this.io.emit('service-status', services);
+    
+    if (this.io) {
+        this.io.emit('service-status', services);
+    }
+
+    try {
+      await fs.writeFile(path.join(this.database.databasePath, 'services-status.json'), JSON.stringify(services, null, 2));
+    } catch (error) {
+      this.logger.error('Erro ao salvar status dos serviços:', error);
+    }
   }
 
 
@@ -729,7 +738,7 @@ class BotAPI {
         // Validate autoTranslateTo
         if (changes.autoTranslateTo) {
             const SUPPORTED_LANGUAGES = [
-                'English (EN)', 'Spanish (ES)', 'Russian (RU)', 'Portuguese (PT)',
+                'English (EN)', 'Spanish (ES)', 'Russian (RU)',
                 'French (FR)', 'German (DE)', 'Italian (IT)', 'Japanese (JA)',
                 'Chinese (ZH)', 'Korean (KO)', 'Arabic (AR)', 'Hindi (HI)',
                 'Turkish (TR)', 'Dutch (NL)', 'Polish (PL)', 'Indonesian (ID)',
