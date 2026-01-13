@@ -729,7 +729,10 @@ class EventHandler extends EventEmitter {
               llm_inviterInfo = ` '${foundInviter.authorName}'`;
             }
 
-            botInfoMessage += `\n\nO nome do seu grupo foi definido como *${group.name}*, mas pode você pode alterar usando:- \`${group.prefix}g-setNome [novoNome]\`.\n\nPara fazer a configuração do grupo sem poluir aqui, me envie no PV:\n- ${group.prefix}g-manage ${group.name}`;
+            botInfoMessage += `\n\nO nome do seu grupo foi definido como *${group.name}*.
+
+Para fazer a configuração do grupo sem poluir aqui, envie \`!g-painel\`, ou me envie no PV:
+- ${group.prefix}g-manage ${group.name}`;
 
             // Se encontramos o autor do convite, adiciona-o como admin adicional
             if (foundInviter) {
@@ -800,6 +803,12 @@ class EventHandler extends EventEmitter {
                 // Substitui variável {prefix} se presente
                 botInfoMessage = botInfoMessage.replace(/{prefix}/g, group.prefix ?? '!');
               }
+
+              botInfoMessage += `\n\nO nome do seu grupo está definido como *${group.name}*.
+
+Para fazer a configuração do grupo sem poluir aqui, envie \`!g-painel\`, ou me envie no PV:
+- ${group.prefix}g-manage ${group.name}`;
+
             }
           } catch (readError) {
             this.logger.error('Erro ao ler groupJoinExistente.txt, usando mensagem padrão:', readError);

@@ -1,15 +1,16 @@
 🦇 Olá, eu sou a *ravenabot*! 🐦‍⬛
 
 💡 *Como me usar:*
-• Digite ```!cmd``` para ver todos os comandos disponíveis
-• Também posso ser adicionada em grupos, envie ```!convite``` para saber mais
+• Digite `!cmd` para ver todos os comandos disponíveis
+• Também posso ser adicionada em grupos, envie `!convite` para saber mais
 • Acesse o site oficial: https://ravena.moothz.win
 
 🔥 *Usos comuns aqui no PV:*
 
 • *Transcrever áudios* - Basta me enviar um áudio ou mensagem de voz
 • *Criar figurinhas* - Envie uma imagem ou vídeo que eu faço automaticamente aqui
-• *Figurinhas Extra*: Experimente colocar na legenda da foto/vídeo ```!sbg``` para figurinhas sem fundo e ```!sq```, ```!sqc```, ```!sqb```, ```!sqe``` para stickers quadrados
+• *Figurinhas Extra*: Experimente colocar na legenda da foto/vídeo `!sbg` para figurinhas sem fundo e `!sq`, `!sqc`, `!sqb`, `!sqe` para stickers quadrados
 
 
-✨ *Dica rápida:* Para gerenciar um grupo sem poluí-lo com comandos, você pode me enviar mensagens aqui no PV usando o comando ```!g-manage``` seguido do nome do grupo (se não souber, envie apenas ```!g-manage``` dentro do seu grupo uma vez).
+✨ *Dica rápida:* Para gerenciar um grupo sem poluí-lo com comandos, acesse o painel do bot enviando `!g-painel`
+Você também pode me enviar mensagens aqui no PV usando o comando `!g-manage` seguido do nome de cadastro grupo (se não souber, envie apenas `!g-manage` dentro do seu grupo uma vez e o bot vai te ajudar).
