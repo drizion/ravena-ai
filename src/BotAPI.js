@@ -723,6 +723,9 @@ class BotAPI {
           return res.status(404).json({ success: false, message: 'Group not found' });
         }
 
+        // Check limits before applying changes
+        await checkGroupLimits(groupId, 'streams', { groupData: changes });
+
         this.logger.info(`[management][${token}][${groupId}] UPDATED Group data:\n${JSON.stringify(changes, null, 2)}`);
 
         // Apply changes
@@ -772,6 +775,9 @@ class BotAPI {
           return res.status(404).json({ success: false, message: 'Group not found' });
         }
 
+        // Check storage limit
+        await checkGroupLimits(groupId, 'storage', { fileSize: file.size });
+
         // Save file  
         const fileName = `${Date.now()}-${file.originalname}`;
         const mediaPath = path.join(this.database.databasePath, "media");
@@ -815,17 +821,238 @@ class BotAPI {
       }
     });
 
-
-    // Serve media files
-    // Ciclo da vida da ravena
-    this.app.get('/ciclo-ravena', async (req, res) => {
-      res.redirect('https://gemini.google.com/share/a03e1fe297de');
-    });
-
-
-    // Serve media files
-    this.app.get('/qrimg/:botId', authenticateBasic, async (req, res) => {
-      const { botId } = req.params;
+    // Custom Commands CRUD
+        
+                // Helper to reload commands for a group
+                const reloadGroupCommands = async (groupId) => {
+                  // Find which bot manages this group
+                  // Since we don't have a direct map, we can try all bots or check their chats
+                  // Optimization: In a real scenario we might map groupId -> botId
+                  
+                  for (const bot of this.bots) {
+                    if (bot.eventHandler && bot.eventHandler.commandHandler) {
+                       // We can just trigger the reload, it's cheap if checks internal cache
+                       await bot.eventHandler.commandHandler.loadCustomCommandsForGroup(groupId).catch(() => {});
+                    }
+                  }
+                }
+            
+                    // Helper to check group limits
+                    const checkGroupLimits = async (groupId, checkType, data = null) => {
+                        const MAX_STORAGE = (parseInt(process.env.LIMIT_STORAGE_MB) || 1024) * 1024 * 1024; // MB to Bytes. Default 1GB
+                        const MAX_COMMANDS = parseInt(process.env.LIMIT_COMMANDS) || 100;
+                        const MAX_STREAMS = parseInt(process.env.LIMIT_STREAMS) || 20;
+                
+                        if (checkType === 'storage') {                        let totalSize = 0;
+                        const groupData = await this.database.getGroup(groupId);
+                        const commands = await this.database.getCustomCommands(groupId);
+                        const mediaPath = path.join(this.database.databasePath, "media");
+            
+                        // Helper to add file size
+                        const addFileSize = async (filename) => {
+                            if (!filename) return;
+                            try {
+                                const stats = await fs.stat(path.join(mediaPath, filename));
+                                totalSize += stats.size;
+                            } catch (e) { /* ignore missing files */ }
+                        };
+            
+                        // Scan Group Data (Greetings, Farewells, Streams)
+                        const scanMediaObj = async (obj) => {
+                            if (!obj) return;
+                            for (const val of Object.values(obj)) {
+                                if (val && val.file) await addFileSize(val.file);
+                            }
+                        };
+            
+                        // Greetings/Farewells
+                        if (groupData) {
+                            await scanMediaObj(groupData.greetings);
+                            await scanMediaObj(groupData.farewells);
+                            
+                            // Streams
+                            ['twitch', 'kick', 'youtube'].forEach(platform => {
+                                if (groupData[platform]) {
+                                    groupData[platform].forEach(stream => {
+                                        if (stream.onConfig?.media) stream.onConfig.media.forEach(m => { if(m.type!=='text') addFileSize(m.content); });
+                                        if (stream.offConfig?.media) stream.offConfig.media.forEach(m => { if(m.type!=='text') addFileSize(m.content); });
+                                    });
+                                }
+                            });
+                        }
+            
+                        // Commands
+                        if (commands) {
+                            for (const cmd of commands) {
+                                if (cmd.responses) {
+                                    for (const resp of cmd.responses) {
+                                        if (resp.startsWith('{') && resp.includes('-')) {
+                                            const end = resp.indexOf('}');
+                                            if (end > 1) {
+                                                // Format: {type-filename}
+                                                const firstDash = resp.indexOf('-');
+                                                const filename = resp.substring(firstDash + 1, end);
+                                                await addFileSize(filename);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+            
+                        // Add new file size if provided
+                        if (data && data.fileSize) {
+                            totalSize += data.fileSize;
+                        }
+            
+                        if (totalSize > MAX_STORAGE) {
+                            throw new Error(`Limite de armazenamento excedido (1GB). Uso atual: ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
+                        }
+                    }
+            
+                    if (checkType === 'commands') {
+                        const commands = await this.database.getCustomCommands(groupId);
+                        if (commands && commands.length >= MAX_COMMANDS) {
+                            // If creating new command (not updating existing)
+                            if (data && data.isNew) {
+                                throw new Error(`Limite de comandos excedido (${MAX_COMMANDS}).`);
+                            }
+                        }
+                    }
+            
+                    if (checkType === 'streams') {
+                        // Check streams count in the NEW data (which replaces old)
+                        if (data && data.groupData) {
+                            const g = data.groupData;
+                            let totalStreams = 0;
+                            totalStreams += (g.twitch || []).length;
+                            totalStreams += (g.kick || []).length;
+                            totalStreams += (g.youtube || []).length;
+                            
+                            if (totalStreams > MAX_STREAMS) {
+                                throw new Error(`Limite de streams excedido (${MAX_STREAMS}).`);
+                            }
+                        }
+                    }
+                };
+            
+                // GET Custom Commands
+                this.app.get('/api/custom-commands/:groupId', async (req, res) => {
+                    const { groupId } = req.params;
+                    const { token } = req.query;
+            
+                    try {
+                        const webManagementData = await this.readWebManagementToken(token);
+                        if (!webManagementData || webManagementData.groupId !== groupId) return res.status(401).json({ message: 'Unauthorized' });
+                        if (new Date() > new Date(webManagementData.expiresAt)) return res.status(401).json({ message: 'Token expired' });
+            
+                        const commands = await this.database.getCustomCommands(groupId);
+                        res.json(commands || []);
+                    } catch (e) {
+                        this.logger.error('Error fetching commands:', e);
+                        res.status(500).json({ message: 'Server error' });
+                    }
+                });
+            
+                // POST New Custom Command
+                this.app.post('/api/custom-commands/:groupId', async (req, res) => {
+                    const { groupId } = req.params;
+                    const { token, command } = req.body;
+            
+                    try {
+                        const webManagementData = await this.readWebManagementToken(token);
+                        if (!webManagementData || webManagementData.groupId !== groupId) return res.status(401).json({ message: 'Unauthorized' });
+                        
+                        await checkGroupLimits(groupId, 'commands', { isNew: true });
+            
+                        await this.database.saveCustomCommand(groupId, command);
+                        
+                        this.database.clearCache(`commands:${groupId}`);
+                        await reloadGroupCommands(groupId);
+            
+                        res.json({ success: true });
+                    } catch (e) {
+                        this.logger.error('Error creating command:', e);
+                        res.status(500).json({ message: e.message });
+                    }
+                });        
+            // PUT Update Custom Command
+            this.app.put('/api/custom-commands/:groupId/:trigger', async (req, res) => {
+                const { groupId, trigger } = req.params;
+                const { token, command } = req.body;
+        
+                try {
+                    const webManagementData = await this.readWebManagementToken(token);
+                    if (!webManagementData || webManagementData.groupId !== groupId) return res.status(401).json({ message: 'Unauthorized' });
+        
+                    // Database update usually needs the object. 
+                    // If the trigger changed, we might need to delete old and save new?
+                    // Management.js uses 'updateCustomCommand' which likely matches by 'startsWith'.
+                    // If 'startsWith' in 'command' body is different from 'trigger' param, it means rename.
+                    
+                    const oldTrigger = decodeURIComponent(trigger);
+                    const newTrigger = command.startsWith;
+        
+                    if (oldTrigger !== newTrigger) {
+                        // Rename logic: Delete old, Create new
+                        // Find old one first to be safe? 
+                        // Database.js probably array based.
+                        const cmds = await this.database.getCustomCommands(groupId);
+                        const oldCmd = cmds.find(c => c.startsWith === oldTrigger);
+                        if (oldCmd) {
+                            oldCmd.deleted = true; // Soft delete
+                            await this.database.updateCustomCommand(groupId, oldCmd);
+                        }
+                        // Save new as new
+                        await this.database.saveCustomCommand(groupId, command);
+                    } else {
+                        // Just update
+                        await this.database.updateCustomCommand(groupId, command);
+                    }
+        
+                    this.database.clearCache(`commands:${groupId}`);
+                    await reloadGroupCommands(groupId);
+        
+                    res.json({ success: true });
+                } catch (e) {
+                    this.logger.error('Error updating command:', e);
+                    res.status(500).json({ message: 'Server error' });
+                }
+            });
+        
+            // DELETE Custom Command
+            this.app.delete('/api/custom-commands/:groupId/:trigger', async (req, res) => {
+                const { groupId, trigger } = req.params;
+                const { token } = req.query;
+        
+                try {
+                    const webManagementData = await this.readWebManagementToken(token);
+                    if (!webManagementData || webManagementData.groupId !== groupId) return res.status(401).json({ message: 'Unauthorized' });
+        
+                    const targetTrigger = decodeURIComponent(trigger);
+                    
+                    // Get commands to find it
+                    const cmds = await this.database.getCustomCommands(groupId);
+                    const cmd = cmds.find(c => c.startsWith === targetTrigger && !c.deleted);
+                    
+                    if (cmd) {
+                        cmd.deleted = true;
+                        cmd.active = false;
+                        await this.database.updateCustomCommand(groupId, cmd);
+                    }
+        
+                    this.database.clearCache(`commands:${groupId}`);
+                    await reloadGroupCommands(groupId);
+        
+                                res.json({ success: true });
+                            } catch (e) {
+                                this.logger.error('Error deleting command:', e);
+                                res.status(500).json({ message: 'Server error' });
+                            }
+                        });
+                    
+                        // Serve media files
+                        this.app.get('/qrimg/:botId', authenticateBasic, async (req, res) => {      const { botId } = req.params;
       const filePath = path.join(this.database.databasePath, "qrcodes", `qrcode_${botId}.png`);
 
       await fs.access(filePath).catch(() => {
@@ -1029,9 +1256,18 @@ class BotAPI {
           return res.status(404).send('Group not found');
         }
 
-        // Security check: verify the file belongs to this group's configuration
+        // Security check: verify the file belongs to this group's configuration or custom commands
         const groupStr = JSON.stringify(groupData);
-        if (!groupStr.includes(fileName)) {
+        let found = groupStr.includes(fileName);
+
+        if (!found) {
+            // Check custom commands
+            const commands = await this.database.getCustomCommands(webManagementData.groupId);
+            const commandsStr = JSON.stringify(commands);
+            found = commandsStr.includes(fileName);
+        }
+
+        if (!found) {
           this.logger.warn(`[security] Unauthenticated access attempt to file ${fileName} by group ${groupData.id}`);
           return res.status(403).send('Forbidden');
         }
@@ -1039,9 +1275,11 @@ class BotAPI {
         const filePath = path.join(this.database.databasePath, "media", fileName);
 
         // Verify file exists  
-        await fs.access(filePath).catch(() => {
+        try {
+          await fs.access(filePath);
+        } catch {
           return res.status(404).send('File not found');
-        });
+        }
 
         // Set content type  
         const ext = path.extname(fileName).toLowerCase();

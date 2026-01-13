@@ -3,306 +3,625 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel de Gerenciamento de Grupos - RavenaBot</title>
-    <link rel="stylesheet" href="/management.css">
+    <title>Painel de Gerenciamento - RavenaBot</title>
+    <link rel="stylesheet" href="/management.css?v=928371">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.css">
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
 </head>
 <body>
     <div class="container">
-    <header class="header">
-    <div class="header-content">
-    <div class="logo">
-    <img src="bot-logo.png">
-    <h1>RavenaBot - Painel de Gerenciamento</h1>
-    </div>
-    <div class="user-info">
-    <div id="user-details">
-    <p><strong>Usuário:</strong> <span id="user-name">Carregando...</span></p>
-    <p><strong>Número:</strong> <span id="user-number">Carregando...</span></p>
-    <p><strong>Grupo:</strong> <span id="group-name">Carregando...</span></p>
-    </div>
-    <div id="session-info" title="Tempo restante da sessão">
-    <i class="fas fa-clock"></i>
-    <span id="expiration-time">Carregando...</span>
-    </div>
-    </div>
-    </div>
-    </header>
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="/android-chrome-192x192.png" alt="RavenaBot Logo">
+                    <h1>RavenaBot</h1>
+                </div>
+                <div class="user-info">
+                    <div id="user-details">
+                        <p><strong>Usuário:</strong> <span id="user-name">Carregando...</span></p>
+                        <p><strong>Grupo:</strong> <span id="group-name">Carregando...</span></p>
+                    </div>
+                    <div id="session-info" title="Tempo restante da sessão">
+                        <i class="fas fa-clock"></i>
+                        <span id="expiration-time">--:--</span>
+                    </div>
+                </div>
+            </div>
+        </header>
 
-    <main class="main-content">
-    <div id="loading-container">
-    <div class="loading-spinner"></div>
-    <p>Carregando dados do grupo...</p>
+        <main class="main-content">
+            <div id="loading-container">
+                <div class="loading-spinner"></div>
+                <p>Carregando configurações...</p>
+            </div>
+
+            <div id="error-container" class="hidden">
+                <div class="error-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                <h2>Erro ao carregar</h2>
+                <p id="error-message">Detalhes do erro aqui.</p>
+                <button id="retry-button" class="btn btn-primary">Tentar novamente</button>
+            </div>
+
+            <div id="dashboard-content" class="hidden">
+                
+                <!-- Accordion 1: Geral -->
+                <div class="accordion-item">
+                    <div class="accordion-header">
+                        <h3><i class="fas fa-cog"></i> Geral</h3>
+                        <i class="fas fa-chevron-down arrow"></i>
+                    </div>
+                    <div class="accordion-content">
+                        <div class="form-group">
+                            <label>ID do Grupo</label>
+                            <input type="text" id="group-id" disabled class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>Data de Entrada</label>
+                            <input type="text" id="group-created-at" disabled class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label for="group-name-input">Nome do Grupo</label>
+                            <input type="text" id="group-name-input" class="form-control" maxlength="50">
+                        </div>
+                        <div class="form-group">
+                            <label for="group-prefix">Prefixo</label>
+                            <input type="text" id="group-prefix" class="form-control" maxlength="5" placeholder="!">
+                            <small class="form-text text-muted" id="prefix-warning"></small>
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="bot-enabled">
+                            <label for="bot-enabled">Bot Habilitado (Responde a comandos)</label>
+                        </div>
+                        <div class="form-group">
+                            <label for="bot-personality">Personalidade do Bot (IA)</label>
+                            <textarea id="bot-personality" class="form-control" maxlength="250" rows="3" placeholder="Descreva como o bot deve se comportar..."></textarea>
+                            <small class="form-text text-right"><span id="personality-count">0</span>/250</small>
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="custom-ignores-prefix">
+                            <label for="custom-ignores-prefix">Comandos Personalizados sem Prefixo</label>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-primary btn-save-section" data-section="geral">Salvar Geral</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Accordion 2: Funções Administrativas -->
+                <div class="accordion-item">
+                    <div class="accordion-header">
+                        <h3><i class="fas fa-shield-alt"></i> Funções Administrativas</h3>
+                        <i class="fas fa-chevron-down arrow"></i>
+                    </div>
+                    <div class="accordion-content">
+                        <!-- Números Ignorados -->
+                        <div class="list-manager-section">
+                            <label>Números Ignorados</label>
+                            <div class="input-group">
+                                <input type="text" id="new-ignored-number" placeholder="5511999999999" class="form-control">
+                                <button type="button" id="add-ignored-number" class="btn btn-secondary"><i class="fas fa-plus"></i></button>
+                            </div>
+                            <div id="ignored-numbers-list" class="tags-container"></div>
+                        </div>
+
+                        <div class="divider"></div>
+
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="delete-links">
+                            <label for="delete-links">Apagar Links</label>
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="delete-nsfw">
+                            <label for="delete-nsfw">Detectar e Apagar NSFW</label>
+                        </div>
+
+                        <div class="divider"></div>
+
+                         <!-- Palavras Proibidas -->
+                         <div class="list-manager-section">
+                            <label>Apagar mensagens com estas palavras</label>
+                            <div class="input-group">
+                                <input type="text" id="new-forbidden-word" placeholder="Palavra ou frase..." class="form-control">
+                                <button type="button" id="add-forbidden-word" class="btn btn-secondary"><i class="fas fa-plus"></i></button>
+                            </div>
+                            <div id="forbidden-words-list" class="tags-container"></div>
+                        </div>
+
+                        <!-- Usuários Proibidos (Mensagens apagadas) -->
+                        <div class="list-manager-section">
+                            <label>Apagar mensagens destes usuários</label>
+                            <div class="input-group">
+                                <input type="text" id="new-forbidden-user" placeholder="5511999999999" class="form-control">
+                                <button type="button" id="add-forbidden-user" class="btn btn-secondary"><i class="fas fa-plus"></i></button>
+                            </div>
+                            <div id="forbidden-users-list" class="tags-container"></div>
+                        </div>
+
+                        <div class="divider"></div>
+
+                        <div class="form-group">
+                            <label>Categorias Silenciadas</label>
+                            <div id="muted-categories-list" class="checkbox-grid">
+                                <!-- Populated via JS -->
+                            </div>
+                        </div>
+
+                        <div class="divider"></div>
+
+                         <!-- Comandos Ignorados -->
+                         <div class="list-manager-section">
+                            <label>Comandos Ignorados (Strings)</label>
+                            <div class="input-group">
+                                <input type="text" id="new-ignored-cmd" placeholder="!comando" class="form-control">
+                                <button type="button" id="add-ignored-cmd" class="btn btn-secondary"><i class="fas fa-plus"></i></button>
+                            </div>
+                            <div id="ignored-cmds-list" class="tags-container"></div>
+                        </div>
+
+                        <!-- Admins Adicionais -->
+                        <div class="list-manager-section">
+                            <label>Administradores Adicionais (Bot)</label>
+                            <div class="input-group">
+                                <input type="text" id="new-additional-admin" placeholder="5511999999999" class="form-control">
+                                <button type="button" id="add-additional-admin" class="btn btn-secondary"><i class="fas fa-plus"></i></button>
+                            </div>
+                            <div id="additional-admins-list" class="tags-container"></div>
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-primary btn-save-section" data-section="admin">Salvar Admin</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Accordion 3: Automatizações -->
+                <div class="accordion-item">
+                    <div class="accordion-header">
+                        <h3><i class="fas fa-robot"></i> Automatizações</h3>
+                        <i class="fas fa-chevron-down arrow"></i>
+                    </div>
+                    <div class="accordion-content">
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="auto-stt">
+                            <label for="auto-stt">Transcrever Áudios Automaticamente</label>
+                        </div>
+
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="auto-interaction">
+                            <label for="auto-interaction">Interações Automáticas</label>
+                        </div>
+
+                        <div id="interaction-settings" class="hidden">
+                            <div class="slider-group">
+                                <label>Chance: <span id="chance-val">0.1</span>%</label>
+                                <input type="range" id="interaction-chance" min="1" max="1000" class="slider">
+                            </div>
+                            <div class="slider-group">
+                                <label>Cooldown: <span id="cooldown-val">5</span> minutos</label>
+                                <input type="range" id="interaction-cooldown" min="5" max="43200" class="slider">
+                            </div>
+                        </div>
+                        
+                        <div class="divider"></div>
+                        
+                        <!-- Welcome Messages -->
+                        <div class="sub-accordion">
+                            <div class="sub-accordion-header">
+                                <h4>Mensagens de Boas Vindas</h4>
+                                <i class="fas fa-chevron-right sub-arrow"></i>
+                            </div>
+                            <div class="sub-accordion-content">
+                                <div id="greetings-list" class="media-list"></div>
+                                <div class="add-response-buttons">
+                                    <button type="button" class="btn btn-xs btn-outline" onclick="addDirectMedia('greetings', 'text')"><i class="fas fa-font"></i> Texto</button>
+                                    <button type="button" class="btn btn-xs btn-outline" onclick="addDirectMedia('greetings', 'image')"><i class="fas fa-image"></i> Imagem</button>
+                                    <button type="button" class="btn btn-xs btn-outline" onclick="addDirectMedia('greetings', 'video')"><i class="fas fa-video"></i> Vídeo</button>
+                                    <button type="button" class="btn btn-xs btn-outline" onclick="addDirectMedia('greetings', 'audio')"><i class="fas fa-music"></i> Áudio</button>
+                                    <button type="button" class="btn btn-xs btn-outline" onclick="addDirectMedia('greetings', 'sticker')"><i class="fas fa-sticky-note"></i> Sticker</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Farewell Messages -->
+                        <div class="sub-accordion">
+                            <div class="sub-accordion-header">
+                                <h4>Mensagens de Despedida</h4>
+                                <i class="fas fa-chevron-right sub-arrow"></i>
+                            </div>
+                            <div class="sub-accordion-content">
+                                <div id="farewells-list" class="media-list"></div>
+                                <div class="add-response-buttons">
+                                    <button type="button" class="btn btn-xs btn-outline" onclick="addDirectMedia('farewells', 'text')"><i class="fas fa-font"></i> Texto</button>
+                                    <button type="button" class="btn btn-xs btn-outline" onclick="addDirectMedia('farewells', 'image')"><i class="fas fa-image"></i> Imagem</button>
+                                    <button type="button" class="btn btn-xs btn-outline" onclick="addDirectMedia('farewells', 'video')"><i class="fas fa-video"></i> Vídeo</button>
+                                    <button type="button" class="btn btn-xs btn-outline" onclick="addDirectMedia('farewells', 'audio')"><i class="fas fa-music"></i> Áudio</button>
+                                    <button type="button" class="btn btn-xs btn-outline" onclick="addDirectMedia('farewells', 'sticker')"><i class="fas fa-sticky-note"></i> Sticker</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="divider"></div>
+
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="auto-translate">
+                            <label for="auto-translate">Traduzir Mensagens do Bot</label>
+                        </div>
+                        <div class="form-group" id="translate-settings">
+                            <div style="display: flex; gap: 5px; max-width: 50%;">
+                                <input type="text" id="translate-lang" class="form-control" maxlength="30" placeholder="Ex.: Spanish (ES)">
+                                <button type="button" id="btn-lang-picker" class="btn btn-secondary"><i class="fas fa-globe"></i></button>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-primary btn-save-section" data-section="automation">Salvar Automatizações</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Accordion: Streams Twitch -->
+                <div class="accordion-item">
+                    <div class="accordion-header">
+                        <h3><i class="fab fa-twitch"></i> Streams - Twitch</h3>
+                        <i class="fas fa-chevron-down arrow"></i>
+                    </div>
+                    <div class="accordion-content">
+                        <div class="commands-toolbar">
+                            <button type="button" class="btn btn-success btn-add-stream" data-platform="twitch"><i class="fas fa-plus"></i> Adicionar Canal</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table" id="twitch-table">
+                                <thead>
+                                    <tr>
+                                        <th>Canal</th>
+                                        <th style="width: 100px;">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                            <div id="no-twitch-msg" class="text-center p-3 text-muted hidden">Nenhum canal configurado.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Accordion: Streams Kick -->
+                <div class="accordion-item">
+                    <div class="accordion-header">
+                        <h3><i class="fas fa-video"></i> Streams - Kick</h3>
+                        <i class="fas fa-chevron-down arrow"></i>
+                    </div>
+                    <div class="accordion-content">
+                        <div class="commands-toolbar">
+                            <button type="button" class="btn btn-success btn-add-stream" data-platform="kick"><i class="fas fa-plus"></i> Adicionar Canal</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table" id="kick-table">
+                                <thead>
+                                    <tr>
+                                        <th>Canal</th>
+                                        <th style="width: 100px;">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                            <div id="no-kick-msg" class="text-center p-3 text-muted hidden">Nenhum canal configurado.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Accordion: Canais YouTube -->
+                <div class="accordion-item">
+                    <div class="accordion-header">
+                        <h3><i class="fab fa-youtube"></i> Canais - YouTube</h3>
+                        <i class="fas fa-chevron-down arrow"></i>
+                    </div>
+                    <div class="accordion-content">
+                        <div class="commands-toolbar">
+                            <button type="button" class="btn btn-success btn-add-stream" data-platform="youtube"><i class="fas fa-plus"></i> Adicionar Canal</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table" id="youtube-table">
+                                <thead>
+                                    <tr>
+                                        <th>Canal/Handle</th>
+                                        <th style="width: 100px;">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                            <div id="no-youtube-msg" class="text-center p-3 text-muted hidden">Nenhum canal configurado.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Accordion 4: Comandos -->
+                <div class="accordion-item">
+                    <div class="accordion-header">
+                        <h3><i class="fas fa-terminal"></i> Comandos Personalizados</h3>
+                        <i class="fas fa-chevron-down arrow"></i>
+                    </div>
+                    <div class="accordion-content">
+                        <div class="commands-toolbar">
+                            <button type="button" id="btn-add-command" class="btn btn-success"><i class="fas fa-plus"></i> Adicionar Novo</button>
+                        </div>
+                        
+                        <div class="table-responsive">
+                            <table class="table" id="commands-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50px;">Ativo</th>
+                                        <th>Comando</th>
+                                        <th class="text-center" style="width: 80px;">Interage</th>
+                                        <th class="text-center" style="width: 50px;">#</th>
+                                        <th>Resposta(s)</th>
+                                        <th style="width: 60px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Populated via JS -->
+                                </tbody>
+                            </table>
+                            <div id="no-commands-msg" class="text-center p-3 text-muted hidden">Nenhum comando personalizado.</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>ravenabot</p>
+        </footer>
     </div>
 
-    <div id="error-container" class="hidden">
-    <div class="error-icon">
-    <i class="fas fa-exclamation-triangle"></i>
-    </div>
-    <h2>Erro ao carregar os dados</h2>
-    <p id="error-message">Mensagem de erro aqui.</p>
-    <button id="retry-button" class="btn btn-primary">Tentar novamente</button>
-    </div>
+    <!-- Edit/Add Command Modal -->
+    <div id="command-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Editar Comando</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Comando (Gatilho)</label>
+                    <input type="text" id="cmd-trigger" class="form-control" placeholder="Ex: regras">
+                </div>
+                
+                <div class="checkbox-grid-modal">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="cmd-active">
+                        <label for="cmd-active">Ativo</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="cmd-interact">
+                        <label for="cmd-interact" title="Participa das interações aleatórias">Interage</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="cmd-reply-quote">
+                        <label for="cmd-reply-quote">Responder mencionando</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="cmd-send-all">
+                        <label for="cmd-send-all">Enviar todas as respostas</label>
+                    </div>
+                </div>
 
-    <div id="group-form-container" class="hidden">
-    <h2>Configurações do Grupo</h2>
-    
-    <form id="group-form">
-    <div class="form-section">
-    <h3>Configurações Gerais</h3>
-    
-    <div class="id-date-container">
-        <div class="form-group">
-            <label for="group-id" title="ID do grupo (não editável)">ID do Grupo:</label>
-            <input type="text" id="group-id" disabled>
+                <div class="form-group">
+                    <label>Reagir com Emoji</label>
+                    <div class="emoji-input-wrapper" style="display: flex; gap: 5px;">
+                        <input type="text" id="cmd-emoji" class="form-control" placeholder="Emoji" maxlength="2">
+                        <button type="button" id="btn-emoji-picker" class="btn btn-secondary"><i class="far fa-smile"></i></button>
+                    </div>
+                </div>
+
+                <div class="responses-section">
+                    <label>Respostas</label>
+                    <div id="cmd-responses-list"></div>
+                    <div class="add-response-buttons">
+                        <button type="button" class="btn btn-xs btn-outline" onclick="addResponseInput('text')"><i class="fas fa-font"></i> Texto</button>
+                        <button type="button" class="btn btn-xs btn-outline" onclick="openMediaUpload('image')"><i class="fas fa-image"></i> Imagem</button>
+                        <button type="button" class="btn btn-xs btn-outline" onclick="openMediaUpload('video')"><i class="fas fa-video"></i> Vídeo</button>
+                        <button type="button" class="btn btn-xs btn-outline" onclick="openMediaUpload('audio')"><i class="fas fa-music"></i> Áudio</button>
+                        <button type="button" class="btn btn-xs btn-outline" onclick="openMediaUpload('sticker')"><i class="fas fa-sticky-note"></i> Sticker</button>
+                    </div>
+                </div>
+
+                <div id="cmd-metadata" class="metadata-footer text-muted small mt-3">
+                    <!-- Metadata populated via JS -->
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="btn-delete-cmd" class="btn btn-danger hidden">Deletar</button>
+                <div class="spacer"></div>
+                <button type="button" class="btn btn-secondary close-modal-btn">Cancelar</button>
+                <button type="button" id="btn-save-cmd" class="btn btn-primary">Salvar</button>
+            </div>
         </div>
-        
-        <div class="form-group">
-            <label for="group-created-at" title="Data de criação do grupo (não editável)">Criado em:</label>
-            <input type="text" id="group-created-at" disabled>
+    </div>
+
+    <!-- Media Upload Modal (Generic) -->
+    <div id="upload-modal" class="modal hidden">
+        <div class="modal-content small-modal">
+            <div class="modal-header">
+                <h2>Upload de Mídia</h2>
+                <span class="close-upload">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="upload-type">
+                <input type="hidden" id="upload-context"> <!-- 'greetings', 'farewells', 'command' -->
+                
+                <div class="form-group">
+                    <label>Arquivo</label>
+                    <input type="file" id="media-file-input" class="form-control">
+                </div>
+                <div class="form-group" id="caption-group">
+                    <label>Legenda (Opcional)</label>
+                    <textarea id="media-caption" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="checkbox-group hidden" id="as-sticker-group">
+                    <input type="checkbox" id="convert-sticker">
+                    <label for="convert-sticker">Converter para Sticker</label>
+                </div>
+                <div id="upload-status" class="text-center mt-3"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary close-upload">Cancelar</button>
+                <button type="button" id="btn-confirm-upload" class="btn btn-primary">Upload</button>
+            </div>
         </div>
     </div>
-    
-    <div class="form-group">
-    <label for="group-name-input" title="Nome do grupo">Nome:</label>
-    <input type="text" id="group-name-input" maxlength="30">
-    </div>
-    
-    <div class="form-group">
-        <label title="Mensagem de boas-vindas para novos membros">Mensagem de Boas-vindas:</label>
-        <div id="greetings-container" class="media-list">
-            <!-- Media items will be added dynamically here -->
+
+    <!-- Stream/Channel Modal -->
+    <div id="stream-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="stream-modal-title">Editar Stream</h2>
+                <span class="close-stream-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="stream-platform">
+                <input type="hidden" id="stream-index">
+
+                <div class="form-group">
+                    <label>Canal / Usuário</label>
+                    <input type="text" id="stream-channel" class="form-control" placeholder="Nome do canal (sem URL)">
+                    <small class="form-text text-muted" id="stream-hint">Digite apenas o nome de usuário.</small>
+                </div>
+
+                <div class="checkbox-grid-modal">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="stream-mention">
+                        <label for="stream-mention">Marcar Todos</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="stream-ai">
+                        <label for="stream-ai">Gerar mensagem com IA</label>
+                    </div>
+                    <div class="checkbox-group" style="grid-column: 1 / -1;">
+                        <input type="checkbox" id="stream-change-title">
+                        <label for="stream-change-title">Mudar Título do Grupo</label>
+                    </div>
+                </div>
+
+                <div id="stream-titles-group" class="hidden" style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 4px;">
+                    <div class="form-group">
+                        <label>Título Online (Opcional)</label>
+                        <input type="text" id="stream-title-on" class="form-control" maxlength="100" placeholder="Se não definir, troca OFF por ON e 🔴 por 🟢">
+                    </div>
+                    <div class="form-group">
+                        <label>Título Offline (Opcional)</label>
+                        <input type="text" id="stream-title-off" class="form-control" maxlength="100" placeholder="Se não definir, troca ON por OFF e 🟢 por 🔴">
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <!-- Online Media -->
+                <div class="sub-accordion active">
+                    <div class="sub-accordion-header">
+                        <h4><i class="fas fa-satellite-dish"></i> Mídia quando Online</h4>
+                    </div>
+                    <div class="sub-accordion-content" style="display: block;">
+                        <div id="stream-on-media-list" class="media-list"></div>
+                        <div class="add-response-buttons">
+                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('on', 'text')"><i class="fas fa-font"></i> Definir Texto</button>
+                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('on', 'image')"><i class="fas fa-image"></i> Definir Imagem</button>
+                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('on', 'video')"><i class="fas fa-video"></i> Definir Vídeo</button>
+                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('on', 'audio')"><i class="fas fa-music"></i> Definir Áudio</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <!-- Offline Media -->
+                <div class="sub-accordion active">
+                    <div class="sub-accordion-header">
+                        <h4><i class="fas fa-power-off"></i> Mídia quando Offline</h4>
+                    </div>
+                    <div class="sub-accordion-content" style="display: block;">
+                        <div id="stream-off-media-list" class="media-list"></div>
+                        <div class="add-response-buttons">
+                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('off', 'text')"><i class="fas fa-font"></i> Definir Texto</button>
+                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('off', 'image')"><i class="fas fa-image"></i> Definir Imagem</button>
+                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('off', 'video')"><i class="fas fa-video"></i> Definir Vídeo</button>
+                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('off', 'audio')"><i class="fas fa-music"></i> Definir Áudio</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="btn-delete-stream" class="btn btn-danger hidden">Deletar</button>
+                <div class="spacer"></div>
+                <button type="button" class="btn btn-secondary close-stream-modal">Cancelar</button>
+                <button type="button" id="btn-save-stream" class="btn btn-primary">Salvar Stream</button>
+            </div>
         </div>
-        <button type="button" id="add-greeting-media" class="btn btn-secondary btn-sm" style="margin-top: 10px;">
-            <i class="fas fa-plus"></i> Adicionar Mídia/Texto
-        </button>
     </div>
-    
-    <div class="form-group">
-        <label title="Mensagem de despedidas pra quem sai/é removido do grupo">Mensagem de Despedidas:</label>
-        <div id="farewells-container" class="media-list">
-            <!-- Media items will be added dynamically here -->
+
+    <!-- Sticky Save Bar -->
+    <div id="sticky-save-bar" class="sticky-save-bar hidden">
+        <div class="sticky-content">
+            <span>Você tem alterações não salvas.</span>
+            <button id="btn-global-save" class="btn btn-success"><i class="fas fa-save"></i> Salvar Tudo</button>
         </div>
-        <button type="button" id="add-farewell-media" class="btn btn-secondary btn-sm" style="margin-top: 10px;">
-            <i class="fas fa-plus"></i> Adicionar Mídia/Texto
-        </button>
     </div>
 
-    </div>
-    
-    <div class="form-section">
-    <h3>Configurações de Recursos</h3>
-    
-    <div class="form-group checkbox-group">
-    <input type="checkbox" id="group-isActive">
-    <label for="group-isActive" title="Grupo ativo">Bot Ativo no Grupo</label>
-    </div>
-
-    
-    <div class="form-group checkbox-group">
-    <input type="checkbox" id="group-autoTranscribe">
-    <label for="group-autoTranscribe" title="Transcreve áudios automaticamente">Auto Transcrição</label>
-    </div>
-    </div>
-    
-    <div class="form-section">
-    <h3>Filtros de Mensagens</h3>
-    <div class="form-group checkbox-group">
-    <input type="checkbox" id="group-isNSFW">
-    <label for="group-isNSFW" title="O bot tenta identificar imagens e stickers NSFW e apaga automático">Apagar conteúdo NSFW</label>
+    <!-- Custom Alert/Confirm/Prompt Modal -->
+    <div id="custom-dialog-modal" class="modal hidden" style="z-index: 3000;">
+        <div class="modal-content small-modal">
+            <div class="modal-header">
+                <h2 id="dialog-title">Aviso</h2>
+                <span class="close-dialog">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p id="dialog-message"></p>
+                <input type="text" id="dialog-input" class="form-control hidden" style="margin-top: 10px;">
+            </div>
+            <div class="modal-footer">
+                <button id="dialog-btn-cancel" class="btn btn-secondary hidden">Cancelar</button>
+                <button id="dialog-btn-ok" class="btn btn-primary">OK</button>
+            </div>
+        </div>
     </div>
 
-    <div class="form-group checkbox-group">
-    <input type="checkbox" id="group-deleteLinks">
-    <label for="group-deleteLinks" title="O bot apaga mensagens que tiverem links">Apagar Links</label>
+    <!-- Variable Picker Modal -->
+    <div id="variable-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="variable-modal-title">Variáveis Disponíveis</h2>
+                <span class="close-variable-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="variable-search" class="form-control" placeholder="Buscar variável..." style="margin-bottom: 10px;">
+                <div id="variable-list" class="variable-list">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary close-variable-modal">Fechar</button>
+            </div>
+        </div>
     </div>
 
-    <div class="form-group">
-    <label for="text-filter-input" title="Apaga mensagens com estas palavras/frases">Filtros de Texto:</label>
-    <div class="input-with-button">
-    <input type="text" id="text-filter-input" list="text-filters-datalist" placeholder="Adicionar filtro de texto...">
-    <datalist id="text-filters-datalist"></datalist>
-    <button type="button" id="add-text-filter" class="btn btn-add">
-    <i class="fas fa-plus"></i>
-    </button>
-    </div>
-    <div id="text-filters-container" class="tags-container"></div>
-    </div>
-
-    
-
-    <div class="form-group">
-    <label for="people-filter-input" title="Apaga mensagens das pessoas filtradas">Filtros de Pessoas:</label>
-    <div class="input-with-button">
-    <input type="text" id="people-filter-input" list="people-filters-datalist" placeholder="Adicionar filtro de pessoa...">
-    <datalist id="people-filters-datalist"></datalist>
-    <button type="button" id="add-people-filter" class="btn btn-add">
-    <i class="fas fa-plus"></i>
-    </button>
-    </div>
-    <div id="people-filters-container" class="tags-container"></div>
+    <!-- Emoji Picker Modal -->
+    <div id="emoji-modal" class="modal hidden">
+        <div class="modal-content small-modal">
+            <div class="modal-header">
+                <h2>Escolher Emoji</h2>
+                <span class="close-emoji-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="emoji-list" class="emoji-grid">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+        </div>
     </div>
 
-
-
-
-    </div>
-    
-    <div class="form-section">
-    <h3>Nicks (Apelidos)</h3>
-    
-    <div id="nicks-container">
-    <!-- Nick entries will be added dynamically here -->
-    <div class="nick-entry form-group">
-    <input type="text" class="nick-input" placeholder="Número (ex: 55119999)">
-    <input type="text" class="nick-value" placeholder="Nome">
-    <button type="button" class="btn btn-remove nick-remove">
-    <i class="fas fa-times"></i>
-    </button>
-    </div>
-    </div>
-    
-    <button type="button" id="add-nick" class="btn btn-secondary">
-    <i class="fas fa-plus"></i> Adicionar Nick
-    </button>
-    </div>
-    
-    <div class="form-section">
-    <h3>Configuração de Streams</h3>
-    
-    <div class="media-section" id="twitch-section">
-    <h4>Twitch</h4>
-    <div id="twitch-container" class="media-container">
-    <!-- Media items will be added dynamically here -->
-    </div>
-    </div>
-    
-    <div class="media-section" id="youtube-section">
-    <h4>YouTube</h4>
-    <div id="youtube-container" class="media-container">
-    <!-- Media items will be added dynamically here -->
-    </div>
-    </div>
-    
-    <div class="media-section" id="kick-section">
-    <h4>Kick</h4>
-    <div id="kick-container" class="media-container">
-    <!-- Media items will be added dynamically here -->
-    </div>
-    </div>
-    </div>
-    
-    <div class="form-actions">
-    <button type="button" id="save-button" class="btn btn-primary">Salvar Alterações</button>
-    </div>
-    </form>
-    </div>
-    </main>
-
-    <footer class="footer">
-    <p>&copy; 2025 RavenaBot - Todos os direitos reservados</p>
-    </footer>
-    </div>
-
-    <!-- Confirmation Modal -->
-    <div id="confirm-modal" class="modal hidden">
-    <div class="modal-content">
-    <div class="modal-header">
-    <h2>Confirmar Alterações</h2>
-    <span class="close-modal">&times;</span>
-    </div>
-    <div class="modal-body">
-    <p>As seguintes alterações serão aplicadas:</p>
-    <div class="changes-formatted" id="changes-formatted"></div>
-    <!-- <p>JSON para debug:</p>
-    <div class="changes-raw" id="changes-raw"></div> -->
-    </div>
-    <div class="modal-footer">
-    <button id="cancel-changes" class="btn btn-secondary">Cancelar</button>
-    <button id="confirm-changes" class="btn btn-primary">Confirmar</button>
-    </div>
-    </div>
-    </div>
-
-    <!-- Media Upload Modal -->
-    <div id="media-upload-modal" class="modal hidden">
-    <div class="modal-content">
-    <div class="modal-header">
-    <h2>Adicionar Mídia</h2>
-    <span class="close-modal">&times;</span>
-    </div>
-    <div class="modal-body">
-    <div class="form-group" id="media-platform-group">
-    <label for="media-platform">Plataforma:</label>
-    <select id="media-platform">
-    <option value="twitch">Twitch</option>
-    <option value="youtube">YouTube</option>
-    <option value="kick">Kick</option>
-    </select>
-    </div>
-    <div class="form-group" id="media-channel-group">
-    <label for="media-channel">Canal:</label>
-    <input type="text" id="media-channel" placeholder="Nome do canal">
-    </div>
-    <div class="form-group">
-    <label for="media-type">Tipo de Mídia:</label>
-    <select id="media-type">
-    <option value="text">💬 Texto</option>
-    <option value="image">🖼 Imagem</option>
-    <option value="sound">🔉 Som</option>
-    <option value="video">📼 Vídeo</option>
-    <option value="sticker">🩻 Sticker</option>
-    </select>
-    </div>
-    <div class="form-group" id="text-content-group">
-    <label for="text-content">Conteúdo:</label>
-    <textarea id="text-content" rows="4"></textarea>
-    </div>
-    <div class="form-group hidden" id="media-file-group">
-    <label for="media-file">Arquivo (max 5MB):</label>
-    <input type="file" id="media-file" accept="image/*,video/*,audio/*">
-    <div class="checkbox-group" style="margin-top: 10px;">
-        <input type="checkbox" id="send-as-sticker">
-        <label for="send-as-sticker" title="Converte a imagem/vídeo para sticker ao salvar">Enviar como Sticker</label>
-    </div>
-    <div id="media-preview-container" class="hidden">
-    <img id="media-preview" class="media-preview">
-    </div>
-    </div>
-    <div class="form-group" id="media-event-group">
-    <label for="media-event">Evento:</label>
-    <select id="media-event">
-    <option value="on">Online/Novo Vídeo</option>
-    <option value="off">Offline</option>
-    </select>
-    </div>
-    </div>
-    <div class="modal-footer">
-    <button id="cancel-media" class="btn btn-secondary">Cancelar</button>
-    <button id="add-media" class="btn btn-primary">Adicionar</button>
-    </div>
-    </div>
-    </div>
-
-    <!-- Restore Defaults Confirmation Modal -->
-    <div id="restore-defaults-modal" class="modal hidden">
-    <div class="modal-content">
-    <div class="modal-header">
-    <h2>Restaurar Padrões</h2>
-    <span class="close-modal">&times;</span>
-    </div>
-    <div class="modal-body">
-    <p>Tem certeza que deseja restaurar as configurações padrão para este canal?</p>
-    <p>Isso irá substituir todas as configurações atuais.</p>
-    </div>
-    <div class="modal-footer">
-    <button id="cancel-restore" class="btn btn-secondary">Cancelar</button>
-    <button id="confirm-restore" class="btn btn-primary">Restaurar</button>
-    </div>
-    </div>
-    </div>
-
-    <script src="/management.js"></script>
+    <script src="/management.js?v=928371"></script>
 </body>
 </html>
