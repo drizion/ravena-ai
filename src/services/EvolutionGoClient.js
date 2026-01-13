@@ -58,13 +58,13 @@ class EvolutionGoClient {
   }
 
 
-  _handleError(error, context) {
+  _handleError(error, context, reqData = {}) {
     const status = error.response?.status;
     const data = error.response?.data;
     const message = data?.message || error.message || "Erro desconhecido";
 
     // Logs detalhados para debug
-    this.logger.error(`[EvoGO] Erro em ${context}: ${status} - ${message}`);
+    this.logger.error(`[EvoGO] Erro em ${context}: ${status} - ${message}`, { reqData });
     if (data) {
       this.logger.error(`\tDetalhes:`, JSON.stringify(data).substring(0, 200));
     }
@@ -89,7 +89,7 @@ class EvolutionGoClient {
       const response = await this.client.get(endpoint, config);
       return response.data;
     } catch (error) {
-      return this._handleError(error, `GET ${endpoint}`);
+      return this._handleError(error, `GET ${endpoint}`, params);
     }
   }
 
@@ -103,7 +103,7 @@ class EvolutionGoClient {
       const response = await this.client.post(endpoint, body, config);
       return response.data;
     } catch (error) {
-      return this._handleError(error, `POST ${endpoint}`);
+      return this._handleError(error, `POST ${endpoint}`, body);
     }
   }
 
@@ -116,7 +116,7 @@ class EvolutionGoClient {
       const response = await this.client.put(endpoint, body, config);
       return response.data;
     } catch (error) {
-      return this._handleError(error, `PUT ${endpoint}`);
+      return this._handleError(error, `PUT ${endpoint}`, body);
     }
   }
 
@@ -132,7 +132,7 @@ class EvolutionGoClient {
       const response = await this.client.delete(endpoint, config);
       return response.data;
     } catch (error) {
-      return this._handleError(error, `DELETE ${endpoint}`);
+      return this._handleError(error, `DELETE ${endpoint}`, body);
     }
   }
 }
