@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel de Gerenciamento - RavenaBot</title>
-    <link rel="stylesheet" href="/management.css?v=928371">
+    <link rel="stylesheet" href="/management.css?v=928372">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.css">
     <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
@@ -350,12 +350,9 @@
                             <table class="table" id="commands-table">
                                 <thead>
                                     <tr>
-                                        <th style="width: 50px;">Ativo</th>
+                                        <th style="width: 50px;"></th>
                                         <th>Comando</th>
-                                        <th class="text-center" style="width: 80px;">Interage</th>
-                                        <th class="text-center" style="width: 50px;">#</th>
                                         <th>Resposta(s)</th>
-                                        <th style="width: 60px;"></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -526,10 +523,10 @@
                     <div class="sub-accordion-content" style="display: block;">
                         <div id="stream-on-media-list" class="media-list"></div>
                         <div class="add-response-buttons">
-                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('on', 'text')"><i class="fas fa-font"></i> Definir Texto</button>
-                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('on', 'image')"><i class="fas fa-image"></i> Definir Imagem</button>
-                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('on', 'video')"><i class="fas fa-video"></i> Definir Vídeo</button>
-                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('on', 'audio')"><i class="fas fa-music"></i> Definir Áudio</button>
+                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('on', 'text')"><i class="fas fa-font"></i> Texto</button>
+                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('on', 'image')"><i class="fas fa-image"></i> Imagem</button>
+                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('on', 'video')"><i class="fas fa-video"></i> Vídeo</button>
+                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('on', 'audio')"><i class="fas fa-music"></i> Áudio</button>
                         </div>
                     </div>
                 </div>
@@ -544,10 +541,10 @@
                     <div class="sub-accordion-content" style="display: block;">
                         <div id="stream-off-media-list" class="media-list"></div>
                         <div class="add-response-buttons">
-                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('off', 'text')"><i class="fas fa-font"></i> Definir Texto</button>
-                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('off', 'image')"><i class="fas fa-image"></i> Definir Imagem</button>
-                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('off', 'video')"><i class="fas fa-video"></i> Definir Vídeo</button>
-                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('off', 'audio')"><i class="fas fa-music"></i> Definir Áudio</button>
+                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('off', 'text')"><i class="fas fa-font"></i> Texto</button>
+                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('off', 'image')"><i class="fas fa-image"></i> Imagem</button>
+                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('off', 'video')"><i class="fas fa-video"></i> Vídeo</button>
+                            <button type="button" class="btn btn-xs btn-outline" onclick="addStreamMedia('off', 'audio')"><i class="fas fa-music"></i> Áudio</button>
                         </div>
                     </div>
                 </div>
@@ -557,7 +554,7 @@
                 <button type="button" id="btn-delete-stream" class="btn btn-danger hidden">Deletar</button>
                 <div class="spacer"></div>
                 <button type="button" class="btn btn-secondary close-stream-modal">Cancelar</button>
-                <button type="button" id="btn-save-stream" class="btn btn-primary">Salvar Stream</button>
+                <button type="button" id="btn-save-stream" class="btn btn-primary">Salvar</button>
             </div>
         </div>
     </div>
@@ -622,6 +619,6 @@
         </div>
     </div>
 
-    <script src="/management.js?v=928371"></script>
+    <script src="/management.js?v=928372"></script>
 </body>
 </html>

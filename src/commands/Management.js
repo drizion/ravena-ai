@@ -350,12 +350,31 @@ class Management {
     }
 
     const targetLanguage = args.join(' ');
-    group.autoTranslateTo = targetLanguage;
+
+    const SUPPORTED_LANGUAGES = [
+        'English (EN)', 'Spanish (ES)', 'Russian (RU)', 'Portuguese (PT)',
+        'French (FR)', 'German (DE)', 'Italian (IT)', 'Japanese (JA)',
+        'Chinese (ZH)', 'Korean (KO)', 'Arabic (AR)', 'Hindi (HI)',
+        'Turkish (TR)', 'Dutch (NL)', 'Polish (PL)', 'Indonesian (ID)',
+        'Vietnamese (VI)', 'Thai (TH)'
+    ];
+
+    if (!SUPPORTED_LANGUAGES.some(lang => lang.toLowerCase() === targetLanguage.toLowerCase())) {
+        return new ReturnMessage({
+            chatId: group.id,
+            content: `❌ Idioma não suportado ou formato inválido.\n\nEscolha um da lista: ${SUPPORTED_LANGUAGES.join(', ')}`
+        });
+    }
+
+    // Normaliza para o nome correto (com caps do array)
+    const normalizedLang = SUPPORTED_LANGUAGES.find(lang => lang.toLowerCase() === targetLanguage.toLowerCase());
+
+    group.autoTranslateTo = normalizedLang;
     await this.database.saveGroup(group);
 
     return new ReturnMessage({
       chatId: group.id,
-      content: `O bot agora irá tentar traduzir todas as mensagens para '${targetLanguage}'.\n\nRecomendado usar o nome do idioma em inglês seguido da sigla de 2 letras entre parênteses para melhor funcionamento do fallback.\nExemplo: "Spanish (ES)"`
+      content: `O bot agora irá tentar traduzir todas as mensagens para '${normalizedLang}'.`
     });
   }
   

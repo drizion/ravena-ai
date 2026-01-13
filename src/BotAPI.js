@@ -726,6 +726,20 @@ class BotAPI {
         // Check limits before applying changes
         await checkGroupLimits(groupId, 'streams', { groupData: changes });
 
+        // Validate autoTranslateTo
+        if (changes.autoTranslateTo) {
+            const SUPPORTED_LANGUAGES = [
+                'English (EN)', 'Spanish (ES)', 'Russian (RU)', 'Portuguese (PT)',
+                'French (FR)', 'German (DE)', 'Italian (IT)', 'Japanese (JA)',
+                'Chinese (ZH)', 'Korean (KO)', 'Arabic (AR)', 'Hindi (HI)',
+                'Turkish (TR)', 'Dutch (NL)', 'Polish (PL)', 'Indonesian (ID)',
+                'Vietnamese (VI)', 'Thai (TH)'
+            ];
+            if (!SUPPORTED_LANGUAGES.includes(changes.autoTranslateTo)) {
+                return res.status(400).json({ success: false, message: 'Idioma para tradução não suportado.' });
+            }
+        }
+
         this.logger.info(`[management][${token}][${groupId}] UPDATED Group data:\n${JSON.stringify(changes, null, 2)}`);
 
         // Apply changes

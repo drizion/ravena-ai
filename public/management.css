@@ -266,13 +266,14 @@ input[type="checkbox"] {
 }
 
 .tag {
-    background-color: rgba(255, 255, 255, 0.1);
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 0.85rem;
+    background-color: rgba(255, 255, 255, 0.15);
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-size: 0.95rem;
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 8px;
+    margin-bottom: 5px;
 }
 
 .tag .remove {
@@ -307,6 +308,7 @@ input[type="checkbox"] {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 10px;
 }
 
 .media-item-content {
@@ -314,7 +316,8 @@ input[type="checkbox"] {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-right: 10px;
+    font-size: 0.9rem;
+    margin-right: 0;
 }
 
 /* Table */
@@ -326,13 +329,13 @@ input[type="checkbox"] {
     width: 100%;
     border-collapse: collapse;
     margin-bottom: 1rem;
-    min-width: 500px; /* Force scroll on mobile */
 }
 
 .table th, .table td {
     padding: 10px;
     text-align: left;
     border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
 }
 
 .table th {
@@ -344,14 +347,6 @@ input[type="checkbox"] {
     margin-bottom: 1rem;
     display: flex;
     justify-content: flex-end;
-}
-
-/* Hide Columns in Commands Table */
-#commands-table th:nth-child(3),
-#commands-table td:nth-child(3),
-#commands-table th:nth-child(4),
-#commands-table td:nth-child(4) {
-    display: none;
 }
 
 /* Modals */
@@ -657,8 +652,50 @@ div:focus-within > .btn-insert-var {
     .container { max-width: 100%; }
     .header h1 { font-size: 1rem; }
     .accordion-header h3 { font-size: 1rem; }
-    .btn { width: 100%; margin-bottom: 5px; }
-    .form-actions .btn { width: auto; }
+    
+    .btn { margin-bottom: 5px; }
+    
+    /* 2 buttons per line for media addition */
+    .add-response-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+    }
+    .add-response-buttons .btn {
+        width: 48%; /* Fallback */
+        flex: 1 0 45%;
+        margin-bottom: 0;
+        justify-content: center;
+    }
+    /* First button (Texto) occupies full line */
+    .add-response-buttons .btn:first-child {
+        flex: 1 0 100%;
+    }
+
+    /* Modal Footer Buttons Equal Width */
+    .modal-footer {
+        display: flex;
+        gap: 10px;
+    }
+    .modal-footer .btn {
+        flex: 1;
+        width: auto;
+        font-size: 0.9rem; /* Normalize font size */
+        padding: 10px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 0;
+    }
+    .modal-footer .spacer {
+        display: none; /* Remove spacer on mobile to let flex grow work */
+    }
+
     .checkbox-grid-modal { grid-template-columns: 1fr; }
-    .add-response-buttons { justify-content: center; }
+    
+    /* Allow table text wrapping on mobile for channel names */
+    .table th, .table td {
+        white-space: normal;
+        word-break: break-all;
+    }
 }

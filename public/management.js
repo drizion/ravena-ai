@@ -11,9 +11,106 @@ document.addEventListener('DOMContentLoaded', () => {
     let isDirty = false;
     let currentStream = null; // { platform, index, data }
     let pickerMode = 'variable'; // 'variable' or 'language'
+    let lastFocusedInput = null;
 
     // Constants
     const API_BASE = '/api';
+
+    const AVAILABLE_LANGUAGES = [
+        { code: 'English (EN)', desc: 'Inglês' },
+        { code: 'Spanish (ES)', desc: 'Espanhol' },
+        { code: 'Russian (RU)', desc: 'Russo' },
+        { code: 'Portuguese (PT)', desc: 'Português' },
+        { code: 'French (FR)', desc: 'Francês' },
+        { code: 'German (DE)', desc: 'Alemão' },
+        { code: 'Italian (IT)', desc: 'Italiano' },
+        { code: 'Japanese (JA)', desc: 'Japonês' },
+        { code: 'Chinese (ZH)', desc: 'Chinês' },
+        { code: 'Korean (KO)', desc: 'Coreano' },
+        { code: 'Arabic (AR)', desc: 'Árabe' },
+        { code: 'Hindi (HI)', desc: 'Hindi' },
+        { code: 'Turkish (TR)', desc: 'Turco' },
+        { code: 'Dutch (NL)', desc: 'Holandês' },
+        { code: 'Polish (PL)', desc: 'Polonês' },
+        { code: 'Indonesian (ID)', desc: 'Indonésio' },
+        { code: 'Vietnamese (VI)', desc: 'Vietnamita' },
+        { code: 'Thai (TH)', desc: 'Tailandês' }
+    ];
+
+    const AVAILABLE_VARIABLES = [
+        { code: '{day}', desc: 'Dia da semana (ex: Segunda-feira)' },
+        { code: '{date}', desc: 'Data atual (ex: 12/01/2026)' },
+        { code: '{time}', desc: 'Hora atual (ex: 14:30:00)' },
+        { code: '{data-hora}', desc: 'Hora (HH)' },
+        { code: '{data-minuto}', desc: 'Minuto (MM)' },
+        { code: '{data-segundo}', desc: 'Segundo (SS)' },
+        { code: '{data-dia}', desc: 'Dia (DD)' },
+        { code: '{data-mes}', desc: 'Mês (MM)' },
+        { code: '{data-ano}', desc: 'Ano (YYYY)' },
+        { code: '{randomPequeno}', desc: 'Número aleatório 1-10' },
+        { code: '{randomMedio}', desc: 'Número aleatório 1-100' },
+        { code: '{randomGrande}', desc: 'Número aleatório 1-1000' },
+        { code: '{randomMuitoGrande}', desc: 'Número aleatório 1-10000' },
+        { code: '{rndDado-6}', desc: 'Dado de 6 lados (exemplo)' },
+        { code: '{rndDadoRange-1-100}', desc: 'Número entre 1 e 100 (exemplo)' },
+        { code: '{somaRandoms}', desc: 'Soma dos números gerados anteriormente' },
+        { code: '{pessoa}', desc: 'Nome de quem enviou a mensagem' },
+        { code: '{group}', desc: 'Nome do grupo' },
+        { code: '{contador}', desc: 'Vezes que o comando foi usado' },
+        { code: '{membroRandom}', desc: 'Nome de um membro aleatório' },
+        { code: '{mention}', desc: 'Menciona usuário (autor/mencionado/aleatório)' },
+        { code: '{singleMention}', desc: 'Mesma menção repetida' },
+        { code: '{mentionOuEu}', desc: 'Menciona usuário ou autor' },
+        { code: '{reddit-memes}', desc: 'Post aleatório do r/memes (exemplo)' },
+        { code: '{weather:São Paulo}', desc: 'Clima de São Paulo (exemplo)' },
+        { code: '{cmd-!outrocomando}', desc: 'Executa outro comando' },
+        { code: '{nomeCanal}', desc: 'Stream: Nome do canal' },
+        { code: '{titulo}', desc: 'Stream: Título da live' },
+        { code: '{jogo}', desc: 'Stream: Jogo/Categoria' },
+        { code: '{author}', desc: 'YouTube: Autor do vídeo' },
+        { code: '{title}', desc: 'YouTube: Título do vídeo' },
+        { code: '{link}', desc: 'YouTube: Link do vídeo' }
+    ];
+
+    const COMMON_EMOJIS = [
+        '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇',
+        '🥰', '😍', '🤩', '😘', '😗', '☺️', '😚', '😙', '😋', '😛', '😜', '🤪', '😝',
+        '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😶‍🌫️', '😏', '😒',
+        '🙄', '😬', '🤥', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮',
+        '🤧', '🥵', '🥶', '🥴', '😵', '😵‍💫', '🤯', '🤠', '🥳', '😎', '🤓', '🧐', '😕',
+        '😟', '🙁', '☹️', '😮', '😯', '😲', '😳', '🥺', '😦', '😧', '😨', '😰', '😥',
+        '😢', '😭', '😱', '😖', '😣', '😞', '😓', '😩', '😫', '🥱', '😤', '😡', '😠',
+        '🤬', '😈', '👿', '💀', '☠️', '💩', '🤡', '👹', '👺', '👻', '👽', '👾', '🤖',
+        '👋', '🤚', '🖐', '✋', '🖖', '👌', '🤌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙',
+        '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏',
+        '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💅', '🤳', '💪', '🦾', '🦵', '🦶', '👂',
+        '🦻', '👃', '🧠', '🫀', '🫁', '🦷', '🦴', '👀', '👁', '👅', '👄', '🫦', '👶',
+        '🧒', '👦', '👧', '🧑', '👱', '👨', '🧔', '👨‍🦰', '👨‍🦱', '👨‍🦳', '👨‍🦲', '👩', '👩‍🦰',
+        '🧑‍🦰', '👩‍🦱', '🧑‍🦱', '👩‍🦳', '🧑‍🦳', '👩‍🦲', '🧑‍🦲', '👱‍♀️', '👱‍♂️', '🧓', '👴', '👵',
+        '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❤️‍🔥', '❤️‍🩹', '❣️',
+        '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', '✝️', '☪️', '🕉', '☸️',
+        '✡️', '🔯', '🕎', '☯️', '☦️', '🛐', '⛎', '♈️', '♉️', '♊️', '♋️', '♋️', '♌️', '♍️',
+        '♎️', '♏️', '♐️', '♑️', '♒️', '♓️', '🆔', '⚛️', '🉑', '☢️', '☣️', '📴', '📳',
+        '🈶', '🈚️', '🈸', '🈺', '🈷️', '✴️', '🆚', '💮', '🉐', '㊙️', '㊗️', '🈴', '🈵',
+        '🈹', '🈲', '🅰️', '🅱️', '🆎', '🆑', '🅾️', '🆘', '❌', '⭕️', '🛑', '⛔️', '📛',
+        '🚫', '💯', '💢', '♨️', '🚷', '🚯', '🚳', '🚱', '🔞', '📵', '🚭', '❗️', '❕',
+        '❓', '❔', '‼️', '⁉️', '🔅', '🔆', '〽️', '⚠️', '🚸', '🔱', '⚜️', '🔰', '♻️',
+        '✅', '🈯️', '💹', '❇️', '✳️', '❎', '🌐', '💠', 'Ⓜ️', '🌀', '💤', '🏧', '🚾',
+        '♿️', '🅿️', '🈳', '🈂️', '🛂', '🛃', '🛄', '🛅', '🚹', '🚺', '🚼', '⚧', '🚻',
+        '🚮', '🎦', '📶', '🈁', '🔣', 'ℹ️', '🔤', '🔡', '🔠', '🆖', '🆗', '🆙', '🆒',
+        '🆕', '🆓', '0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣',
+        '🔟', '🔢', '#️⃣', '*️⃣', '⏏️', '▶️', '⏸', '⏯', '⏹', '⏺', '⏭', '⏮', '⏩',
+        '⏪', '⏫', '⏬', '◀️', '🔼', '🔽', '➡️', '⬅️', '⬆️', '⬇️', '↗️', '↘️', '↙️',
+        '↖️', '↕️', '↔️', '↪️', '↩️', '⤴️', '⤵️', '🔀', '🔁', '🔂', '🔄', '🔃', '🎵',
+        '🎶', '➕', '➖', '➗', '✖️', '♾', '💲', '💱', '™️', '©️', '®️', '👁‍🗨', '🔚',
+        '🔙', '🔛', '🔝', '🔜', '〰️', '➰', '➿', '✔️', '☑️', '🔘', '🔴', '🟠', '🟡',
+        '🟢', '🔵', '🟣', '⚫', '⚪', '🟤', '🔺', '🔻', '🔸', '🔹', '🔶', '🔷', '🔳',
+        '🔲', '▪️', '▫️', '◾️', '◽️', '◼️', '◻️', '🟥', '🟧', '🟨', '🟩', '🟦', '🟪',
+        '⬛', '⬜', '🟫', '🔈', '🔇', '🔉', '🔊', '🔔', '🔕', '📣', '📢', '👁‍🗨', '💬',
+        '💭', '🗯', '♠️', '♣️', '♥️', '♦️', '🃏', '🎴', '🀄️', '🕐', '🕑', '🕒', '🕓',
+        '🕔', '🕕', '🕖', '🕗', '🕘', '🕙', '🕚', '🕛', '🕜', '🕝', '🕞', '🕟', '🕠',
+        '🕡', '🕢', '🕣', '🕤', '🕥', '🕦', '🕧'
+    ];
 
     // UI Elements
     const els = {
@@ -215,7 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const resGroup = await fetch(`${API_BASE}/group?id=${groupId}&token=${token}`);
             if (!resGroup.ok) throw new Error('Falha ao carregar grupo');
             groupData = await resGroup.json();
-            originalGroupData = JSON.parse(JSON.stringify(groupData)); // Deep clone for comparison
+            originalGroupData = JSON.parse(JSON.stringify(groupData)); 
             
             const resCmds = await fetch(`${API_BASE}/custom-commands/${groupId}?token=${token}`);
             if (resCmds.ok) {
@@ -282,10 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         for (const [key, value] of Object.entries(current)) {
-            // Ignore internal keys
             if (['id', 'createdAt', 'addedBy', 'removedBy', 'lastUpdated'].includes(key)) continue;
-            
-            // Check diff
             if (!original.hasOwnProperty(key) || isDifferent(original[key], value)) {
                 changes[key] = value;
             }
@@ -299,7 +393,7 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const [key, value] of Object.entries(changes)) {
             let valDisplay = '';
             if (typeof value === 'object') {
-                if (key === 'greetings' || key === 'farewells' || key === 'twitch' || key === 'kick' || key === 'youtube') {
+                if (['greetings', 'farewells', 'twitch', 'kick', 'youtube'].includes(key)) {
                     valDisplay = '<em>(Mídia/Configuração Complexa Atualizada)</em>';
                 } else {
                     valDisplay = JSON.stringify(value).substring(0, 100) + (JSON.stringify(value).length > 100 ? '...' : '');
@@ -308,7 +402,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 valDisplay = String(value).substring(0, 100);
             }
             
-            // Translate keys
             const keyMap = {
                 'name': 'Nome do Grupo', 'prefix': 'Prefixo', 'paused': 'Bot Pausado',
                 'customAIPrompt': 'Personalidade IA', 'customIgnoresPrefix': 'Ignorar Prefixo',
@@ -357,10 +450,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function saveAllChanges() {
         try {
-            // Collect current state
             updateGroupDataFromForm();
-            
-            // Calculate Diff
             const changes = calculateChanges(originalGroupData, groupData);
             
             if (Object.keys(changes).length === 0) {
@@ -369,7 +459,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Prompt user
             const confirmed = await showCustomConfirm(
                 `As seguintes alterações serão salvas:<br><br>${formatChanges(changes)}`,
                 'Confirmar Alterações'
@@ -395,7 +484,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(err.message || 'Falha ao salvar');
             }
 
-            // Update original state
             originalGroupData = JSON.parse(JSON.stringify(groupData));
             setDirty(false);
             await showCustomAlert('Todas as alterações foram salvas!', 'Sucesso');
@@ -434,8 +522,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         groupData.autoTranslateTo = autoTranslate ? translateLang : false;
     }
-
-    // --- Population ---
 
     function populateFields() {
         document.getElementById('group-id').value = groupData.id;
@@ -494,9 +580,9 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('auto-interaction').checked = !!interact.enabled;
         
         const chanceVal = interact.chance || 1;
-        document.getElementById('interaction-chance').value = Math.min(chanceVal, 100); 
-        document.getElementById('chance-val').textContent = (Math.min(chanceVal, 100) / 10).toFixed(1);
-        document.getElementById('interaction-chance').max = 100;
+        document.getElementById('interaction-chance').value = chanceVal; 
+        document.getElementById('chance-val').textContent = (chanceVal / 100).toFixed(2);
+        document.getElementById('interaction-chance').max = 1000;
 
         document.getElementById('interaction-cooldown').value = interact.cooldown || 5;
         document.getElementById('cooldown-val').textContent = interact.cooldown || 5;
@@ -574,9 +660,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     els.accordions.forEach(acc => {
         acc.querySelector('.accordion-header').addEventListener('click', () => {
-            const active = document.querySelectorAll('.accordion-item.active');
-            if (!acc.classList.contains('active') && active.length >= 2) {
-                active[0].classList.remove('active');
+            const currentActive = document.querySelector('.accordion-item.active');
+            if(currentActive && currentActive !== acc) {
+                currentActive.classList.remove('active');
             }
             acc.classList.toggle('active');
         });
@@ -588,41 +674,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // --- Logic Handlers ---
-
-    document.getElementById('interaction-chance').addEventListener('input', (e) => {
-        document.getElementById('chance-val').textContent = (e.target.value / 10).toFixed(1);
-    });
-    document.getElementById('interaction-cooldown').addEventListener('input', (e) => {
-        document.getElementById('cooldown-val').textContent = e.target.value;
-    });
-
-    document.getElementById('auto-interaction').addEventListener('change', (e) => {
-        toggleInteractionSettings(e.target.checked);
-    });
-
     function toggleInteractionSettings(show) {
         document.getElementById('interaction-settings').classList.toggle('hidden', !show);
     }
 
-    document.getElementById('auto-translate').addEventListener('change', (e) => {
-        toggleTranslateSettings(e.target.checked);
-    });
-
     function toggleTranslateSettings(show) {
         document.getElementById('translate-settings').classList.toggle('hidden', !show);
     }
-
-    document.getElementById('bot-personality').addEventListener('input', (e) => {
-        document.getElementById('personality-count').textContent = e.target.value.length;
-    });
-
-    // List Adders
-    setupListAdder('add-ignored-number', 'new-ignored-number', 'ignoredNumbers');
-    setupListAdder('add-forbidden-word', 'new-forbidden-word', 'filters.words');
-    setupListAdder('add-forbidden-user', 'new-forbidden-user', 'filters.people');
-    setupListAdder('add-ignored-cmd', 'new-ignored-cmd', 'mutedStrings');
-    setupListAdder('add-additional-admin', 'new-additional-admin', 'additionalAdmins');
 
     function setupListAdder(btnId, inputId, dataPath) {
         document.getElementById(btnId).addEventListener('click', () => {
@@ -736,10 +794,6 @@ document.addEventListener('DOMContentLoaded', () => {
         els.streamModal.classList.remove('hidden');
     }
 
-    els.streamChangeTitle.addEventListener('change', (e) => {
-        toggleStreamTitles(e.target.checked);
-    });
-
     function toggleStreamTitles(show) {
         els.streamTitlesGroup.classList.toggle('hidden', !show);
     }
@@ -766,7 +820,6 @@ document.addEventListener('DOMContentLoaded', () => {
             div.innerHTML = `
                 <div class="media-item-content">${display}</div>
                 <div class="btn-group">
-                    <button class="btn btn-xs btn-primary btn-edit-media-item"><i class="fas fa-edit"></i></button>
                     <button class="btn btn-xs btn-danger btn-remove-media-item"><i class="fas fa-trash"></i></button>
                 </div>
             `;
@@ -775,18 +828,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if(await showCustomConfirm('Remover este item?')) {
                     mediaArray.splice(index, 1);
                     renderStreamMediaList(containerId, mediaArray);
-                }
-            };
-
-            div.querySelector('.btn-edit-media-item').onclick = async () => {
-                if(media.type === 'text') {
-                    const newText = await showCustomPrompt("Editar Texto:", media.content);
-                    if(newText !== null) {
-                        media.content = newText;
-                        renderStreamMediaList(containerId, mediaArray);
-                    }
-                } else {
-                    await showCustomAlert('Para editar mídia, remova e adicione novamente.');
                 }
             };
 
@@ -800,6 +841,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (type === 'text') {
             const text = await showCustomPrompt("Digite o texto:");
             if (text) {
+                const existingIdx = targetArray.findIndex(m => m.type === 'text');
+                if(existingIdx !== -1) targetArray.splice(existingIdx, 1);
+                
                 targetArray.push({ type: 'text', content: text });
                 renderStreamMediaList(`stream-${context}-media-list`, targetArray);
             }
@@ -828,7 +872,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Direct Media Add (Greetings/Farewells) ---
     window.addDirectMedia = async function(context, type) {
         if (type === 'text') {
             const text = await showCustomPrompt("Digite a mensagem:");
@@ -936,14 +979,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (responsesCount > 1) respPreview += ` (+${responsesCount-1})`;
 
             tr.innerHTML = `
-                <td><input type="checkbox" disabled ${cmd.active ? 'checked' : ''}></td>
-                <td>${cmd.startsWith}</td>
-                <td class="text-center"><input type="checkbox" disabled ${!cmd.ignoreInteract ? 'checked' : ''}></td>
-                <td class="text-center">${cmd.count || 0}</td>
-                <td>${respPreview}</td>
                 <td>
                     <button class="btn btn-xs btn-primary btn-edit-cmd"><i class="fas fa-edit"></i></button>
                 </td>
+                <td>${cmd.startsWith} ${!cmd.active ? '(Desativado)' : ''}</td>
+                <td>${respPreview}</td>
             `;
             
             tr.querySelector('.btn-edit-cmd').onclick = () => openCommandModal(cmd);
@@ -988,48 +1028,6 @@ document.addEventListener('DOMContentLoaded', () => {
         els.cmdModal.classList.remove('hidden');
     }
 
-    // --- Emoji Picker Logic ---
-
-    const COMMON_EMOJIS = [
-        '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇',
-        '🥰', '😍', '🤩', '😘', '😗', '☺️', '😚', '😙', '😋', '😛', '😜', '🤪', '😝',
-        '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😶‍🌫️', '😏', '😒',
-        '🙄', '😬', '🤥', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮',
-        '🤧', '🥵', '🥶', '🥴', '😵', '😵‍💫', '🤯', '🤠', '🥳', '😎', '🤓', '🧐', '😕',
-        '😟', '🙁', '☹️', '😮', '😯', '😲', '😳', '🥺', '😦', '😧', '😨', '😰', '😥',
-        '😢', '😭', '😱', '😖', '😣', '😞', '😓', '😩', '😫', '🥱', '😤', '😡', '😠',
-        '🤬', '😈', '👿', '💀', '☠️', '💩', '🤡', '👹', '👺', '👻', '👽', '👾', '🤖',
-        '👋', '🤚', '🖐', '✋', '🖖', '👌', '🤌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙',
-        '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏',
-        '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💅', '🤳', '💪', '🦾', '🦵', '🦶', '👂',
-        '🦻', '👃', '🧠', '🫀', '🫁', '🦷', '🦴', '👀', '👁', '👅', '👄', '🫦', '👶',
-        '🧒', '👦', '👧', '🧑', '👱', '👨', '🧔', '👨‍🦰', '👨‍🦱', '👨‍🦳', '👨‍🦲', '👩', '👩‍🦰',
-        '🧑‍🦰', '👩‍🦱', '🧑‍🦱', '👩‍🦳', '🧑‍🦳', '👩‍🦲', '🧑‍🦲', '👱‍♀️', '👱‍♂️', '🧓', '👴', '👵',
-        '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❤️‍🔥', '❤️‍🩹', '❣️',
-        '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', '✝️', '☪️', '🕉', '☸️',
-        '✡️', '🔯', '🕎', '☯️', '☦️', '🛐', '⛎', '♈️', '♉️', '♊️', '♋️', '♋️', '♌️', '♍️',
-        '♎️', '♏️', '♐️', '♑️', '♒️', '♓️', '🆔', '⚛️', '🉑', '☢️', '☣️', '📴', '📳',
-        '🈶', '🈚️', '🈸', '🈺', '🈷️', '✴️', '🆚', '💮', '🉐', '㊙️', '㊗️', '🈴', '🈵',
-        '🈹', '🈲', '🅰️', '🅱️', '🆎', '🆑', '🅾️', '🆘', '❌', '⭕️', '🛑', '⛔️', '📛',
-        '🚫', '💯', '💢', '♨️', '🚷', '🚯', '🚳', '🚱', '🔞', '📵', '🚭', '❗️', '❕',
-        '❓', '❔', '‼️', '⁉️', '🔅', '🔆', '〽️', '⚠️', '🚸', '🔱', '⚜️', '🔰', '♻️',
-        '✅', '🈯️', '💹', '❇️', '✳️', '❎', '🌐', '💠', 'Ⓜ️', '🌀', '💤', '🏧', '🚾',
-        '♿️', '🅿️', '🈳', '🈂️', '🛂', '🛃', '🛄', '🛅', '🚹', '🚺', '🚼', '⚧', '🚻',
-        '🚮', '🎦', '📶', '🈁', '🔣', 'ℹ️', '🔤', '🔡', '🔠', '🆖', '🆗', '🆙', '🆒',
-        '🆕', '🆓', '0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣',
-        '🔟', '🔢', '#️⃣', '*️⃣', '⏏️', '▶️', '⏸', '⏯', '⏹', '⏺', '⏭', '⏮', '⏩',
-        '⏪', '⏫', '⏬', '◀️', '🔼', '🔽', '➡️', '⬅️', '⬆️', '⬇️', '↗️', '↘️', '↙️',
-        '↖️', '↕️', '↔️', '↪️', '↩️', '⤴️', '⤵️', '🔀', '🔁', '🔂', '🔄', '🔃', '🎵',
-        '🎶', '➕', '➖', '➗', '✖️', '♾', '💲', '💱', '™️', '©️', '®️', '👁‍🗨', '🔚',
-        '🔙', '🔛', '🔝', '🔜', '〰️', '➰', '➿', '✔️', '☑️', '🔘', '🔴', '🟠', '🟡',
-        '🟢', '🔵', '🟣', '⚫', '⚪', '🟤', '🔺', '🔻', '🔸', '🔹', '🔶', '🔷', '🔳',
-        '🔲', '▪️', '▫️', '◾️', '◽️', '◼️', '◻️', '🟥', '🟧', '🟨', '🟩', '🟦', '🟪',
-        '⬛', '⬜', '🟫', '🔈', '🔇', '🔉', '🔊', '🔔', '🔕', '📣', '📢', '👁‍🗨', '💬',
-        '💭', '🗯', '♠️', '♣️', '♥️', '♦️', '🃏', '🎴', '🀄️', '🕐', '🕑', '🕒', '🕓',
-        '🕔', '🕕', '🕖', '🕗', '🕘', '🕙', '🕚', '🕛', '🕜', '🕝', '🕞', '🕟', '🕠',
-        '🕡', '🕢', '🕣', '🕤', '🕥', '🕦', '🕧'
-    ];
-
     function renderEmojiGrid() {
         const container = document.getElementById('emoji-list');
         container.innerHTML = '';
@@ -1047,114 +1045,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setDirty(true);
         els.emojiModal.classList.add('hidden');
     }
-
-    if (document.getElementById('btn-emoji-picker')) {
-        document.getElementById('btn-emoji-picker').addEventListener('click', () => {
-            renderEmojiGrid();
-            els.emojiModal.classList.remove('hidden');
-        });
-    }
-
-    // --- Language Picker Logic ---
-
-    const AVAILABLE_LANGUAGES = [
-        { code: 'English (EN)', desc: 'Inglês' },
-        { code: 'Spanish (ES)', desc: 'Espanhol' },
-        { code: 'Russian (RU)', desc: 'Russo' },
-        { code: 'Portuguese (PT)', desc: 'Português' },
-        { code: 'French (FR)', desc: 'Francês' },
-        { code: 'German (DE)', desc: 'Alemão' },
-        { code: 'Italian (IT)', desc: 'Italiano' },
-        { code: 'Japanese (JA)', desc: 'Japonês' },
-        { code: 'Chinese (ZH)', desc: 'Chinês' },
-        { code: 'Korean (KO)', desc: 'Coreano' },
-        { code: 'Arabic (AR)', desc: 'Árabe' },
-        { code: 'Hindi (HI)', desc: 'Hindi' },
-        { code: 'Turkish (TR)', desc: 'Turco' },
-        { code: 'Dutch (NL)', desc: 'Holandês' },
-        { code: 'Polish (PL)', desc: 'Polonês' },
-        { code: 'Indonesian (ID)', desc: 'Indonésio' },
-        { code: 'Vietnamese (VI)', desc: 'Vietnamita' },
-        { code: 'Thai (TH)', desc: 'Tailandês' }
-    ];
-
-    function renderLanguages(filter = '') {
-        const container = document.getElementById('variable-list');
-        container.innerHTML = '';
-        
-        const filtered = AVAILABLE_LANGUAGES.filter(l => 
-            l.code.toLowerCase().includes(filter.toLowerCase()) || 
-            l.desc.toLowerCase().includes(filter.toLowerCase())
-        );
-
-        filtered.forEach(l => {
-            const div = document.createElement('div');
-            div.className = 'variable-item';
-            div.innerHTML = `
-                <div class="variable-code">${l.code}</div>
-                <div class="variable-desc">${l.desc}</div>
-            `;
-            div.onclick = () => {
-                document.getElementById('translate-lang').value = l.code;
-                setDirty(true);
-                els.variableModal.classList.add('hidden');
-            };
-            container.appendChild(div);
-        });
-    }
-
-    if (document.getElementById('btn-lang-picker')) {
-        document.getElementById('btn-lang-picker').addEventListener('click', () => {
-            document.getElementById('variable-modal-title').textContent = 'Idiomas Disponíveis';
-            document.getElementById('variable-search').value = '';
-            document.getElementById('variable-search').placeholder = 'Buscar idioma...';
-            
-            pickerMode = 'language';
-            renderLanguages();
-            
-            els.variableModal.classList.remove('hidden');
-            document.getElementById('variable-search').focus();
-        });
-    }
-
-    // --- Variable Picker Logic ---
-
-    const AVAILABLE_VARIABLES = [
-        { code: '{day}', desc: 'Dia da semana (ex: Segunda-feira)' },
-        { code: '{date}', desc: 'Data atual (ex: 12/01/2026)' },
-        { code: '{time}', desc: 'Hora atual (ex: 14:30:00)' },
-        { code: '{data-hora}', desc: 'Hora (HH)' },
-        { code: '{data-minuto}', desc: 'Minuto (MM)' },
-        { code: '{data-segundo}', desc: 'Segundo (SS)' },
-        { code: '{data-dia}', desc: 'Dia (DD)' },
-        { code: '{data-mes}', desc: 'Mês (MM)' },
-        { code: '{data-ano}', desc: 'Ano (YYYY)' },
-        { code: '{randomPequeno}', desc: 'Número aleatório 1-10' },
-        { code: '{randomMedio}', desc: 'Número aleatório 1-100' },
-        { code: '{randomGrande}', desc: 'Número aleatório 1-1000' },
-        { code: '{randomMuitoGrande}', desc: 'Número aleatório 1-10000' },
-        { code: '{rndDado-6}', desc: 'Dado de 6 lados (exemplo)' },
-        { code: '{rndDadoRange-1-100}', desc: 'Número entre 1 e 100 (exemplo)' },
-        { code: '{somaRandoms}', desc: 'Soma dos números gerados anteriormente' },
-        { code: '{pessoa}', desc: 'Nome de quem enviou a mensagem' },
-        { code: '{group}', desc: 'Nome do grupo' },
-        { code: '{contador}', desc: 'Vezes que o comando foi usado' },
-        { code: '{membroRandom}', desc: 'Nome de um membro aleatório' },
-        { code: '{mention}', desc: 'Menciona usuário (autor/mencionado/aleatório)' },
-        { code: '{singleMention}', desc: 'Mesma menção repetida' },
-        { code: '{mentionOuEu}', desc: 'Menciona usuário ou autor' },
-        { code: '{reddit-memes}', desc: 'Post aleatório do r/memes (exemplo)' },
-        { code: '{weather:São Paulo}', desc: 'Clima de São Paulo (exemplo)' },
-        { code: '{cmd-!outrocomando}', desc: 'Executa outro comando' },
-        { code: '{nomeCanal}', desc: 'Stream: Nome do canal' },
-        { code: '{titulo}', desc: 'Stream: Título da live' },
-        { code: '{jogo}', desc: 'Stream: Jogo/Categoria' },
-        { code: '{author}', desc: 'YouTube: Autor do vídeo' },
-        { code: '{title}', desc: 'YouTube: Título do vídeo' },
-        { code: '{link}', desc: 'YouTube: Link do vídeo' }
-    ];
-
-    let lastFocusedInput = null;
 
     function renderVariables(filter = '') {
         const container = document.getElementById('variable-list');
@@ -1202,16 +1092,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         els.variableModal.classList.add('hidden');
     }
-
-    document.getElementById('variable-search').addEventListener('input', (e) => {
-        if (pickerMode === 'variable') {
-            renderVariables(e.target.value);
-        } else {
-            renderLanguages(e.target.value);
-        }
-    });
-
-    // --- Media Input Logic ---
 
     window.addResponseInput = function(type, value = '') {
         const div = document.createElement('div');
@@ -1282,16 +1162,8 @@ document.addEventListener('DOMContentLoaded', () => {
         els.uploadModal.classList.remove('hidden');
     }
 
-    els.closeModalBtns.forEach(b => b.onclick = () => {
-        els.cmdModal.classList.add('hidden');
-        els.streamModal.classList.add('hidden');
-        els.variableModal.classList.add('hidden');
-        els.emojiModal.classList.add('hidden');
-        els.customDialogModal.classList.add('hidden');
-    });
-    els.closeUploadBtns.forEach(b => b.onclick = () => els.uploadModal.classList.add('hidden'));
+    // --- Upload Logic ---
 
-    // Updated Upload Handler with XHR for Progress
     els.btnConfirmUpload.addEventListener('click', () => {
         const file = els.mediaFileInput.files[0];
         if (!file) return showCustomAlert('Selecione um arquivo');
@@ -1333,26 +1205,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (context === 'command') {
                         const formatted = `{${finalType}-${data.fileName}} ${caption}`;
                         addResponseInput(finalType, formatted);
-                    } else if (context === 'greetings' || context === 'farewells') {
+                    } else if (['greetings', 'farewells'].includes(context)) {
                         if (!groupData[context]) groupData[context] = {};
-                        groupData[context][finalType] = {
-                            file: data.fileName,
-                            caption: caption
-                        };
+                        groupData[context][finalType] = { file: data.fileName, caption: caption };
                         renderMediaList(`${context}-list`, groupData[context], context);
                         setDirty(true);
                     } else if (context === 'stream-on') {
-                        // Check if type exists and remove
                         const existingIdx = currentStream.data.onConfig.media.findIndex(m => m.type === finalType);
                         if(existingIdx !== -1) currentStream.data.onConfig.media.splice(existingIdx, 1);
-                        
                         currentStream.data.onConfig.media.push({ type: finalType, content: data.fileName, caption });
                         renderStreamMediaList('stream-on-media-list', currentStream.data.onConfig.media);
                     } else if (context === 'stream-off') {
-                        // Check if type exists and remove
                         const existingIdx = currentStream.data.offConfig.media.findIndex(m => m.type === finalType);
                         if(existingIdx !== -1) currentStream.data.offConfig.media.splice(existingIdx, 1);
-
                         currentStream.data.offConfig.media.push({ type: finalType, content: data.fileName, caption });
                         renderStreamMediaList('stream-off-media-list', currentStream.data.offConfig.media);
                     }
@@ -1390,13 +1255,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (responses.length === 0) return await showCustomAlert('Adicione pelo menos uma resposta');
 
         const newCmd = {
-            startsWith: trigger,
-            responses: responses,
-            active: els.cmdActive.checked,
-            ignoreInteract: !els.cmdInteract.checked,
-            reply: els.cmdReplyQuote.checked,
-            sendAllResponses: els.cmdSendAll.checked,
-            react: els.cmdEmoji.value.trim() || null,
+            startsWith: trigger, responses: responses, active: els.cmdActive.checked,
+            ignoreInteract: !els.cmdInteract.checked, reply: els.cmdReplyQuote.checked,
+            sendAllResponses: els.cmdSendAll.checked, react: els.cmdEmoji.value.trim() || null,
             count: currentEditingCmd ? currentEditingCmd.count : 0,
             metadata: currentEditingCmd ? currentEditingCmd.metadata : { createdBy: 'Painel Web', createdAt: Date.now() }
         };
@@ -1422,7 +1283,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 await loadData();
                 els.cmdModal.classList.add('hidden');
             } else {
-                await showCustomAlert('Erro ao salvar comando');
+                const err = await res.json();
+                await showCustomAlert('Erro ao salvar comando: ' + err.message);
             }
         } catch (e) {
             await showCustomAlert('Erro: ' + e.message);
@@ -1451,42 +1313,44 @@ document.addEventListener('DOMContentLoaded', () => {
     function setupEventListeners() {
         els.retryBtn.addEventListener('click', () => window.location.reload());
         
-        // --- Direct Media Add (Greetings/Farewells) ---
-        window.addDirectMedia = async function(context, type) {
-            if (type === 'text') {
-                const text = await showCustomPrompt("Digite a mensagem:");
-                if(text) {
-                    if(!groupData[context]) groupData[context] = {};
-                    groupData[context].text = text;
-                    renderMediaList(`${context}-list`, groupData[context], context);
-                    setDirty(true);
-                }
-            } else {
-                els.uploadType.value = type;
-                els.uploadContext.value = context;
-                els.mediaFileInput.value = '';
-                els.mediaCaption.value = '';
-                
-                els.captionGroup.classList.remove('hidden');
-                els.asStickerGroup.classList.add('hidden');
-                if(type === 'image' || type === 'video') els.asStickerGroup.classList.remove('hidden');
-                
-                const existingVarBtn = els.captionGroup.querySelector('.btn-insert-var');
-                if(existingVarBtn) existingVarBtn.remove();
-                if(type === 'image' || type === 'video') {
-                    const varBtn = document.createElement('button');
-                    varBtn.type = 'button';
-                    varBtn.className = 'btn-insert-var';
-                    varBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Variável';
-                    varBtn.onclick = () => openVariableModal(els.mediaCaption);
-                    els.captionGroup.appendChild(varBtn);
-                }
+        if (document.getElementById('btn-emoji-picker')) {
+            document.getElementById('btn-emoji-picker').addEventListener('click', () => {
+                renderEmojiGrid();
+                els.emojiModal.classList.remove('hidden');
+            });
+        }
 
-                els.uploadModal.classList.remove('hidden');
+        if (document.getElementById('btn-lang-picker')) {
+            document.getElementById('btn-lang-picker').addEventListener('click', () => {
+                document.getElementById('variable-modal-title').textContent = 'Idiomas Disponíveis';
+                document.getElementById('variable-search').value = '';
+                document.getElementById('variable-search').placeholder = 'Buscar idioma...';
+                pickerMode = 'language';
+                renderLanguages();
+                els.variableModal.classList.remove('hidden');
+                document.getElementById('variable-search').focus();
+            });
+        }
+
+        document.getElementById('variable-search').addEventListener('input', (e) => {
+            if (pickerMode === 'variable') {
+                renderVariables(e.target.value);
+            } else {
+                renderLanguages(e.target.value);
             }
-        };
+        });
+
+        document.querySelectorAll('.close-modal, .close-modal-btn, .close-stream-modal, .close-variable-modal, .close-emoji-modal, .close-dialog').forEach(b => {
+            b.onclick = () => {
+                els.cmdModal.classList.add('hidden');
+                els.streamModal.classList.add('hidden');
+                els.variableModal.classList.add('hidden');
+                els.emojiModal.classList.add('hidden');
+                els.customDialogModal.classList.add('hidden');
+            };
+        });
+        els.closeUploadBtns.forEach(b => b.onclick = () => els.uploadModal.classList.add('hidden'));
     }
 
-    // Start
     init();
 });
