@@ -289,7 +289,7 @@ class CustomVariableProcessor {
       try {
         const randomMember = await this.getRandomGroupMember(context.bot, context.message.group);
         const memberName = randomMember ? (randomMember.pushname ?? randomMember.name ?? "Alguém") : "Alguém";
-        text = text.replace(/{membroRandom}/g, memberName);
+        text = text.replace(/{membroRandom}/g, memberName.pushName ?? memberName);
       } catch (error) {
         this.logger.error('Erro ao processar variável {membroRandom}:', error);
         text = text.replace(/{membroRandom}/g, "Alguém");
