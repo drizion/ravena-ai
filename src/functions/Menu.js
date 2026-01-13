@@ -326,24 +326,8 @@ async function sendCommandList(bot, message, args, group) {
     }
     menuText += header + '\n';
     
-    // 1. Comandos Personalizados
-    // Muita poluição
-    /*
-    if (customCommands.length > 0) {
-      menuText += `📋 *Exclusivos do grupo _${group.name}_:*\n`;
-      for (const cmd of customCommands) {
-        let cmdText = `• *${prefix}${cmd.startsWith}*`;
-        if (cmd.reactions && cmd.reactions.trigger) {
-          cmdText += ` (${cmd.reactions.trigger})`;
-        }
-        menuText += `${cmdText}\n`;
-      }
-      menuText += '\n';
-    }
-    */
     
-    
-    // 2. Comandos Fixos por categoria
+    // 1. Comandos Fixos por categoria
     // Processa cada categoria na ordem definida em CATEGORY_EMOJIS
     for (const category in CATEGORY_EMOJIS) {
       const commands = categorizedCommands[category] || [];
@@ -376,33 +360,10 @@ async function sendCommandList(bot, message, args, group) {
       }
     }
     
-    // 3. Comandos de gerenciamento
-    // Obtém comandos de gerenciamento dinamicamente
-    const managementCommands = bot.eventHandler.commandHandler.management.getManagementCommands();
-
-    // Ordena os comandos: primeiro os prioritários, depois os demais em ordem alfabética
-    const sortedCmdNames = Object.keys(managementCommands).sort((a, b) => {
-      const indexA = COMMAND_ORDER.indexOf(a);
-      const indexB = COMMAND_ORDER.indexOf(b);
-      
-      // Se ambos estão na lista de prioridade, usa a posição na lista
-      if (indexA !== -1 && indexB !== -1) {
-        return indexA - indexB;
-      }
-      // Se apenas um está na lista, este vem primeiro
-      if (indexA !== -1) return -1;
-      if (indexB !== -1) return 1;
-      
-      // Caso contrário, usa ordem alfabética
-      return a.localeCompare(b);
-    });
-
+    // 2. Comandos de gerenciamento
+    // Ocupam muito espaço, movidos para o !cmd-g
     menuText += '\n⚙️ *Comandos de Gerenciamento:*\n';
-    // Adiciona cada comando formatado ao menu
-    for (const cmdName of sortedCmdNames) {
-      const cmdInfo = managementCommands[cmdName];
-      menuText += `• *${prefix}g-${cmdName}*: ${cmdInfo.description}\n`;
-    }
+    menuText += `• *Movidos!* Consulte enviando \`!cmd-g\`\n`;
     
     // Retorna a mensagem com o menu
     return new ReturnMessage({

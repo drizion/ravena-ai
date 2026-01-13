@@ -352,7 +352,7 @@ class Management {
     const targetLanguage = args.join(' ');
 
     const SUPPORTED_LANGUAGES = [
-        'English (EN)', 'Spanish (ES)', 'Russian (RU)', 'Portuguese (PT)',
+        'English (EN)', 'Spanish (ES)', 'Russian (RU)',
         'French (FR)', 'German (DE)', 'Italian (IT)', 'Japanese (JA)',
         'Chinese (ZH)', 'Korean (KO)', 'Arabic (AR)', 'Hindi (HI)',
         'Turkish (TR)', 'Dutch (NL)', 'Polish (PL)', 'Indonesian (ID)',

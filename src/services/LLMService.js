@@ -75,18 +75,6 @@ class LLMService {
 		this.providerQueue = [...this.providerDefinitions];
 		this.lastQueueChangeTimestamp = 0;
 		this.resetQueueTimeout = 30 * 60 * 1000; // 30 minutos
-
-		
-		this.logger.debug('LLMService inicializado com configuração:', {
-			localModel: this.localModel,
-			ollamaModel: this.ollamaModel,
-			hasOpenRouterKey: !!this.openRouterKey,
-			hasOpenAIKey: !!this.openAIKey,
-			hasGoogleKey: !!this.googleKey,
-			hasDeepseekKey: !!this.deepseekKey,
-			localEndpoint: this.localEndpoint,
-			apiTimeout: this.apiTimeout
-		});
 	}
 
 	/**
