@@ -288,6 +288,14 @@ async function generateImage(bot, message, args, group, skipNotify = true) {
         });
     }
 
+    // Verificar se o servidor ComfyUI está online via WebSocket
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        return new ReturnMessage({
+            chatId: chatId,
+            content: '❌ O servidor de geração de imagens está temporariamente offline. 😔'
+        });
+    }
+
     prompt = await translateText(prompt, "pt", "en");
 
     logger.info(`Gerando imagem com prompt: '${prompt}'`);

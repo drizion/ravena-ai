@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const Logger = require('./Logger');
+const Status = require('./Status');
 const LLMService = require('../services/LLMService');
 const { extractFrames } = require('./Conversions');
 
@@ -20,6 +21,17 @@ class NSFWPredict {
    * @returns {Promise<{isNSFW: boolean, reason: String}>} - Resultado da detecção.
    */
   async detectNSFW(imagesInput) {
+    try {
+      const servicesData = await Status.getServicesStatus();
+      
+      if (servicesData.llm !== 'up') {
+        return { isNSFW: false, reason: 'Serviço está temporariamente indisponível' };
+      }
+    } catch (e) {
+      // If we can't check status, we assume it's down to be safe/avoid errors
+      return { isNSFW: false, reason: 'Serviço está temporariamente indisponível' };
+    }
+
     this.logger.info(`Detectando NSFW em mídia...`);
 
     const prompt = `Analyze the provided image(s) with a focus on strict content safety classification. Your goal is to distinguish between general skin exposure (Safe) and explicit sexual content (NSFW).
@@ -81,7 +93,7 @@ Return the result in JSON format.`;
 
       return { isNSFW, reason };
     } catch (error) {
-      this.logger.error('Erro ao executar detecção NSFW com LLM.', { response });
+      this.logger.error('Erro ao executar detecção NSFW com LLM.');
       return { isNSFW: false, reason: "", error: error.message };
     }
   }

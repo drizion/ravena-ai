@@ -1,6 +1,7 @@
 const path = require('path');
 const Logger = require('../utils/Logger');
 const Database = require('../utils/Database');
+const Status = require('../utils/Status');
 const LLMService = require('../services/LLMService');
 const Command = require('../models/Command');
 const ReturnMessage = require('../models/ReturnMessage');
@@ -284,7 +285,17 @@ async function storeMessage(message, chatId) {
 
     // Mensagens de áudio são interpretadas também, usando transcrição do whisper, mas ficam no EventHandler - pra poder usar msg de voz no pv também!
     
-    if(message.type === 'image'){
+    let llmUp = false;
+    try {
+      const servicesData = await Status.getServicesStatus();
+      if (servicesData.llm === 'up') {
+        llmUp = true;
+      }
+    } catch (e) {
+      // Ignore error, assume down
+    }
+
+    if(message.type === 'image' && llmUp){
       // Tenta interpretar a imagem usando Vision AI, menos se for pedido de sticker pra aliviar  a GPU
       if(message.content && !message.caption?.startsWith("!s")&& !message.caption?.startsWith("!ia")){
         const completionOptions = {
@@ -303,7 +314,7 @@ async function storeMessage(message, chatId) {
           logger.info(`[${chatId}][storeMessage] Imagem interpretada: ${textContent}`);
         }
       }
-    } else if (message.type === 'video') {
+    } else if (message.type === 'video' && llmUp) {
        // Tenta interpretar o video usando Vision AI
        if (message.content && !message.caption?.startsWith("!s")) {
          const response = await analyzeVideo(message);

@@ -3,6 +3,7 @@ const Logger = require('../utils/Logger');
 const ReturnMessage = require('../models/ReturnMessage');
 const Command = require('../models/Command');
 const Database = require('../utils/Database');
+const Status = require('../utils/Status');
 const fs = require('fs').promises;
 const axios = require('axios');
 
@@ -415,8 +416,7 @@ async function statusCommand(bot, message, args, group) {
     // Carrega status dos serviços externos
     let servicesHeader = "";
     try {
-      const servicesPath = path.join(database.databasePath, 'services-status.json');
-      const servicesData = JSON.parse(await fs.readFile(servicesPath, 'utf8'));
+      const servicesData = await Status.getServicesStatus();
       
       const getEmoji = (status) => {
           if (status === 'up') return '🟢';

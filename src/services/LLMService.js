@@ -42,10 +42,11 @@ class LLMService {
 				}
 			},
 			{
-				name: 'ollama-gemma3:27b-it-qat',
+				name: 'ollama-gemma3:12b-it-qat',
 				method: async (options) => {
-					options.model = "gemma3:27b-it-qat";
-					options.timeout = options.timeout ?? 30000;
+					options.model = "gemma3:12b-it-qat";
+					options.timeout = options.timeout ?? 60000;
+					options.ignoreVideo = true;
 					const response = await this.ollamaCompletion({customEndpoint: "http://192.168.3.200:12345", ...options});
 					if (response && response.message && response.message.content) {
 						return response.message.content;
@@ -451,6 +452,10 @@ class LLMService {
 				const imagesToProcess = options.images ? options.images : [options.image];
 				const processedImages = [];
 
+				if(options.ignoreVideo){
+					imagesToProcess = [imagesToProcess[0]];
+				}
+
 				for (const img of imagesToProcess) {
 					let base64Image;
 					if (img.startsWith('data:image')) {
@@ -504,7 +509,7 @@ class LLMService {
 			};
 
 			if(debugPrompt){
-				this.logger.debug('[LLMService][ollamaCompletion] Sending request to Ollama API', { prompt: this.summarizeString(options.prompt)}); // , debugData
+				this.logger.debug('[LLMService][ollamaCompletion] Sending request to Ollama API', { size: options.prompt.length, prompt: this.summarizeString(options.prompt)}); // , debugData
 			} else {
 				this.logger.debug('[LLMService][ollamaCompletion] Sending request to Ollama API');
 			}
