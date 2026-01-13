@@ -1019,8 +1019,8 @@ class WhatsAppBotEvoGo {
         } else {
           const contact = await this.cacheManager.getContactFromCache(number);
           if (contact) {
-            contact.block = async () => await this.setCttBlockStatus(contact.number, "block");
-            contact.unblock = async () => await this.setCttBlockStatus(contact.number, "unblock");
+            contact.block = async () => await this.setCttBlockStatus(number, "block");
+            contact.unblock = async () => await this.setCttBlockStatus(number, "unblock");
             resolve(contact);
           } else {
             resolve(null);
@@ -2080,14 +2080,21 @@ class WhatsAppBotEvoGo {
         name: this.instanceName,
         number: this.phoneNumber,
         lid: this.phoneNumber,
-        picture: ""
+        picture: "",
       };
     }
 
     const now = Date.now();
     const expirationMs = cacheDurationHours * 60 * 60 * 1000;
 
-    let returnData = { id: { _serialized: id }, number: id.split("@")[0], lid: id, name: prefetchedName ?? id.split('@')[0] };
+    let returnData = { 
+      id: { _serialized: id },
+      number: id.split("@")[0],
+      lid: id,
+      name: prefetchedName ?? id.split('@')[0],
+      block: async () => await this.setCttBlockStatus(id, "block"),
+      unblock: async () => await this.setCttBlockStatus(id, "unblock")
+    };
 
     let cacheName;
     try {
@@ -2100,15 +2107,21 @@ class WhatsAppBotEvoGo {
     try{
       if (!cacheName || ((now - cachedContact._cachedAt) < expirationMs)) {
         // Não tem cache ou expirou
-        const infoResponse = await this.apiClient.post('/user/info', { number: [id] });
-        const info = infoResponse.data?.Users?.[id];
+        let numberToFetch = id;
+        if(numberToFetch.includes("@")){
+          numberToFetch = numberToFetch.split("@")[0]+"@s.whatsapp.net";
+        }
+        const infoResponse = await this.apiClient.post('/user/info', { number: [numberToFetch] });
+        const info = infoResponse.data?.Users?.[numberToFetch];
+        this.logger.debug(`[getContactDetails]`, { numberToFetch, userInfo: info.data ?? '' });
 
         if (info) {
           returnData.name = info.VerifiedName ?? returnData.name;
           returnData.lid =  info.LID;
           returnData.picture =  info.PictureID;
 
-          this.cacheManager.putPushnameInCache({id: id , pushName: returnData.name});
+          this.cacheManager.putPushnameInCache({id: id, pushName: returnData.name});
+          this.cacheManager.putPushnameInCache({id: numberToFetch, pushName: returnData.name});
         }
       }
     } catch (e) {
@@ -2117,6 +2130,7 @@ class WhatsAppBotEvoGo {
 
 
     //this.logger.debug(`[getChatDetails] ${id}, ${prefetchedName}`, { returnData });
+    
     return returnData;
   }
 
@@ -2198,6 +2212,27 @@ class WhatsAppBotEvoGo {
     this.logger.debug(`[getCurrentGroups] `, grupos);
     return grupos;
   }
+
+  setCttBlockStatus(ctt, blockStatus) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        this.logger.debug(`[setCttBlockStatus][${this.instanceName}] '${ctt}' => '${blockStatus}'`);
+
+        if(ctt.includes("@")){
+          ctt = ctt.split("@")[0]+"@s.whatsapp.net";
+        }
+
+        const resp = await this.apiClient.post(`/user/${blockStatus}`, { number: ctt });
+
+        resolve(resp.accepted);
+      } catch (e) {
+        this.logger.warn(`[setCttBlockStatus] Erro setando blockStatus ${blockStatus} para '${ct}'`);
+        reject(e);
+      }
+
+    });
+  }
+
 
   async destroy() {
     if (this.webhookServer) this.webhookServer.close();

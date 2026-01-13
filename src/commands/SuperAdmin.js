@@ -693,7 +693,7 @@ ${listGroups}`;
     }
   }
 
-  async removeFromSpecialGroups(bot, phoneNumber, specialGroups = []) {
+  async removeFromSpecialGroups(bot, phoneNumber, specialGroups = [], message) {
     if (!this.isSuperAdmin(message.author)) return;
 
     const results = {
@@ -707,23 +707,27 @@ ${listGroups}`;
         const chat = await bot.client.getChatById(groupId);
 
         // Verifica se o contato está no grupo
-        const isInGroup = chat.participants.some(p => p.id._serialized === phoneNumber);
+        if(chat){
+          this.logger.debug(`[removeFromSpecialGroups] `, {phoneNumber, chat});
 
-        if (isInGroup) {
-          // Remove a pessoa do grupo
-          await chat.removeParticipants([phoneNumber]);
-          results.successes++;
-          results.details.push({
-            groupId,
-            groupName: chat.name,
-            status: 'success'
-          });
-        } else {
-          results.details.push({
-            groupId,
-            groupName: chat.name,
-            status: 'not_present'
-          });
+          const isInGroup = chat.participants?.some(p => p.id._serialized === phoneNumber);
+
+          if (isInGroup) {
+            // Remove a pessoa do grupo
+            await chat.removeParticipants([phoneNumber]);
+            results.successes++;
+            results.details.push({
+              groupId,
+              groupName: chat.name,
+              status: 'success'
+            });
+          } else {
+            results.details.push({
+              groupId,
+              groupName: chat.name,
+              status: 'not_present'
+            });
+          }
         }
       } catch (error) {
         this.logger.error(`Erro ao remover ${phoneNumber} do grupo especial ${groupId}:`, error);
@@ -859,8 +863,9 @@ ${listGroups}`;
 
       try {
         // Tenta remover o contato de grupos especiais primeiro
+        let removeResults = {};
         if (specialGroups.length > 0) {
-          const removeResults = await this.removeFromSpecialGroups(bot, phoneNumber, specialGroups);
+          removeResults = await this.removeFromSpecialGroups(bot, phoneNumber, specialGroups, message);
           this.logger.info(`Resultados da remoção de grupos especiais: ${JSON.stringify(removeResults)}`);
         }
 
@@ -869,7 +874,7 @@ ${listGroups}`;
         await contatoBloquear.block();
 
         // Cria a resposta
-        let responseMessage = `✅ Contato ${phoneNumber} bloqueado com sucesso.`;
+        let responseMessage = `✅ Contato ${phoneNumber} bloqueado com sucesso. ${JSON.stringify(removeResults)}`;
 
         return new ReturnMessage({
           chatId: chatId,
@@ -1631,7 +1636,7 @@ ${listGroups}`;
         try {
           // Tenta remover o contato de grupos especiais primeiro
           if (specialGroups.length > 0) {
-            const removeResults = await this.removeFromSpecialGroups(bot, phoneNumber, specialGroups);
+            const removeResults = await this.removeFromSpecialGroups(bot, phoneNumber, specialGroups, message);
             specialGroupResults[phoneNumber] = removeResults;
           }
 
