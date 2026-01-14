@@ -11,6 +11,7 @@ const { exec, spawn } = require("child_process");
 const { Server } = require("socket.io");
 const axios = require("axios");
 const WebManagement = require("./utils/WebManagement");
+const { CATEGORY_EMOJIS, COMMAND_ORDER } = require("./functions/MenuOrder");
 
 /**
  * Servidor API para o bot WhatsApp
@@ -646,6 +647,148 @@ class BotAPI {
 			const filePath = path.join(__dirname, "../public/management.html");
 			this.logger.info(`[management] => '${token}'`);
 			res.sendFile(filePath);
+		});
+
+		// Serve public commands page
+		this.app.get("/cmd", (req, res) => {
+			const filePath = path.join(__dirname, "../public/cmd.html");
+			res.sendFile(filePath);
+		});
+
+		// Get Public Commands
+		this.app.get("/api/public-commands", async (req, res) => {
+			try {
+				if (this.bots.length === 0) {
+					return res.status(503).json({ error: "No bots available" });
+				}
+
+				const bot = this.bots[0];
+				
+				// 1. Get Fixed Commands
+				const fixedCommands = bot.eventHandler.commandHandler.fixedCommands.getAllCommands();
+				
+				// Helper to group commands (duplicated logic from Menu.js to be self-contained)
+				const groupCommandsByCategory = (commands) => {
+					const categories = {};
+					Object.keys(CATEGORY_EMOJIS).forEach((category) => {
+						categories[category] = [];
+					});
+
+					for (const cmd of commands) {
+						if (cmd.hidden) continue;
+						let category = cmd.category?.toLowerCase() ?? "resto";
+						if (category.length < 1) category = "resto";
+						if (!categories[category]) categories[category] = [];
+						categories[category].push(cmd);
+					}
+					return categories;
+				};
+
+				const groupRelatedCommands = (commands) => {
+					const groupedCommands = [];
+					const groups = {};
+					for (const cmd of commands) {
+						if (cmd.group) {
+							if (!groups[cmd.group]) groups[cmd.group] = [];
+							groups[cmd.group].push(cmd);
+						} else {
+							groupedCommands.push([cmd]);
+						}
+					}
+					for (const groupName in groups) {
+						if (groups[groupName].length > 0) {
+							groups[groupName].sort((a, b) => a.name.localeCompare(b.name));
+							groupedCommands.push(groups[groupName]);
+						}
+					}
+					return groupedCommands;
+				};
+
+				const sortCommands = (commands) => {
+					return commands.sort((a, b) => {
+						const cmdA = Array.isArray(a) ? a[0] : a;
+						const cmdB = Array.isArray(b) ? b[0] : b;
+						const indexA = COMMAND_ORDER.indexOf(cmdA.name);
+						const indexB = COMMAND_ORDER.indexOf(cmdB.name);
+						if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+						if (indexA !== -1) return -1;
+						if (indexB !== -1) return 1;
+						return cmdA.name.localeCompare(cmdB.name);
+					});
+				};
+
+				const categorizedCommands = groupCommandsByCategory(fixedCommands);
+				const finalCategories = [];
+
+				for (const category in CATEGORY_EMOJIS) {
+					const commands = categorizedCommands[category] || [];
+					if (commands.length === 0) continue;
+
+					const grouped = groupRelatedCommands(commands);
+					const sorted = sortCommands(grouped);
+
+					const categoryData = {
+						name: category.charAt(0).toUpperCase() + category.slice(1),
+						emoji: CATEGORY_EMOJIS[category],
+						commands: []
+					};
+
+					if (categoryData.name.length < 4) categoryData.name = categoryData.name.toUpperCase();
+
+					for (const item of sorted) {
+						const cmd = Array.isArray(item) ? item[0] : item;
+						// For groups, we might want to list all aliases or just the main ones
+						// Simplified: take the first one, add aliases from all if grouped?
+						// Menu.js logic: formatCommandGroup joins all names.
+						
+						let aliases = [];
+						if (Array.isArray(item)) {
+							// It is a group
+							item.forEach(c => {
+								if(c.name !== cmd.name) aliases.push(c.name);
+								if(c.aliases) aliases.push(...c.aliases);
+							});
+						} else {
+							if (cmd.aliases) aliases = cmd.aliases;
+						}
+						
+						// Remove duplicates
+						aliases = [...new Set(aliases)];
+
+						categoryData.commands.push({
+							name: cmd.name,
+							description: cmd.description,
+							aliases: aliases,
+							reaction: cmd.reactions?.trigger
+						});
+					}
+					finalCategories.push(categoryData);
+				}
+
+				// 2. Get Management Commands
+				const managementCommands = bot.eventHandler.commandHandler.management.getManagementCommands();
+				// Sort management commands logic
+				const sortedMgmtKeys = Object.keys(managementCommands).sort((a, b) => {
+					const indexA = COMMAND_ORDER.indexOf(a);
+					const indexB = COMMAND_ORDER.indexOf(b);
+					if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+					if (indexA !== -1) return -1;
+					if (indexB !== -1) return 1;
+					return a.localeCompare(b);
+				});
+
+				const sortedMgmt = {};
+				sortedMgmtKeys.forEach(key => sortedMgmt[key] = managementCommands[key]);
+
+				res.json({
+					categories: finalCategories,
+					management: sortedMgmt
+				});
+
+			} catch (error) {
+				this.logger.error("Error serving public commands:", error);
+				res.status(500).json({ error: "Internal server error" });
+			}
 		});
 
 		// Validate token endpoint

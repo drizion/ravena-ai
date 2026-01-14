@@ -1,0 +1,317 @@
+:root {
+    --primary-color: #04a9f0;
+    --primary-dark: #0388c2;
+    --secondary-color: #3e0ea7;
+    --background-color: #05060d;
+    --surface-color: #23066d;
+    --text-color: #b7b7c5;
+    --text-highlight: #ffffff;
+    --border-color: #47486c;
+    --success-color: #48bb78;
+    --font-family: 'Roboto', sans-serif;
+    --shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: var(--font-family);
+    background-color: var(--background-color);
+    color: var(--text-color);
+    line-height: 1.6;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header */
+.header {
+    background-color: var(--surface-color);
+    padding: 1rem;
+    box-shadow: var(--shadow);
+    border-bottom: 2px solid var(--primary-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.logo img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+}
+
+.logo h1 {
+    font-size: 1.2rem;
+    color: var(--primary-color);
+    margin: 0;
+}
+
+.header-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text-highlight);
+    text-align: right;
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    padding: 1rem;
+}
+
+.info-text {
+    background-color: rgba(4, 169, 240, 0.1);
+    border-left: 4px solid var(--primary-color);
+    padding: 0.8rem;
+    margin-bottom: 1.5rem;
+    color: var(--text-highlight);
+    font-size: 0.9rem;
+    border-radius: 4px;
+}
+
+/* Loading */
+.loading-container {
+    text-align: center;
+    padding: 3rem 1rem;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--border-color);
+    border-top: 4px solid var(--primary-color);
+    border-radius: 50%;
+    margin: 0 auto 1rem;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* Accordion */
+.category-section {
+    margin-bottom: 1rem;
+    background-color: var(--surface-color);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+
+.category-header {
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    background-color: rgba(255, 255, 255, 0.05);
+    user-select: none;
+    transition: background-color 0.2s;
+}
+
+.category-header:active {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.category-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-highlight);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.arrow {
+    transition: transform 0.3s ease;
+}
+
+.category-section.active .arrow {
+    transform: rotate(180deg);
+}
+
+.category-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+.category-section.active .category-content {
+    max-height: 5000px; /* Arbitrary large height */
+}
+
+/* Command List */
+.command-list {
+    list-style: none;
+    padding: 0;
+}
+
+.command-item {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: stretch;
+    position: relative;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.command-item:nth-child(even) {
+    background-color: #33108a;
+}
+
+.command-item:last-child {
+    border-bottom: none;
+}
+
+.command-item:active {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.cmd-main-info {
+    flex: 1;
+    padding: 0.8rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.cmd-name-line {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.cmd-name {
+    font-family: monospace;
+    font-size: 1rem;
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+.cmd-aliases {
+    font-size: 0.8rem;
+    color: var(--text-color);
+    margin-left: 10px;
+    opacity: 0.7;
+}
+
+.cmd-desc {
+    font-size: 0.95rem;
+    color: var(--text-highlight);
+    line-height: 1.4;
+}
+
+.cmd-emoji-container {
+    width: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0.1);
+    border-left: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.cmd-reaction {
+    font-size: 2.2rem;
+}
+
+/* Tooltip */
+.tooltip {
+    position: fixed;
+    background-color: rgba(20, 20, 35, 0.95);
+    border: 1px solid var(--primary-color);
+    border-radius: 6px;
+    padding: 10px 15px;
+    max-width: 90vw;
+    width: 300px;
+    color: var(--text-highlight);
+    font-size: 0.9rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.2s, transform 0.2s;
+}
+
+.tooltip.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.tooltip-title {
+    font-weight: bold;
+    color: var(--primary-color);
+    margin-bottom: 5px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding-bottom: 3px;
+}
+
+.tooltip-usage {
+    font-family: monospace;
+    background: rgba(0,0,0,0.3);
+    padding: 2px 5px;
+    border-radius: 3px;
+    margin-bottom: 5px;
+    display: block;
+}
+
+/* Toast */
+.toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--success-color);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-weight: 500;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    z-index: 2000;
+    opacity: 1;
+    transition: opacity 0.3s, transform 0.3s;
+}
+
+.toast.hidden {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+    pointer-events: none;
+}
+
+.footer {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--text-color);
+    font-size: 0.8rem;
+    margin-top: auto;
+}
+
+@media (min-width: 600px) {
+    .container {
+        padding: 20px;
+    }
+    
+    .category-section {
+        margin-bottom: 1.5rem;
+    }
+}
