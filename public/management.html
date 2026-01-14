@@ -53,34 +53,34 @@
                     </div>
                     <div class="accordion-content">
                         <div class="form-group">
-                            <label>ID do Grupo</label>
+                            <label id="lbl-group-id">ID do Grupo</label>
                             <input type="text" id="group-id" disabled class="form-control">
                         </div>
                         <div class="form-group">
-                            <label>Data de Entrada</label>
+                            <label id="lbl-group-created-at">Data de Entrada</label>
                             <input type="text" id="group-created-at" disabled class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="group-name-input">Nome do Grupo</label>
+                            <label id="lbl-group-name" for="group-name-input">Nome do Grupo</label>
                             <input type="text" id="group-name-input" class="form-control" maxlength="50">
                         </div>
                         <div class="form-group">
-                            <label for="group-prefix">Prefixo</label>
+                            <label id="lbl-group-prefix" for="group-prefix">Prefixo</label>
                             <input type="text" id="group-prefix" class="form-control" maxlength="5" placeholder="!">
                             <small class="form-text text-muted" id="prefix-warning"></small>
                         </div>
                         <div class="form-group checkbox-group">
                             <input type="checkbox" id="bot-enabled">
-                            <label for="bot-enabled">Bot Habilitado (Responde a comandos)</label>
+                            <label id="lbl-bot-enabled" for="bot-enabled">Bot Habilitado (Responde a comandos)</label>
                         </div>
                         <div class="form-group">
-                            <label for="bot-personality">Personalidade do Bot (IA)</label>
+                            <label id="lbl-bot-personality" for="bot-personality">Personalidade do Bot (IA)</label>
                             <textarea id="bot-personality" class="form-control" maxlength="250" rows="3" placeholder="Descreva como o bot deve se comportar..."></textarea>
                             <small class="form-text text-right"><span id="personality-count">0</span>/250</small>
                         </div>
                         <div class="form-group checkbox-group">
                             <input type="checkbox" id="custom-ignores-prefix">
-                            <label for="custom-ignores-prefix">Comandos Personalizados sem Prefixo</label>
+                            <label id="lbl-custom-ignores" for="custom-ignores-prefix">Comandos Personalizados sem Prefixo</label>
                         </div>
                         <div class="form-actions">
                             <button type="button" class="btn btn-primary btn-save-section" data-section="geral">Salvar Geral</button>
@@ -97,7 +97,7 @@
                     <div class="accordion-content">
                         <!-- Números Ignorados -->
                         <div class="list-manager-section">
-                            <label>Números Ignorados</label>
+                            <label id="lbl-ignored-numbers">Números Ignorados</label>
                             <div class="input-group">
                                 <input type="text" id="new-ignored-number" placeholder="5511999999999" class="form-control">
                                 <button type="button" id="add-ignored-number" class="btn btn-secondary"><i class="fas fa-plus"></i></button>
@@ -109,18 +109,18 @@
 
                         <div class="form-group checkbox-group">
                             <input type="checkbox" id="delete-links">
-                            <label for="delete-links">Apagar Links</label>
+                            <label id="lbl-delete-links" for="delete-links">Apagar Links</label>
                         </div>
                         <div class="form-group checkbox-group">
                             <input type="checkbox" id="delete-nsfw">
-                            <label for="delete-nsfw">Detectar e Apagar NSFW</label>
+                            <label id="lbl-delete-nsfw" for="delete-nsfw">Detectar e Apagar NSFW</label>
                         </div>
 
                         <div class="divider"></div>
 
                          <!-- Palavras Proibidas -->
                          <div class="list-manager-section">
-                            <label>Apagar mensagens com estas palavras</label>
+                            <label id="lbl-forbidden-words">Apagar mensagens com estas palavras</label>
                             <div class="input-group">
                                 <input type="text" id="new-forbidden-word" placeholder="Palavra ou frase..." class="form-control">
                                 <button type="button" id="add-forbidden-word" class="btn btn-secondary"><i class="fas fa-plus"></i></button>
@@ -130,7 +130,7 @@
 
                         <!-- Usuários Proibidos (Mensagens apagadas) -->
                         <div class="list-manager-section">
-                            <label>Apagar mensagens destes usuários</label>
+                            <label id="lbl-forbidden-users">Apagar mensagens destes usuários</label>
                             <div class="input-group">
                                 <input type="text" id="new-forbidden-user" placeholder="5511999999999" class="form-control">
                                 <button type="button" id="add-forbidden-user" class="btn btn-secondary"><i class="fas fa-plus"></i></button>
@@ -141,7 +141,7 @@
                         <div class="divider"></div>
 
                         <div class="form-group">
-                            <label>Categorias Silenciadas</label>
+                            <label id="lbl-muted-categories">Categorias Silenciadas</label>
                             <div id="muted-categories-list" class="checkbox-grid">
                                 <!-- Populated via JS -->
                             </div>
@@ -151,7 +151,7 @@
 
                          <!-- Comandos Ignorados -->
                          <div class="list-manager-section">
-                            <label>Comandos Ignorados (Strings)</label>
+                            <label id="lbl-ignored-cmds">Comandos Ignorados (Strings)</label>
                             <div class="input-group">
                                 <input type="text" id="new-ignored-cmd" placeholder="!comando" class="form-control">
                                 <button type="button" id="add-ignored-cmd" class="btn btn-secondary"><i class="fas fa-plus"></i></button>
@@ -161,7 +161,7 @@
 
                         <!-- Admins Adicionais -->
                         <div class="list-manager-section">
-                            <label>Administradores Adicionais (Bot)</label>
+                            <label id="lbl-additional-admins">Administradores Adicionais (Bot)</label>
                             <div class="input-group">
                                 <input type="text" id="new-additional-admin" placeholder="5511999999999" class="form-control">
                                 <button type="button" id="add-additional-admin" class="btn btn-secondary"><i class="fas fa-plus"></i></button>
@@ -184,21 +184,21 @@
                     <div class="accordion-content">
                         <div class="form-group checkbox-group">
                             <input type="checkbox" id="auto-stt">
-                            <label for="auto-stt">Transcrever Áudios Automaticamente</label>
+                            <label id="lbl-auto-stt" for="auto-stt">Transcrever Áudios Automaticamente</label>
                         </div>
 
                         <div class="form-group checkbox-group">
                             <input type="checkbox" id="auto-interaction">
-                            <label for="auto-interaction">Interações Automáticas</label>
+                            <label id="lbl-auto-interaction" for="auto-interaction">Interações Automáticas</label>
                         </div>
 
                         <div id="interaction-settings" class="hidden">
                             <div class="slider-group">
-                                <label>Chance: <span id="chance-val">0.1</span>%</label>
+                                <label id="lbl-interaction-chance">Chance: <span id="chance-val">0.1</span>%</label>
                                 <input type="range" id="interaction-chance" min="1" max="1000" class="slider">
                             </div>
                             <div class="slider-group">
-                                <label>Cooldown: <span id="cooldown-val">5</span> minutos</label>
+                                <label id="lbl-interaction-cooldown">Cooldown: <span id="cooldown-val">5</span> minutos</label>
                                 <input type="range" id="interaction-cooldown" min="5" max="43200" class="slider">
                             </div>
                         </div>
@@ -208,7 +208,7 @@
                         <!-- Welcome Messages -->
                         <div class="sub-accordion">
                             <div class="sub-accordion-header">
-                                <h4>Mensagens de Boas Vindas</h4>
+                                <h4 id="lbl-greetings">Mensagens de Boas Vindas</h4>
                                 <i class="fas fa-chevron-right sub-arrow"></i>
                             </div>
                             <div class="sub-accordion-content">
@@ -226,7 +226,7 @@
                         <!-- Farewell Messages -->
                         <div class="sub-accordion">
                             <div class="sub-accordion-header">
-                                <h4>Mensagens de Despedida</h4>
+                                <h4 id="lbl-farewells">Mensagens de Despedida</h4>
                                 <i class="fas fa-chevron-right sub-arrow"></i>
                             </div>
                             <div class="sub-accordion-content">
@@ -245,7 +245,7 @@
 
                         <div class="form-group checkbox-group">
                             <input type="checkbox" id="auto-translate">
-                            <label for="auto-translate">Traduzir Mensagens do Bot</label>
+                            <label id="lbl-auto-translate" for="auto-translate">Traduzir Mensagens do Bot</label>
                         </div>
                         <div class="form-group" id="translate-settings">
                             <div style="display: flex; gap: 5px; max-width: 50%;">
@@ -381,31 +381,31 @@
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label>Comando (Gatilho)</label>
+                    <label id="lbl-cmd-trigger">Comando (Gatilho)</label>
                     <input type="text" id="cmd-trigger" class="form-control" placeholder="Ex: regras">
                 </div>
                 
                 <div class="checkbox-grid-modal">
                     <div class="checkbox-group">
                         <input type="checkbox" id="cmd-active">
-                        <label for="cmd-active">Ativo</label>
+                        <label id="lbl-cmd-active" for="cmd-active">Ativo</label>
                     </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="cmd-interact">
-                        <label for="cmd-interact" title="Participa das interações aleatórias">Interage</label>
+                        <label id="lbl-cmd-interact" for="cmd-interact" title="Participa das interações aleatórias">Interage</label>
                     </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="cmd-reply-quote">
-                        <label for="cmd-reply-quote">Responder mencionando</label>
+                        <label id="lbl-cmd-reply-quote" for="cmd-reply-quote">Responder mencionando</label>
                     </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="cmd-send-all">
-                        <label for="cmd-send-all">Enviar todas as respostas</label>
+                        <label id="lbl-cmd-send-all" for="cmd-send-all">Enviar todas as respostas</label>
                     </div>
                 </div>
 
                 <div class="form-group">
-                    <label>Reagir com Emoji</label>
+                    <label id="lbl-cmd-emoji">Reagir com Emoji</label>
                     <div class="emoji-input-wrapper" style="display: flex; gap: 5px;">
                         <input type="text" id="cmd-emoji" class="form-control" placeholder="Emoji" maxlength="2">
                         <button type="button" id="btn-emoji-picker" class="btn btn-secondary"><i class="far fa-smile"></i></button>
@@ -413,7 +413,7 @@
                 </div>
 
                 <div class="responses-section">
-                    <label>Respostas</label>
+                    <label id="lbl-cmd-responses">Respostas</label>
                     <div id="cmd-responses-list"></div>
                     <div class="add-response-buttons">
                         <button type="button" class="btn btn-xs btn-outline" onclick="addResponseInput('text')"><i class="fas fa-font"></i> Texto</button>
@@ -482,7 +482,7 @@
                 <input type="hidden" id="stream-index">
 
                 <div class="form-group">
-                    <label>Canal / Usuário</label>
+                    <label id="lbl-stream-channel">Canal / Usuário</label>
                     <input type="text" id="stream-channel" class="form-control" placeholder="Nome do canal (sem URL)">
                     <small class="form-text text-muted" id="stream-hint">Digite apenas o nome de usuário.</small>
                 </div>
@@ -490,25 +490,25 @@
                 <div class="checkbox-grid-modal">
                     <div class="checkbox-group">
                         <input type="checkbox" id="stream-mention">
-                        <label for="stream-mention">Marcar Todos</label>
+                        <label id="lbl-stream-mention" for="stream-mention">Marcar Todos</label>
                     </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="stream-ai">
-                        <label for="stream-ai">Gerar mensagem com IA</label>
+                        <label id="lbl-stream-ai" for="stream-ai">Gerar mensagem com IA</label>
                     </div>
                     <div class="checkbox-group" style="grid-column: 1 / -1;">
                         <input type="checkbox" id="stream-change-title">
-                        <label for="stream-change-title">Mudar Título do Grupo</label>
+                        <label id="lbl-stream-change-title" for="stream-change-title">Mudar Título do Grupo</label>
                     </div>
                 </div>
 
                 <div id="stream-titles-group" class="hidden" style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 4px;">
                     <div class="form-group">
-                        <label>Título Online (Opcional)</label>
+                        <label id="lbl-stream-title-on">Título Online (Opcional)</label>
                         <input type="text" id="stream-title-on" class="form-control" maxlength="100" placeholder="Se não definir, troca OFF por ON e 🔴 por 🟢">
                     </div>
                     <div class="form-group">
-                        <label>Título Offline (Opcional)</label>
+                        <label id="lbl-stream-title-off">Título Offline (Opcional)</label>
                         <input type="text" id="stream-title-off" class="form-control" maxlength="100" placeholder="Se não definir, troca ON por OFF e 🟢 por 🔴">
                     </div>
                 </div>
@@ -619,6 +619,13 @@
         </div>
     </div>
 
+    <!-- Custom Tooltip -->
+    <div id="custom-tooltip" class="custom-tooltip hidden">
+        <div id="tooltip-content"></div>
+        <div id="tooltip-close" class="tooltip-close hidden">&times;</div>
+    </div>
+
+    <script src="/help.js"></script>
     <script src="/management.js?v=928372"></script>
 </body>
 </html>
