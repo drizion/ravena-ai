@@ -1,157 +1,157 @@
-const fs = require('fs');
-const path = require('path');
-const util = require('util');
+const fs = require("fs");
+const path = require("path");
+const util = require("util");
 
 /**
  * Utilitário de Logger para registrar mensagens no console e arquivo
  */
 class Logger {
-  /**
-   * Cria um novo logger
-   * @param {string} name - Nome do logger (será incluído no nome do arquivo)
-   */
-  constructor(name) {
-    this.name = name;
-    this.logDir = path.join(__dirname, '../../logs');
-    this.currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    this.logFile = null;
-    this.debugMode = process.env.DEBUG === 'true';
-    
-    // Cria diretório de log se não existir
-    this.ensureLogDirectory();
-    
-    // Abre arquivo de log
-    this.openLogFile();
-    
-    // Configura rotação à meia-noite
-    this.setupRotation();
-  }
+	/**
+	 * Cria um novo logger
+	 * @param {string} name - Nome do logger (será incluído no nome do arquivo)
+	 */
+	constructor(name) {
+		this.name = name;
+		this.logDir = path.join(__dirname, "../../logs");
+		this.currentDate = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+		this.logFile = null;
+		this.debugMode = process.env.DEBUG === "true";
 
-  /**
-   * Garante que o diretório de log exista
-   */
-  ensureLogDirectory() {
-    if (!fs.existsSync(this.logDir)) {
-      fs.mkdirSync(this.logDir, { recursive: true });
-    }
-  }
+		// Cria diretório de log se não existir
+		this.ensureLogDirectory();
 
-  /**
-   * Abre arquivo de log
-   */
-  openLogFile() {
-    const logFileName = `${this.currentDate}-${this.name}.log`;
-    const logFilePath = path.join(this.logDir, logFileName);
-    
-    // Fecha arquivo existente se estiver aberto
-    if (this.logFile) {
-      try {
-        fs.closeSync(this.logFile);
-      } catch (error) {
-        console.error('Erro ao fechar arquivo de log:', error);
-      }
-    }
-    
-    // Abre novo arquivo para anexar
-    try {
-      this.logFile = fs.openSync(logFilePath, 'a');
-    } catch (error) {
-      console.error('Erro ao abrir arquivo de log:', error);
-      this.logFile = null;
-    }
-  }
+		// Abre arquivo de log
+		this.openLogFile();
 
-  /**
-   * Configura rotação de logs à meia-noite
-   */
-  setupRotation() {
-    const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(now.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
-    
-    const timeUntilMidnight = tomorrow - now;
-    
-    // Define timeout para rotacionar logs à meia-noite
-    setTimeout(() => {
-      this.currentDate = new Date().toISOString().split('T')[0];
-      this.openLogFile();
-      this.setupRotation(); // Configura próxima rotação
-    }, timeUntilMidnight);
-  }
+		// Configura rotação à meia-noite
+		this.setupRotation();
+	}
 
-  /**
-   * Escreve uma mensagem de log
-   * @param {string} level - Nível de log
-   * @param {string} message - Mensagem de log
-   * @param {any} [data] - Dados adicionais para registrar
-   */
-  log(level, message, data = null) {
-    const timestamp = new Date().toISOString();
-    let logMessage = `[${timestamp}] [${level.toUpperCase()}] [${this.name}] ${message}`;
-    
-    // Adiciona dados se fornecidos
-    if (data) {
-      if (typeof data === 'object') {
-        logMessage += '\n' + util.inspect(data, { depth: null, colors: false });
-      } else {
-        logMessage += ' ' + data;
-      }
-    }
-    
-    // Registra no console
-    const consoleMethod = level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log';
-    console[consoleMethod](logMessage);
-    
-    // Registra no arquivo
-    if (this.logFile) {
-      try {
-        fs.writeSync(this.logFile, logMessage + '\n');
-      } catch (error) {
-        console.error('Erro ao escrever no arquivo de log:', error);
-        // Tenta reabrir arquivo de log
-        this.openLogFile();
-      }
-    }
-  }
+	/**
+	 * Garante que o diretório de log exista
+	 */
+	ensureLogDirectory() {
+		if (!fs.existsSync(this.logDir)) {
+			fs.mkdirSync(this.logDir, { recursive: true });
+		}
+	}
 
-  /**
-   * Registra uma mensagem de informação
-   * @param {string} message - Mensagem de log
-   * @param {any} [data] - Dados adicionais para registrar
-   */
-  info(message, data = null) {
-    this.log('info', message, data);
-  }
+	/**
+	 * Abre arquivo de log
+	 */
+	openLogFile() {
+		const logFileName = `${this.currentDate}-${this.name}.log`;
+		const logFilePath = path.join(this.logDir, logFileName);
 
-  /**
-   * Registra uma mensagem de aviso
-   * @param {string} message - Mensagem de log
-   * @param {any} [data] - Dados adicionais para registrar
-   */
-  warn(message, data = null) {
-    this.log('warn', message, data);
-  }
+		// Fecha arquivo existente se estiver aberto
+		if (this.logFile) {
+			try {
+				fs.closeSync(this.logFile);
+			} catch (error) {
+				console.error("Erro ao fechar arquivo de log:", error);
+			}
+		}
 
-  /**
-   * Registra uma mensagem de erro
-   * @param {string} message - Mensagem de log
-   * @param {any} [data] - Dados adicionais para registrar
-   */
-  error(message, data = null) {
-    this.log('error', message, data);
-  }
+		// Abre novo arquivo para anexar
+		try {
+			this.logFile = fs.openSync(logFilePath, "a");
+		} catch (error) {
+			console.error("Erro ao abrir arquivo de log:", error);
+			this.logFile = null;
+		}
+	}
 
-  /**
-   * Registra uma mensagem de depuração
-   * @param {string} message - Mensagem de log
-   * @param {any} [data] - Dados adicionais para registrar
-   */
-  debug(message, data = null) {
-    if (this.debugMode) {
-      this.log('debug', message, data);
-    }
-  }
+	/**
+	 * Configura rotação de logs à meia-noite
+	 */
+	setupRotation() {
+		const now = new Date();
+		const tomorrow = new Date(now);
+		tomorrow.setDate(now.getDate() + 1);
+		tomorrow.setHours(0, 0, 0, 0);
+
+		const timeUntilMidnight = tomorrow - now;
+
+		// Define timeout para rotacionar logs à meia-noite
+		setTimeout(() => {
+			this.currentDate = new Date().toISOString().split("T")[0];
+			this.openLogFile();
+			this.setupRotation(); // Configura próxima rotação
+		}, timeUntilMidnight);
+	}
+
+	/**
+	 * Escreve uma mensagem de log
+	 * @param {string} level - Nível de log
+	 * @param {string} message - Mensagem de log
+	 * @param {any} [data] - Dados adicionais para registrar
+	 */
+	log(level, message, data = null) {
+		const timestamp = new Date().toISOString();
+		let logMessage = `[${timestamp}] [${level.toUpperCase()}] [${this.name}] ${message}`;
+
+		// Adiciona dados se fornecidos
+		if (data) {
+			if (typeof data === "object") {
+				logMessage += "\n" + util.inspect(data, { depth: null, colors: false });
+			} else {
+				logMessage += " " + data;
+			}
+		}
+
+		// Registra no console
+		const consoleMethod = level === "error" ? "error" : level === "warn" ? "warn" : "log";
+		console[consoleMethod](logMessage);
+
+		// Registra no arquivo
+		if (this.logFile) {
+			try {
+				fs.writeSync(this.logFile, logMessage + "\n");
+			} catch (error) {
+				console.error("Erro ao escrever no arquivo de log:", error);
+				// Tenta reabrir arquivo de log
+				this.openLogFile();
+			}
+		}
+	}
+
+	/**
+	 * Registra uma mensagem de informação
+	 * @param {string} message - Mensagem de log
+	 * @param {any} [data] - Dados adicionais para registrar
+	 */
+	info(message, data = null) {
+		this.log("info", message, data);
+	}
+
+	/**
+	 * Registra uma mensagem de aviso
+	 * @param {string} message - Mensagem de log
+	 * @param {any} [data] - Dados adicionais para registrar
+	 */
+	warn(message, data = null) {
+		this.log("warn", message, data);
+	}
+
+	/**
+	 * Registra uma mensagem de erro
+	 * @param {string} message - Mensagem de log
+	 * @param {any} [data] - Dados adicionais para registrar
+	 */
+	error(message, data = null) {
+		this.log("error", message, data);
+	}
+
+	/**
+	 * Registra uma mensagem de depuração
+	 * @param {string} message - Mensagem de log
+	 * @param {any} [data] - Dados adicionais para registrar
+	 */
+	debug(message, data = null) {
+		if (this.debugMode) {
+			this.log("debug", message, data);
+		}
+	}
 }
 
 module.exports = Logger;

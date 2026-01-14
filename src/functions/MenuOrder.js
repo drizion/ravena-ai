@@ -3,25 +3,25 @@
  * A ordem das chaves define a ordem de apresentação das categorias
  */
 const CATEGORY_EMOJIS = {
-  "geral": "📃",
-  "grupo": "👥",
-  "utilidades": "🛠️",
-  "midia": "📱",
-  "ia": "🤖",
-  "downloaders": "📤",
-  "jogos": "🎮",
-  "cultura": "🍿",
-  "áudio": "🔈",
-  "tts": "🗣",
-  "busca": "🔎",
-  "listas": "📜",
-  "arquivos": "📂",
-  "general": "🖨️",
-  "diversao": "🎮",
-  "info": "ℹ️",
-  "imagens": "📷",
-  "zoeira": "🤪", 
-  "resto": "❓"
+	geral: "📃",
+	grupo: "👥",
+	utilidades: "🛠️",
+	midia: "📱",
+	ia: "🤖",
+	downloaders: "📤",
+	jogos: "🎮",
+	cultura: "🍿",
+	áudio: "🔈",
+	tts: "🗣",
+	busca: "🔎",
+	listas: "📜",
+	arquivos: "📂",
+	general: "🖨️",
+	diversao: "🎮",
+	info: "ℹ️",
+	imagens: "📷",
+	zoeira: "🤪",
+	resto: "❓"
 };
 
 /**
@@ -175,4 +175,4 @@ const COMMAND_ORDER = [
 	"youtube-midia-off"
 ];
 
-module.exports = { COMMAND_ORDER, CATEGORY_EMOJIS }
+module.exports = { COMMAND_ORDER, CATEGORY_EMOJIS };

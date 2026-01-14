@@ -1,151 +1,162 @@
-const Database = require('./Database');
-const Logger = require('./Logger');
+const Database = require("./Database");
+const Logger = require("./Logger");
 
 /**
  * Classe utilitária para verificação de permissões administrativas
  */
 class AdminUtils {
-  constructor() {
-    this.logger = new Logger('admin-utils');
-    this.database = Database.getInstance();
-    this.superAdmins = process.env.SUPER_ADMINS ? process.env.SUPER_ADMINS.split(',') : [];
-  }
+	constructor() {
+		this.logger = new Logger("admin-utils");
+		this.database = Database.getInstance();
+		this.superAdmins = process.env.SUPER_ADMINS ? process.env.SUPER_ADMINS.split(",") : [];
+	}
 
-  _normalizeId(id, logger) {
-    if (typeof id !== 'string' || !id) {
-      return '';
-    }
+	_normalizeId(id, logger) {
+		if (typeof id !== "string" || !id) {
+			return "";
+		}
 
-    // Pega a parte antes do '@', e depois a parte antes do ':'
-    const cleanId = id.split('@')[0].split(':')[0];
+		// Pega a parte antes do '@', e depois a parte antes do ':'
+		const cleanId = id.split("@")[0].split(":")[0];
 
-    // Valida se o ID limpo contém apenas dígitos.
-    if (cleanId && !/^\d+$/.test(cleanId)) {
-      if (logger && typeof logger.error === 'function') {
-          logger.error(`[isAdmin] ID inválido detectado: "${id}" resultou em "${cleanId}", que contém caracteres não numéricos.`);
-      }
-    }
-    
-    return cleanId;
-  }
+		// Valida se o ID limpo contém apenas dígitos.
+		if (cleanId && !/^\d+$/.test(cleanId)) {
+			if (logger && typeof logger.error === "function") {
+				logger.error(
+					`[isAdmin] ID inválido detectado: "${id}" resultou em "${cleanId}", que contém caracteres não numéricos.`
+				);
+			}
+		}
 
-  /**
-   * Verifica se um usuário é administrador no grupo
-   * @param {string} userId - ID do usuário a verificar
-   * @param {Object} group - Objeto do grupo do banco de dados
-   * @param {Object} chat - Objeto de chat do WhatsApp (opcional)
-   * @param {Object} client - Instância do cliente WhatsApp (opcional)
-   * @returns {Promise<boolean>} - True se o usuário for admin
-   */
-  async isAdmin(userId, group, chat = null, client = null, debug = false) {
-    try {
-      const normalizedUserId = this._normalizeId(userId);
+		return cleanId;
+	}
 
-      if(debug) this.logger.debug(`[isAdmin] `, {userId, normalizedUserId, group, chat});
+	/**
+	 * Verifica se um usuário é administrador no grupo
+	 * @param {string} userId - ID do usuário a verificar
+	 * @param {Object} group - Objeto do grupo do banco de dados
+	 * @param {Object} chat - Objeto de chat do WhatsApp (opcional)
+	 * @param {Object} client - Instância do cliente WhatsApp (opcional)
+	 * @returns {Promise<boolean>} - True se o usuário for admin
+	 */
+	async isAdmin(userId, group, chat = null, client = null, debug = false) {
+		try {
+			const normalizedUserId = this._normalizeId(userId);
 
-      // Se o ID normalizado for vazio, o usuário é inválido.
-      if (!normalizedUserId) {
-        this.logger.debug(`ID de usuário inválido fornecido: ${userId}`);
-        return false;
-      }
+			if (debug) this.logger.debug(`[isAdmin] `, { userId, normalizedUserId, group, chat });
 
-      // 1. Verifica se é um super admin (usando o ID normalizado)
-      if (this.isSuperAdmin(normalizedUserId)) {
-        this.logger.debug(`Usuário ${normalizedUserId} é super admin.`);
-        return true;
-      }
+			// Se o ID normalizado for vazio, o usuário é inválido.
+			if (!normalizedUserId) {
+				this.logger.debug(`ID de usuário inválido fornecido: ${userId}`);
+				return false;
+			}
 
-      // 2. Verifica 'additionalAdmins' no objeto de grupo
-      if (group && Array.isArray(group.additionalAdmins)) {
-        const isAdditionalAdmin = group.additionalAdmins
-          .map(this._normalizeId) // Normaliza cada ID da lista de admins
-          .includes(normalizedUserId);
+			// 1. Verifica se é um super admin (usando o ID normalizado)
+			if (this.isSuperAdmin(normalizedUserId)) {
+				this.logger.debug(`Usuário ${normalizedUserId} é super admin.`);
+				return true;
+			}
 
-        if (isAdditionalAdmin) {
-          this.logger.debug(`Usuário ${normalizedUserId} é admin adicional no grupo ${group.id}.`);
-          return true;
-        }
-      }
+			// 2. Verifica 'additionalAdmins' no objeto de grupo
+			if (group && Array.isArray(group.additionalAdmins)) {
+				const isAdditionalAdmin = group.additionalAdmins
+					.map(this._normalizeId) // Normaliza cada ID da lista de admins
+					.includes(normalizedUserId);
 
-      // 3. Verifica se é admin no WhatsApp
-      let chatInstance = chat;
+				if (isAdditionalAdmin) {
+					this.logger.debug(`Usuário ${normalizedUserId} é admin adicional no grupo ${group.id}.`);
+					return true;
+				}
+			}
 
-      // Se o chat não foi fornecido ou é um pv, tenta buscá-lo usando o cliente
-      if ((!chatInstance && client && group && group.id) || (!chat?.isGroup)){
-        try {
-          chatInstance = await client.getChatById(group.id);
-          //this.logger.debug(`[isAdmin] Sem chat ou PV, buscando: `, {chatInstance});
-        } catch (chatError) {
-          this.logger.error(`Erro ao buscar chat ${group.id} para verificação de admin:`, chatError);
-          // A função continua, mas provavelmente retornará false se esta era a única forma de ser admin.
-        }
-      }
+			// 3. Verifica se é admin no WhatsApp
+			let chatInstance = chat;
 
-      let participantes = [];
+			// Se o chat não foi fornecido ou é um pv, tenta buscá-lo usando o cliente
+			if ((!chatInstance && client && group && group.id) || !chat?.isGroup) {
+				try {
+					chatInstance = await client.getChatById(group.id);
+					//this.logger.debug(`[isAdmin] Sem chat ou PV, buscando: `, {chatInstance});
+				} catch (chatError) {
+					this.logger.error(
+						`Erro ao buscar chat ${group.id} para verificação de admin:`,
+						chatError
+					);
+					// A função continua, mas provavelmente retornará false se esta era a única forma de ser admin.
+				}
+			}
 
-      // Toda hora muda essa estrutura.. Considerar várias coisas
-      if (chatInstance && chatInstance.isGroup) {
-        participantes = participantes.concat(chatInstance.participants);
-        if(chatInstance._rawEvoGroup){
-          participantes = participantes.concat(chatInstance._rawEvoGroup.participants);
-        }
+			let participantes = [];
 
+			// Toda hora muda essa estrutura.. Considerar várias coisas
+			if (chatInstance && chatInstance.isGroup) {
+				participantes = participantes.concat(chatInstance.participants);
+				if (chatInstance._rawEvoGroup) {
+					participantes = participantes.concat(chatInstance._rawEvoGroup.participants);
+				}
 
-        const participant = participantes.find(p => 
-          [p.id?._serialized, p.id, p.phoneNumber].some(
-            numero => this._normalizeId(numero) === normalizedUserId
-          )
-        );
+				const participant = participantes.find((p) =>
+					[p.id?._serialized, p.id, p.phoneNumber].some(
+						(numero) => this._normalizeId(numero) === normalizedUserId
+					)
+				);
 
-        if(debug) this.logger.debug(`[isAdmin][group] `, {normalizedUserId, botPart: participant, participantes});
+				if (debug)
+					this.logger.debug(`[isAdmin][group] `, {
+						normalizedUserId,
+						botPart: participant,
+						participantes
+					});
 
-        if (participant && (participant.isAdmin || participant.admin === 'admin')) {
-          this.logger.debug(`Usuário ${normalizedUserId} é admin no WhatsApp para o grupo ${group.id}.`);
-          return true;
-        }
-      }
+				if (participant && (participant.isAdmin || participant.admin === "admin")) {
+					this.logger.debug(
+						`Usuário ${normalizedUserId} é admin no WhatsApp para o grupo ${group.id}.`
+					);
+					return true;
+				}
+			}
 
-      // Se nenhuma das verificações acima passou, o usuário não é admin.
-      return false;
+			// Se nenhuma das verificações acima passou, o usuário não é admin.
+			return false;
+		} catch (error) {
+			this.logger.error(`Erro ao verificar se o usuário ${userId} é admin:`, error);
+			return false; // Retorna false em caso de erro inesperado.
+		}
+	}
 
-    } catch (error) {
-      this.logger.error(`Erro ao verificar se o usuário ${userId} é admin:`, error);
-      return false; // Retorna false em caso de erro inesperado.
-    }
-  }
+	/**
+	 * Verifica se um usuário é super admin
+	 * @param {string} userId - ID do usuário a verificar
+	 * @returns {boolean} - True se o usuário for super admin
+	 */
+	isSuperAdmin(userId) {
+		const normalizedUserId = this._normalizeId(userId);
+		//this.logger.info(`[isSuperAdmin] ${normalizedUserId}`, this.superAdmins);
+		return (
+			normalizedUserId.length > 10 && this.superAdmins.some((sA) => sA.startsWith(normalizedUserId))
+		);
+	}
 
-
-  /**
-   * Verifica se um usuário é super admin
-   * @param {string} userId - ID do usuário a verificar
-   * @returns {boolean} - True se o usuário for super admin
-   */
-  isSuperAdmin(userId) {
-    const normalizedUserId = this._normalizeId(userId);
-    //this.logger.info(`[isSuperAdmin] ${normalizedUserId}`, this.superAdmins);
-    return (normalizedUserId.length > 10) && (this.superAdmins.some(sA => sA.startsWith(normalizedUserId)));
-  }
-
-  /**
-   * Verifica se um usuário é dono do grupo
-   * @param {string} userId - ID do usuário a verificar 
-   * @param {Object} group - Objeto do grupo do banco de dados
-   * @returns {boolean} - True se o usuário for dono do grupo
-   */
-  isGroupOwner(userId, group) {
-    if (!group || !group.addedBy) return false;
-    return group.addedBy === userId;
-  }
+	/**
+	 * Verifica se um usuário é dono do grupo
+	 * @param {string} userId - ID do usuário a verificar
+	 * @param {Object} group - Objeto do grupo do banco de dados
+	 * @returns {boolean} - True se o usuário for dono do grupo
+	 */
+	isGroupOwner(userId, group) {
+		if (!group || !group.addedBy) return false;
+		return group.addedBy === userId;
+	}
 }
 
 // Singleton para reutilização
 let instance = null;
 
 module.exports = {
-  getInstance: () => {
-    if (!instance) {
-      instance = new AdminUtils();
-    }
-    return instance;
-  }
+	getInstance: () => {
+		if (!instance) {
+			instance = new AdminUtils();
+		}
+		return instance;
+	}
 };

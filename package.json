@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "start": "node --dns-result-order=ipv4first index.js",
-    "test": "node test-mockup.js"
+    "test": "node test-mockup.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "dependencies": {
     "@hapi/boom": "^10.0.1",
@@ -45,5 +47,12 @@
   "engines": {
     "node": ">=14.0.0"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "globals": "^17.0.0",
+    "prettier": "^3.7.4"
+  }
 }
