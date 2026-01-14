@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lista de Comandos - RavenaBot</title>
-    <link rel="stylesheet" href="/cmd.css">
+    <link rel="stylesheet" href="/cmd.css?v=1">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.css">
     <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
@@ -21,9 +21,18 @@
             </div>
         </header>
 
+        <div class="search-container">
+            <i class="fas fa-search search-icon"></i>
+            <input type="text" id="command-search" class="search-input" placeholder="Buscar comando...">
+        </div>
+
         <main id="command-list" class="main-content">
+            <div id="no-results" class="info-text hidden" style="border-left-color: #ff4444; background-color: rgba(255, 68, 68, 0.1);">
+                Nenhum comando encontrado para '<span id="search-term"></span>'
+            </div>
             <div class="info-text">
-                Comandos com um emoji podem ser ativados via reação (reaja à mensagem com o emoji)
+                Comandos com um emoji podem ser ativados via reação (reagir na mensagem com o emoji).<br>
+                Dê 2 toques no comando para copiar
             </div>
             <div id="loading" class="loading-container">
                 <div class="loading-spinner"></div>
@@ -41,7 +50,7 @@
     <!-- Template for Tooltip -->
     <div id="tooltip" class="tooltip hidden"></div>
 
-    <script src="/help.js"></script>
-    <script src="/cmd.js"></script>
+    <script src="/help.js?v=1"></script>
+    <script src="/cmd.js?v=1"></script>
 </body>
 </html>

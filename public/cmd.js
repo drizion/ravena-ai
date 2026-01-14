@@ -4,11 +4,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const toast = document.getElementById('toast');
     const tooltip = document.getElementById('tooltip');
     
+    // Search elements
+    const searchInput = document.getElementById('command-search');
+    const noResults = document.getElementById('no-results');
+    const searchTermSpan = document.getElementById('search-term');
+
     // Help data from help.js (expected to be loaded)
     // Structure: const helpCommands = { 'command': { usage: '...', desc: '...', example: '...' } }
     
     let lastTap = 0;
-    let activeTooltip = null;
+    let allCommands = []; // To store all loaded commands for random placeholder
 
     async function fetchCommands() {
         try {
@@ -16,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!response.ok) throw new Error('Falha ao carregar comandos');
             const data = await response.json();
             renderCommands(data);
+            startRandomPlaceholder();
         } catch (error) {
             loading.innerHTML = `<p style="color: var(--danger-color)">Erro: ${error.message}</p>`;
         }
@@ -28,12 +34,16 @@ document.addEventListener('DOMContentLoaded', () => {
         data.categories.forEach((category, index) => {
             const section = createCategorySection(category, index === 0);
             commandList.appendChild(section);
+            // Collect command names for placeholder
+            category.commands.forEach(cmd => allCommands.push(cmd.name));
         });
 
         // Render Management Commands
         if (data.management && Object.keys(data.management).length > 0) {
             const mgmtSection = createManagementSection(data.management);
             commandList.appendChild(mgmtSection);
+             // Collect management command names
+            Object.keys(data.management).forEach(name => allCommands.push(`g-${name}`));
         }
     }
 
@@ -113,6 +123,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function createCommandItem(cmd) {
         const li = document.createElement('li');
         li.className = 'command-item';
+        // Add data attributes for search
+        li.dataset.name = cmd.name.toLowerCase();
+        li.dataset.aliases = (cmd.aliases || []).join(',').toLowerCase();
+        li.dataset.desc = (cmd.description || '').toLowerCase();
         
         // Handle aliases formatting
         let aliasesHtml = '';
@@ -180,6 +194,73 @@ document.addEventListener('DOMContentLoaded', () => {
 
         return li;
     }
+
+    // Search Logic
+    searchInput.addEventListener('input', (e) => {
+        const term = e.target.value.toLowerCase().trim();
+        let hasGlobalResults = false;
+
+        const categories = document.querySelectorAll('.category-section');
+        
+        categories.forEach(category => {
+            const commands = category.querySelectorAll('.command-item');
+            let hasVisibleCommands = false;
+
+            commands.forEach(cmd => {
+                const name = cmd.dataset.name;
+                const aliases = cmd.dataset.aliases;
+                const desc = cmd.dataset.desc;
+
+                if (name.includes(term) || aliases.includes(term) || desc.includes(term)) {
+                    cmd.classList.remove('hidden');
+                    hasVisibleCommands = true;
+                    hasGlobalResults = true;
+                } else {
+                    cmd.classList.add('hidden');
+                }
+            });
+
+            if (hasVisibleCommands) {
+                category.classList.remove('hidden');
+                if (term.length > 0) {
+                     category.classList.add('active'); // Expand if searching
+                }
+            } else {
+                category.classList.add('hidden');
+            }
+        });
+
+        if (!hasGlobalResults && term.length > 0) {
+            noResults.classList.remove('hidden');
+            searchTermSpan.textContent = term;
+        } else {
+            noResults.classList.add('hidden');
+        }
+    });
+
+    // Focus on keypress
+    document.addEventListener('keydown', (e) => {
+        // Ignore if Ctrl/Alt/Meta is pressed or if already focused on input
+        if (e.ctrlKey || e.altKey || e.metaKey || e.target === searchInput) return;
+        
+        // Ignore specific keys that shouldn't trigger search
+        if (e.key.length > 1 && e.key !== 'Backspace') return; 
+
+        searchInput.focus();
+    });
+
+    // Random Placeholder
+    function startRandomPlaceholder() {
+        if (allCommands.length === 0) return;
+        
+        setInterval(() => {
+            if (document.activeElement !== searchInput && searchInput.value === '') {
+                const randomCmd = allCommands[Math.floor(Math.random() * allCommands.length)];
+                searchInput.setAttribute('placeholder', `Buscar comando... ex: !${randomCmd}`);
+            }
+        }, 3000);
+    }
+
 
     function copyToClipboard(text) {
         navigator.clipboard.writeText(text).then(() => {

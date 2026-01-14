@@ -15,6 +15,7 @@ module.exports = [
 			"public/**",
 			"old/**",
 			".Trash-1000/**",
+			"!public/cmd.js",
 			"!public/help.js",
 			"!public/scripts.js",
 			"!public/dashboard.js",
