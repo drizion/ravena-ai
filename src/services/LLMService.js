@@ -2,6 +2,7 @@ const axios = require("axios");
 const Logger = require("../utils/Logger");
 const fs = require("fs");
 const path = require("path");
+const Database = require("../utils/Database");
 
 /**
  * Serviço para interagir com APIs de LLM
@@ -25,6 +26,26 @@ class LLMService {
 		this.ollamaEndpoint =
 			config.ollamaEndpoint ?? process.env.OLLAMA_ENDPOINT ?? "http://localhost:11434";
 		this.ollamaModel = config.ollamaModel ?? process.env.OLLAMA_MODEL ?? "gemma3:12b";
+
+		// Initialize Database for stats
+		this.database = Database.getInstance();
+		this.DB_NAME = "llm_stats";
+
+		this.database.getSQLiteDb(
+			this.DB_NAME,
+			`
+			CREATE TABLE IF NOT EXISTS usage_stats (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				timestamp INTEGER,
+				provider TEXT,
+				model TEXT,
+				request_type TEXT,
+				input_tokens INTEGER,
+				output_tokens INTEGER
+			);
+			CREATE INDEX IF NOT EXISTS idx_timestamp ON usage_stats(timestamp);
+			`
+		);
 
 		this.providerDefinitions = [
 			{
@@ -87,6 +108,117 @@ class LLMService {
 	}
 
 	/**
+	 * Updates and logs the token usage to SQLite.
+	 * @param {string} provider - The name of the provider.
+	 * @param {Object} response - The API response object containing usage data.
+	 * @param {string} model - The model used.
+	 * @param {Object} options - Original request options (to determine request type).
+	 * @private
+	 */
+	async _trackUsage(provider, response, model, options) {
+		let promptTokens = 0;
+		let completionTokens = 0;
+
+		// Determine request type
+		let requestType = "text";
+		if (options.images && options.images.length > 1) {
+			requestType = "video";
+		} else if (options.image || (options.images && options.images.length > 0)) {
+			requestType = "image";
+		}
+
+		// OpenAI / Deepseek / LMStudio / OpenRouter
+		if (response.usage) {
+			promptTokens = response.usage.prompt_tokens || 0;
+			completionTokens = response.usage.completion_tokens || 0;
+		}
+		// Gemini
+		else if (response.usageMetadata) {
+			promptTokens = response.usageMetadata.promptTokenCount || 0;
+			completionTokens = response.usageMetadata.candidatesTokenCount || 0;
+		}
+		// Ollama (standard /api/chat)
+		else if (response.prompt_eval_count !== undefined || response.eval_count !== undefined) {
+			promptTokens = response.prompt_eval_count || 0;
+			completionTokens = response.eval_count || 0;
+		}
+
+		if (promptTokens > 0 || completionTokens > 0) {
+			this.logger.info(
+				`[TokenUsage][${provider}] Type: ${requestType} | Model: ${model} | In: ${promptTokens} | Out: ${completionTokens}`
+			);
+
+			try {
+				await this.database.dbRun(
+					this.DB_NAME,
+					`INSERT INTO usage_stats (timestamp, provider, model, request_type, input_tokens, output_tokens) VALUES (?, ?, ?, ?, ?, ?)`,
+					[Date.now(), provider, model, requestType, promptTokens, completionTokens]
+				);
+			} catch (e) {
+				this.logger.error("Error saving LLM stats:", e);
+			}
+		}
+	}
+
+	/**
+	 * Retrieves aggregated usage statistics from the database.
+	 * @returns {Promise<Object>} - Aggregated stats.
+	 */
+	async getStats() {
+		try {
+			const rows = await this.database.dbAll(this.DB_NAME, "SELECT * FROM usage_stats");
+
+			const stats = {
+				total_requests: 0,
+				total_input_tokens: 0,
+				total_output_tokens: 0,
+				by_type: {
+					text: { requests: 0, input_tokens: 0, output_tokens: 0 },
+					image: { requests: 0, input_tokens: 0, output_tokens: 0 },
+					video: { requests: 0, input_tokens: 0, output_tokens: 0 }
+				},
+				by_provider: {}
+			};
+
+			for (const row of rows) {
+				stats.total_requests++;
+				stats.total_input_tokens += row.input_tokens;
+				stats.total_output_tokens += row.output_tokens;
+
+				const type = row.request_type || "text";
+				if (!stats.by_type[type]) {
+					stats.by_type[type] = {
+						requests: 0,
+						input_tokens: 0,
+						output_tokens: 0
+					};
+				}
+
+				stats.by_type[type].requests++;
+				stats.by_type[type].input_tokens += row.input_tokens;
+				stats.by_type[type].output_tokens += row.output_tokens;
+
+				const provider = row.provider;
+				if (!stats.by_provider[provider]) {
+					stats.by_provider[provider] = {
+						requests: 0,
+						input_tokens: 0,
+						output_tokens: 0
+					};
+				}
+				stats.by_provider[provider].requests++;
+				stats.by_provider[provider].input_tokens += row.input_tokens;
+				stats.by_provider[provider].output_tokens += row.output_tokens;
+			}
+
+			return stats;
+		} catch (e) {
+			this.logger.error("Error getting stats", e);
+			return {};
+		}
+	}
+
+	/**
 	 * Envia uma solicitação de completação para OpenRouter
 	 * @param {Object} options - Opções de solicitação
 	 * @param {string} options.prompt - O texto do prompt
@@ -102,8 +234,9 @@ class LLMService {
 				throw new Error("Chave da API OpenRouter não configurada");
 			}
 
+			const model = options.model ?? "google/gemini-2.5-flash:free";
 			this.logger.debug("Enviando solicitação para API OpenRouter:", {
-				model: options.model ?? "google/gemini-2.5-flash:free",
+				model,
 				promptLength: options.prompt.length,
 				maxTokens: options.maxTokens ?? 5000
 			});
@@ -111,7 +244,7 @@ class LLMService {
 			const response = await axios.post(
 				"https://openrouter.ai/api/v1/chat/completions",
 				{
-					model: options.model ?? "google/gemini-2.5-flash:free",
+					model,
 					messages: [{ role: "user", content: options.prompt }],
 					max_tokens: options.maxTokens ?? 5000,
 					temperature: options.temperature ?? 0.7
@@ -130,6 +263,8 @@ class LLMService {
 			//	 data: response.data,
 			//	 contentLength: JSON.stringify(response.data).length
 			// });
+
+			this._trackUsage("OpenRouter", response.data, model, options);
 
 			return response.data;
 		} catch (error) {
@@ -201,6 +336,8 @@ class LLMService {
 			//	 contentLength: JSON.stringify(response.data).length
 			// });
 
+			this._trackUsage("Gemini", response.data, model, options);
+
 			return response.data;
 		} catch (error) {
 			this.logger.error("[LLMService] Erro ao chamar API Gemini:", error.message);
@@ -257,6 +394,8 @@ class LLMService {
 			//	 contentLength: JSON.stringify(response.data).length
 			// });
 
+			this._trackUsage("Deepseek", response.data, model, options);
+
 			return response.data;
 		} catch (error) {
 			this.logger.error("Erro ao chamar API Deepseek:", error.message);
@@ -288,11 +427,13 @@ class LLMService {
 				throw new Error("Chave da API OpenAI não configurada");
 			}
 
+			const model = options.model ?? "gpt-3.5-turbo";
+
 			this.logger.debug(
 				`Enviando solicitação para API ${options.useLocal ? "LM Studio Local" : "OpenAI"}:`,
 				{
 					endpoint,
-					model: options.model ?? "gpt-3.5-turbo",
+					model,
 					promptLength: options.prompt.length,
 					maxTokens: options.maxTokens ?? 5000
 				}
@@ -305,7 +446,7 @@ class LLMService {
 			const response = await axios.post(
 				endpoint,
 				{
-					model: options.model ?? "gpt-3.5-turbo",
+					model,
 					messages: [
 						{ role: "system", content: ctxInclude },
 						{ role: "user", content: options.prompt }
@@ -326,6 +467,8 @@ class LLMService {
 			//	 status: response.status,
 			//	 contentLength: JSON.stringify(response.data).length
 			// });
+
+			this._trackUsage(options.useLocal ? "Local" : "OpenAI", response.data, model, options);
 
 			return response.data;
 		} catch (error) {
@@ -385,8 +528,9 @@ class LLMService {
 
 			messages.push(userMessage);
 
+			const model = options.model ?? this.localModel;
 			const queryOptions = {
-				model: options.model ?? this.localModel,
+				model,
 				messages,
 				max_tokens: options.maxTokens ?? 8096,
 				temperature: options.temperature ?? 0.7,
@@ -406,6 +550,8 @@ class LLMService {
 				},
 				timeout: options.timeout ?? this.apiTimeout
 			});
+
+			this._trackUsage("LMStudio", response.data, model, options);
 
 			return response.data;
 		} catch (error) {
@@ -535,6 +681,8 @@ class LLMService {
 				},
 				timeout: toTime
 			});
+
+			this._trackUsage("Ollama", response.data, payload.model, options);
 
 			return response.data;
 		} catch (error) {

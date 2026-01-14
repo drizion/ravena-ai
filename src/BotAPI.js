@@ -663,10 +663,10 @@ class BotAPI {
 				}
 
 				const bot = this.bots[0];
-				
+
 				// 1. Get Fixed Commands
 				const fixedCommands = bot.eventHandler.commandHandler.fixedCommands.getAllCommands();
-				
+
 				// Helper to group commands (duplicated logic from Menu.js to be self-contained)
 				const groupCommandsByCategory = (commands) => {
 					const categories = {};
@@ -704,8 +704,8 @@ class BotAPI {
 					return groupedCommands;
 				};
 
-				const sortCommands = (commands) => {
-					return commands.sort((a, b) => {
+				const sortCommands = (commands) =>
+					commands.sort((a, b) => {
 						const cmdA = Array.isArray(a) ? a[0] : a;
 						const cmdB = Array.isArray(b) ? b[0] : b;
 						const indexA = COMMAND_ORDER.indexOf(cmdA.name);
@@ -715,7 +715,6 @@ class BotAPI {
 						if (indexB !== -1) return 1;
 						return cmdA.name.localeCompare(cmdB.name);
 					});
-				};
 
 				const categorizedCommands = groupCommandsByCategory(fixedCommands);
 				const finalCategories = [];
@@ -740,25 +739,25 @@ class BotAPI {
 						// For groups, we might want to list all aliases or just the main ones
 						// Simplified: take the first one, add aliases from all if grouped?
 						// Menu.js logic: formatCommandGroup joins all names.
-						
+
 						let aliases = [];
 						if (Array.isArray(item)) {
 							// It is a group
-							item.forEach(c => {
-								if(c.name !== cmd.name) aliases.push(c.name);
-								if(c.aliases) aliases.push(...c.aliases);
+							item.forEach((c) => {
+								if (c.name !== cmd.name) aliases.push(c.name);
+								if (c.aliases) aliases.push(...c.aliases);
 							});
 						} else {
 							if (cmd.aliases) aliases = cmd.aliases;
 						}
-						
+
 						// Remove duplicates
 						aliases = [...new Set(aliases)];
 
 						categoryData.commands.push({
 							name: cmd.name,
 							description: cmd.description,
-							aliases: aliases,
+							aliases,
 							reaction: cmd.reactions?.trigger
 						});
 					}
@@ -766,7 +765,8 @@ class BotAPI {
 				}
 
 				// 2. Get Management Commands
-				const managementCommands = bot.eventHandler.commandHandler.management.getManagementCommands();
+				const managementCommands =
+					bot.eventHandler.commandHandler.management.getManagementCommands();
 				// Sort management commands logic
 				const sortedMgmtKeys = Object.keys(managementCommands).sort((a, b) => {
 					const indexA = COMMAND_ORDER.indexOf(a);
@@ -778,13 +778,12 @@ class BotAPI {
 				});
 
 				const sortedMgmt = {};
-				sortedMgmtKeys.forEach(key => sortedMgmt[key] = managementCommands[key]);
+				sortedMgmtKeys.forEach((key) => (sortedMgmt[key] = managementCommands[key]));
 
 				res.json({
 					categories: finalCategories,
 					management: sortedMgmt
 				});
-
 			} catch (error) {
 				this.logger.error("Error serving public commands:", error);
 				res.status(500).json({ error: "Internal server error" });
