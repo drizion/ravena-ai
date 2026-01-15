@@ -46,6 +46,7 @@ class SuperAdmin {
 			restart: { method: "restartBot", description: "Reinicia o bot" },
 
 			stats: { method: "botStats", description: "Status, grupos" },
+			iaStats: { method: "iaStats", description: "Estatísticas de IA (LLM, Comfy, Speech)" },
 
 			getGroupInfo: {
 				method: "getGroupInfo",
@@ -232,6 +233,72 @@ ${listGroups}`;
 			return new ReturnMessage({
 				chatId: message.group ?? message.author,
 				content: "❌ Erro ao processar comando."
+			});
+		}
+	}
+
+	async iaStats(bot, message, args) {
+		const chatId = message.group ?? message.author;
+		try {
+			if (!this.isSuperAdmin(message.author)) return;
+
+			const StatsService = require("../services/StatsService");
+			const statsService = new StatsService();
+			const stats = await statsService.getAllStats();
+
+			const formatNum = (num) => (num ?? 0).toLocaleString("pt-BR");
+
+			let response = "🤖 *Estatísticas de IA*\n\n";
+
+			// LLM Stats
+			response += "🧠 *LLM (Grandes Modelos de Linguagem)*\n";
+			response += `- Total Requisições: ${formatNum(stats.llm.total_requests)}\n`;
+			response += `- Tokens Entrada: ${formatNum(stats.llm.total_input_tokens)}\n`;
+			response += `- Tokens Saída: ${formatNum(stats.llm.total_output_tokens)}\n\n`;
+
+			response += "*Por Tipo:*\n";
+			for (const [type, data] of Object.entries(stats.llm.by_type)) {
+				if (data.requests > 0) {
+					response += `- ${type.toUpperCase()}: ${formatNum(data.requests)} reqs (${formatNum(data.input_tokens)} in / ${formatNum(data.output_tokens)} out)\n`;
+				}
+			}
+
+			response += "\n*Por Provedor:*\n";
+			for (const [provider, data] of Object.entries(stats.llm.by_provider)) {
+				response += `- ${provider}: ${formatNum(data.requests)} reqs\n`;
+			}
+
+			// ComfyUI Stats
+			response += "\n🎨 *ComfyUI (Geração de Imagens)*\n";
+			response += `- Total Imagens: ${formatNum(stats.comfyui.total_images)}\n`;
+			for (const [res, count] of Object.entries(stats.comfyui.by_resolution)) {
+				response += `- ${res}: ${formatNum(count)}\n`;
+			}
+
+			// Speech Stats
+			response += "\n🎙️ *Speech (Voz e Áudio)*\n";
+			response += "*TTS (Texto para Voz):*\n";
+			response += `- Requisições: ${formatNum(stats.speech.tts.total_requests)}\n`;
+			response += `- Caracteres: ${formatNum(stats.speech.tts.total_chars)}\n`;
+			response += `- Duração Total: ${formatNum(Math.round(stats.speech.tts.total_duration_sec))}s\n`;
+			response += `- Tempo Médio Proc: ${formatNum(Math.round(stats.speech.tts.avg_processing_time_ms))}ms\n\n`;
+
+			response += "*STT (Voz para Texto):*\n";
+			response += `- Requisições: ${formatNum(stats.speech.stt.total_requests)}\n`;
+			response += `- Caracteres: ${formatNum(stats.speech.stt.total_chars)}\n`;
+			response += `- Duração Áudio Total: ${formatNum(Math.round(stats.speech.stt.total_duration_sec))}s\n`;
+			response += `- Tempo Médio Proc: ${formatNum(Math.round(stats.speech.stt.avg_processing_time_ms))}ms\n`;
+
+			return new ReturnMessage({
+				chatId,
+				content: response
+			});
+		} catch (error) {
+			this.logger.error("Erro no comando iaStats:", error);
+
+			return new ReturnMessage({
+				chatId: message.group ?? message.author,
+				content: "❌ Erro ao obter estatísticas de IA."
 			});
 		}
 	}

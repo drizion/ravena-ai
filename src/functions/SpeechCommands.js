@@ -21,6 +21,32 @@ const database = Database.getInstance();
 const cmdUsage = CmdUsage.getInstance();
 const llmService = new LLMService({});
 
+// Initialize Media Stats Database
+database.getSQLiteDb(
+	"media_stats",
+	`
+    CREATE TABLE IF NOT EXISTS speech_transcription_stats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER,
+        duration_sec REAL,
+        char_count INTEGER,
+        word_count INTEGER,
+        processing_time_ms INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_transcr_ts ON speech_transcription_stats(timestamp);
+
+    CREATE TABLE IF NOT EXISTS speech_generation_stats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER,
+        char_count INTEGER,
+        word_count INTEGER,
+        duration_sec REAL,
+        processing_time_ms INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_gen_ts ON speech_generation_stats(timestamp);
+`
+);
+
 const ffmpegPath = process.env.FFMPEG_PATH || "ffmpeg";
 const allTalkAPI = process.env.ALLTALK_API || "http://localhost:7851/";
 
@@ -54,6 +80,45 @@ fs.mkdir(tempDir, { recursive: true })
 	});
 
 logger.info(`Módulo SpeechCommands carregado, whisperPath: ${whisperPath} ${runOn}`);
+
+/**
+ * Helper to get audio duration using ffmpeg
+ * @param {string} filePath - Path to audio file
+ * @returns {Promise<number>} - Duration in seconds
+ */
+async function getAudioDuration(filePath) {
+	try {
+		// Uses stderr because ffmpeg outputs file info to stderr
+		const { stdout, stderr } = await execPromise(
+			`"${ffmpegPath}" -i "${filePath}" 2>&1 | grep "Duration"`
+		);
+		const output = stdout || stderr;
+		const durationMatch = output.match(
+			/Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})/
+		);
+		if (durationMatch) {
+			const hours = parseFloat(durationMatch[1]);
+			const minutes = parseFloat(durationMatch[2]);
+			const seconds = parseFloat(durationMatch[3]);
+			return hours * 3600 + minutes * 60 + seconds;
+		}
+	} catch (e) {
+		// ffmpeg exits with code 1 if no output file, but still prints info to stderr
+		if (e.stderr) {
+			const durationMatch = e.stderr.match(
+				/Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})/
+			);
+			if (durationMatch) {
+				const hours = parseFloat(durationMatch[1]);
+				const minutes = parseFloat(durationMatch[2]);
+				const seconds = parseFloat(durationMatch[3]);
+				return hours * 3600 + minutes * 60 + seconds;
+			}
+		}
+		logger.warn(`Could not determine duration for ${filePath}:`, e.message);
+	}
+	return 0;
+}
 
 /**
  * Obtém mídia da mensagem
@@ -144,6 +209,7 @@ function removeWhatsAppMarkup(text) {
  */
 async function textToSpeech(bot, message, args, group, char = "ravena") {
 	try {
+		const startProcess = Date.now();
 		const chatId = message.group ?? message.author;
 
 		const quotedMsg = await message.origin.getQuotedMessage().catch(() => null);
@@ -233,6 +299,23 @@ async function textToSpeech(bot, message, args, group, char = "ravena") {
 		// Salvar o arquivo localmente (temporariamente)
 		await fs.writeFile(tempFilePath, Buffer.from(audioResponse.data));
 
+		const processingTime = Date.now() - startProcess;
+
+		// Track Stats
+		try {
+			const duration = await getAudioDuration(tempFilePath);
+			const words = text.trim().split(/\s+/).length;
+			const chars = text.length;
+
+			await database.dbRun(
+				"media_stats",
+				`INSERT INTO speech_generation_stats (timestamp, char_count, word_count, duration_sec, processing_time_ms) VALUES (?, ?, ?, ?, ?)`,
+				[Date.now(), chars, words, duration, processingTime]
+			);
+		} catch (statErr) {
+			logger.error("Error tracking TTS stats:", statErr);
+		}
+
 		logger.info(`Criando mídia de '${tempFilePath}'`);
 		const media = await bot.createMedia(tempFilePath);
 
@@ -318,6 +401,7 @@ function cleanupString(text) {
  * @returns {Promise<ReturnMessage|Array<ReturnMessage>>} - ReturnMessage ou array de ReturnMessages
  */
 async function speechToText(bot, message, args, group, optimizeWithLLM = true) {
+	const startProcess = Date.now();
 	const chatId = message.group ?? message.author;
 	let audioPath = null;
 	let wavPath = null;
@@ -356,6 +440,9 @@ async function speechToText(bot, message, args, group, optimizeWithLLM = true) {
 		// Salva áudio em arquivo temporário
 		audioPath = await saveMediaToTemp(media, "ogg");
 
+		// Get Duration
+		let audioDuration = await getAudioDuration(audioPath);
+
 		let transcribedText = "";
 
 		if (process.env.WHISPER_API_URL) {
@@ -371,7 +458,10 @@ async function speechToText(bot, message, args, group, optimizeWithLLM = true) {
 				};
 
 				const postResponse = await axios.post(`${WHISPER_API_URL}/transcribe`, requestBody);
-				const { executionId, audioDuration, estimatedTranscriptionTime } = postResponse.data;
+				const { executionId, audioDuration: apiDuration, estimatedTranscriptionTime } = postResponse.data;
+
+				// Update duration if API gives it (likely more accurate or just consistent)
+				if (apiDuration) audioDuration = apiDuration;
 
 				if (!executionId) {
 					throw new Error("A API não retornou um executionId.");
@@ -476,6 +566,22 @@ async function speechToText(bot, message, args, group, optimizeWithLLM = true) {
 			return errorMessage;
 		}
 
+		const processingTime = Date.now() - startProcess;
+
+		// Track Stats
+		try {
+			const words = transcribedText.trim().split(/\s+/).length;
+			const chars = transcribedText.length;
+
+			await database.dbRun(
+				"media_stats",
+				`INSERT INTO speech_transcription_stats (timestamp, duration_sec, char_count, word_count, processing_time_ms) VALUES (?, ?, ?, ?, ?)`,
+				[Date.now(), audioDuration, chars, words, processingTime]
+			);
+		} catch (statErr) {
+			logger.error("Error tracking STT stats:", statErr);
+		}
+
 		const returnMessage = new ReturnMessage({
 			chatId,
 			content: cleanupString(transcribedText?.trim() ?? ""),
@@ -538,6 +644,7 @@ async function speechToText(bot, message, args, group, optimizeWithLLM = true) {
  * @returns {Promise<boolean>} - Se a mensagem foi processada
  */
 async function processAutoSTT(bot, message, group, opts) {
+	const startProcess = Date.now();
 	const chatId = message.group ?? message.author;
 	let audioPath = null;
 	let wavPath = null;
@@ -570,6 +677,9 @@ async function processAutoSTT(bot, message, group, opts) {
 		const media = await message.downloadMedia();
 		audioPath = await saveMediaToTemp(media, "ogg");
 
+		// Get Duration
+		let audioDuration = await getAudioDuration(audioPath);
+
 		let transcribedText = "";
 
 		if (process.env.WHISPER_API_URL) {
@@ -585,7 +695,9 @@ async function processAutoSTT(bot, message, group, opts) {
 				};
 
 				const postResponse = await axios.post(`${WHISPER_API_URL}/transcribe`, requestBody);
-				const { executionId, audioDuration, estimatedTranscriptionTime } = postResponse.data;
+				const { executionId, audioDuration: apiDuration, estimatedTranscriptionTime } = postResponse.data;
+
+				if (apiDuration) audioDuration = apiDuration;
 
 				if (!executionId) {
 					throw new Error("A API não retornou um executionId.");
@@ -649,6 +761,23 @@ async function processAutoSTT(bot, message, group, opts) {
 		if (transcribedText && !transcribedText.includes("Erro ao transcrever áudio")) {
 			// Cria ReturnMessage com a transcrição
 			contentRetorno = cleanupString(transcribedText?.trim() ?? "");
+
+			const processingTime = Date.now() - startProcess;
+
+			// Track Stats
+			try {
+				const words = transcribedText.trim().split(/\s+/).length;
+				const chars = transcribedText.length;
+
+				await database.dbRun(
+					"media_stats",
+					`INSERT INTO speech_transcription_stats (timestamp, duration_sec, char_count, word_count, processing_time_ms) VALUES (?, ?, ?, ?, ?)`,
+					[Date.now(), audioDuration, chars, words, processingTime]
+				);
+			} catch (statErr) {
+				logger.error("Error tracking Auto-STT stats:", statErr);
+			}
+
 			const returnMessage = new ReturnMessage({
 				chatId,
 				content: contentRetorno,

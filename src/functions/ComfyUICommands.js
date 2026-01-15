@@ -17,6 +17,39 @@ const nsfwPredict = NSFWPredict.getInstance();
 const LLMService = require("../services/LLMService");
 const llmService = new LLMService({});
 
+// Initialize Media Stats Database
+database.getSQLiteDb(
+	"media_stats",
+	`
+    CREATE TABLE IF NOT EXISTS comfy_stats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER,
+        resolution TEXT,
+        count INTEGER DEFAULT 1,
+        model TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_comfy_ts ON comfy_stats(timestamp);
+`
+);
+
+/**
+ * Tracks ComfyUI usage stats
+ * @param {string} resolution - Image resolution (e.g., "1024x1024")
+ * @param {number} count - Number of images generated
+ * @param {string} model - Model used
+ */
+async function trackComfyStats(resolution, count = 1, model = "unknown") {
+	try {
+		await database.dbRun(
+			"media_stats",
+			`INSERT INTO comfy_stats (timestamp, resolution, count, model) VALUES (?, ?, ?, ?)`,
+			[Date.now(), resolution, count, model]
+		);
+	} catch (e) {
+		logger.error("Error tracking comfy stats:", e);
+	}
+}
+
 let COMFYUI_URL = process.env.COMFYUI_URL || "http://127.0.0.1:8188";
 if (!COMFYUI_URL.match(/^https?:\/\//)) {
 	COMFYUI_URL = "http://" + COMFYUI_URL;
@@ -355,6 +388,9 @@ async function generateImage(bot, message, args, group, skipNotify = true) {
 
 		// Queue Prompt and Wait for Image
 		let imageBuffer = await queuePrompt(prompt + aesthetic, sampler, scheduler);
+
+		// Track stats
+		trackComfyStats("1024x1024", 1, "z-image-turbo-bf16");
 
 		// Calcula o tempo de geração
 		const generationTime = ((Date.now() - startTime) / 1000).toFixed(1);
