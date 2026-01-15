@@ -279,6 +279,14 @@ async function aiCommand(bot, message, args, group) {
 	);
 
 	// 5. Handle Classification Results
+	const aiAliases = ["ai", "ia", "gpt", "gemini"];
+	if (
+		classificationResult.classification === "command" &&
+		aiAliases.includes(classificationResult.command?.toLowerCase().replace(/!/g, ""))
+	) {
+		logger.debug("[aiCommand] Self-invocation detected, reclassifying to bot");
+		classificationResult.classification = "bot";
+	}
 
 	// CASE A: Command Invocation (e.g. "make sticker", "weather in paris")
 	if (classificationResult.classification === "command" && classificationResult.command) {
