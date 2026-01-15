@@ -871,7 +871,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.addDirectMedia = async function(context, type) {
         if (type === 'text') {
-            const text = await showCustomPrompt("Digite a mensagem:");
+            const currentText = (groupData[context] && groupData[context].text) ? groupData[context].text : '';
+            const text = await showCustomPrompt("Digite a mensagem:", currentText);
             if(text) {
                 if(!groupData[context]) groupData[context] = {};
                 groupData[context].text = text;

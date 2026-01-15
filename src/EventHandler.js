@@ -728,8 +728,8 @@ class EventHandler extends EventEmitter {
 				if (bot.grupoLogs) {
 					try {
 						const msgJoin = `🚪🟢 *${bot.id}* entrou no grupo:
-- 🆔 *ID:* \`${group.id}\`
-- 📃 *Nome:* \`${group.name}\` _(${groupData.newGroup ? "novo" : "antigo"})_
+- 🆔 *ID:* ${group.id}
+- 📃 *Nome:* ${group.name} _(${groupData.newGroup ? "novo" : "antigo"})_
 - 👷‍♂️ *Responsável:*
 \`\`\`${JSON.stringify(data.responsavel, null, "\t")}\`\`\`
 - 👨‍💻 *Raw Data*:
