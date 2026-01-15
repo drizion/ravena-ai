@@ -332,6 +332,68 @@ async function faladoresLimpezaCommand(bot, message, args, group) {
 	}
 }
 
+/**
+ * Remove todos os registros de ranking de um grupo
+ * @param {string} chatId - ID do chat
+ */
+async function resetRanking(chatId) {
+	try {
+		await database.dbRun(dbName, `DELETE FROM ranking WHERE chat_id = ?`, [chatId]);
+	} catch (error) {
+		logger.error("Erro ao resetar ranking:", error);
+	}
+}
+
+/**
+ * Reseta o ranking do grupo, mostrando o resultado final antes
+ */
+async function faladoresResetCommand(bot, message, args, group) {
+	try {
+		const userId = message.author || message.authorAlt;
+		const chatId = message.group ?? userId;
+
+		if (!message.group) {
+			return new ReturnMessage({
+				chatId,
+				content: "Comando apenas para grupos."
+			});
+		}
+
+		// 1. Get current full ranking
+		const rankingMsg = await faladoresCommand(bot, message, ["completo"], group);
+		const rankingContent = rankingMsg.content;
+
+		// 2. Reset database
+		await resetRanking(chatId);
+
+		// 3. Format Date
+		const now = new Date();
+		const formattedDate = now
+			.toLocaleString("pt-BR", {
+				hour: "2-digit",
+				minute: "2-digit",
+				day: "2-digit",
+				month: "2-digit",
+				year: "numeric"
+			})
+			.replace(",", "");
+
+		// 4. Construct response
+		const response = `${rankingContent}\n\n📅 Fechamento: ${formattedDate}\n\n♻️ *Ranking reiniciado com sucesso!*`;
+
+		return new ReturnMessage({
+			chatId,
+			content: response
+		});
+	} catch (error) {
+		logger.error("Erro em faladores-reset:", error);
+		return new ReturnMessage({
+			chatId: message.group ?? message.author,
+			content: "Erro ao resetar o ranking."
+		});
+	}
+}
+
 // Comando para exibir o ranking de faladores
 const commands = [
 	new Command({
@@ -347,6 +409,13 @@ const commands = [
 		category: "grupo",
 		method: faladoresLimpezaCommand,
 		reactions: { after: "🧹", error: "❌" }
+	}),
+	new Command({
+		name: "faladores-reset",
+		description: "Mostra o ranking final e reinicia a contagem",
+		category: "grupo",
+		method: faladoresResetCommand,
+		reactions: { after: "♻️", error: "❌" }
 	})
 ];
 
