@@ -58,7 +58,7 @@ if (!COMFYUI_URL.match(/^https?:\/\//)) {
 const aesthetic = "\n\n(Aesthetic: Gothic, lightly purple-ish tinted atmosphere, cartoony)";
 
 const samplers = ["dpmpp_sde", "euler_ancestral", "res_multistep"];
-const schedulers = ["simple", "beta", "ddim_uniform"];
+const schedulers = ["simple", "beta"]; // ddim_uniform
 
 const urlObj = new URL(COMFYUI_URL);
 const httpProtocol = urlObj.protocol; // 'http:' or 'https:'
