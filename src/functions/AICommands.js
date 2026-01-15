@@ -144,19 +144,56 @@ async function handleCommandInvocation(classification, bot, message, group) {
 			}
 
 			const result = await fixedCmd.execute(bot, message, args, group);
+			const introText = `> 🤖 Usando comando !${cmdName} ${argsStr}`;
+			const introMessage = new ReturnMessage({
+				chatId: message.group ?? message.author,
+				content: introText,
+				options: { quotedMessageId: message.origin.id._serialized }
+			});
 
-			let content = `> 🤖 Usando comando !${cmdName} ${argsStr}\n\n`;
+			// Case 1: Result is an Array of ReturnMessages
+
+			if (Array.isArray(result)) {
+				return [introMessage, ...result];
+			}
+
+			// Case 2: Result is a single ReturnMessage
 			if (result instanceof ReturnMessage) {
-				content += result.content;
-				result.content = content;
-				return result;
-			} else if (typeof result === "string") {
+				// Stickers don't show text, so always send separate notification
+
+				if (result.options?.sendMediaAsSticker) {
+					return [introMessage, result];
+				}
+
+				if (typeof result.options?.caption === "string") {
+					const currentCaption = result.options.caption.trim();
+					result.options.caption = currentCaption ? `${introText}\n\n${currentCaption}` : introText;
+					return result;
+				}
+				
+				// If it's a text message or we can merge into content
+				if (typeof result.content === "string") {
+					const currentContent = result.content.trim();
+					result.content = currentContent ? `${introText}\n\n${currentContent}` : introText;
+					return result;
+				}
+
+				// Fallback if content isn't a string or complex object
+
+				return [introMessage, result];
+			}
+
+			// Case 3: Result is a string (simple text response)
+			if (typeof result === "string") {
 				return new ReturnMessage({
 					chatId: message.group ?? message.author,
-					content: content + result,
+					content: `${introText}\n\n${result}`,
 					options: { quotedMessageId: message.origin.id._serialized }
 				});
 			}
+
+			// Case 4: No result or unknown type
+			return introMessage;
 		} catch (e) {
 			logger.error(`[AICommand] Error auto-invoking command ${cmdName}`, e);
 			return new ReturnMessage({
