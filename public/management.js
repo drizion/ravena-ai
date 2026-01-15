@@ -548,7 +548,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderTags('ignored-cmds-list', groupData.mutedStrings || [], (list) => { groupData.mutedStrings = list; setDirty(true); });
         renderTags('additional-admins-list', groupData.additionalAdmins || [], (list) => { groupData.additionalAdmins = list; setDirty(true); });
 
-        const categories = ["geral","grupo","utilidades","midia","ia","downloaders","jogos","cultura","áudio","tts","busca","listas","arquivos","general","diversao","info","imagens","zoeira"];
+        const categories = ["geral","grupo","utilidades","saude","midia","ia","downloaders","jogos","cultura","áudio","tts","busca","listas","arquivos","general","diversao","info","imagens","zoeira"];
         const mutedList = document.getElementById('muted-categories-list');
         mutedList.innerHTML = '';
         const muted = groupData.mutedCategories || [];
@@ -1110,13 +1110,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (mediaType === 'text') {
              div.innerHTML = `
                 <div style="flex: 1; display: flex; flex-direction: column;">
-                    <input type="text" class="form-control cmd-response-input" value="${value && !isMedia ? value : ''}" placeholder="Texto da resposta">
+                    <textarea class="form-control cmd-response-input" rows="2" placeholder="Texto da resposta"></textarea>
                     <button type="button" class="btn-insert-var"><i class="fas fa-plus-circle"></i> Variável</button>
                 </div>
                 <button type="button" class="btn btn-xs btn-danger remove-resp" style="align-self: flex-start; margin-top: 5px;"><i class="fas fa-trash"></i></button>
             `;
-            const input = div.querySelector('input');
-            div.querySelector('.btn-insert-var').onclick = () => openVariableModal(input);
+            const textarea = div.querySelector('textarea');
+            textarea.value = value && !isMedia ? value : '';
+            div.querySelector('.btn-insert-var').onclick = () => openVariableModal(textarea);
         } else {
             const mediaLink = `/media-direct/${mediaContent}?token=${token}`;
             div.innerHTML = `
