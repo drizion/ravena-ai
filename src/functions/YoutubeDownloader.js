@@ -498,11 +498,12 @@ async function ytCommand(bot, message, args, group) {
 				const media = await bot.createMedia(result.arquivo, "video/mp4");
 
 				// Envia vídeo
+				const dicaAudio = `\n\n> *Dica:* Se vocẽ quiser apenas o áudio deste vídeo, responda esta mensagem com \`${bot.prefix}extractaudio\` (MP3) ou \`${bot.prefix}extractvoice\``;
 				const videoMsg = new ReturnMessage({
 					chatId,
 					content: media,
 					options: {
-						caption: result.legenda,
+						caption: result.legenda + dicaAudio,
 						quotedMessageId: message.origin.id._serialized,
 						evoReply: message.origin
 					}
@@ -681,7 +682,7 @@ const commands = [
 	new Command({
 		name: "sr",
 		caseSensitive: false,
-		description: "Baixa um áudio do YouTube",
+		description: "Baixa uma música do YouTube (áudio do vídeo)",
 		category: "downloaders",
 		reactions: {
 			before: process.env.LOADING_EMOJI ?? "🌀",

@@ -146,7 +146,7 @@ async function audioCommand(bot, message, args, group) {
 const commands = [
 	new Command({
 		name: "audio",
-		description: "Busca um áudio no site MyInstants",
+		description: "Busca um áudio no site MyInstants (não é música)",
 		usage: "!audio <nome_do_áudio> <número>",
 		category: "busca",
 		reactions: {

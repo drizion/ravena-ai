@@ -328,8 +328,8 @@ async function handleVolumeAdjust(bot, message, args, group) {
 // Comandos usando a classe Command
 const commands = [
 	new Command({
-		name: "getaudio",
-		description: "Converte mídia para arquivo de áudio MP3",
+		name: "extractaudio",
+		description: "Extrai audio do arquivo especificado, em mp3",
 		category: "áudio",
 		reactions: {
 			before: process.env.LOADING_EMOJI ?? "🌀",
@@ -341,8 +341,8 @@ const commands = [
 	}),
 
 	new Command({
-		name: "getvoice",
-		description: "Converte mídia para mensagem de voz",
+		name: "extractvoice",
+		description: "Extrai audio do arquivo especificado, como mensagem de voz",
 		category: "áudio",
 		reactions: {
 			before: process.env.LOADING_EMOJI ?? "🌀",
