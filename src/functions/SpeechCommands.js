@@ -93,9 +93,7 @@ async function getAudioDuration(filePath) {
 			`"${ffmpegPath}" -i "${filePath}" 2>&1 | grep "Duration"`
 		);
 		const output = stdout || stderr;
-		const durationMatch = output.match(
-			/Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})/
-		);
+		const durationMatch = output.match(/Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})/);
 		if (durationMatch) {
 			const hours = parseFloat(durationMatch[1]);
 			const minutes = parseFloat(durationMatch[2]);
@@ -105,9 +103,7 @@ async function getAudioDuration(filePath) {
 	} catch (e) {
 		// ffmpeg exits with code 1 if no output file, but still prints info to stderr
 		if (e.stderr) {
-			const durationMatch = e.stderr.match(
-				/Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})/
-			);
+			const durationMatch = e.stderr.match(/Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})/);
 			if (durationMatch) {
 				const hours = parseFloat(durationMatch[1]);
 				const minutes = parseFloat(durationMatch[2]);
@@ -458,7 +454,11 @@ async function speechToText(bot, message, args, group, optimizeWithLLM = true) {
 				};
 
 				const postResponse = await axios.post(`${WHISPER_API_URL}/transcribe`, requestBody);
-				const { executionId, audioDuration: apiDuration, estimatedTranscriptionTime } = postResponse.data;
+				const {
+					executionId,
+					audioDuration: apiDuration,
+					estimatedTranscriptionTime
+				} = postResponse.data;
 
 				// Update duration if API gives it (likely more accurate or just consistent)
 				if (apiDuration) audioDuration = apiDuration;
@@ -695,7 +695,11 @@ async function processAutoSTT(bot, message, group, opts) {
 				};
 
 				const postResponse = await axios.post(`${WHISPER_API_URL}/transcribe`, requestBody);
-				const { executionId, audioDuration: apiDuration, estimatedTranscriptionTime } = postResponse.data;
+				const {
+					executionId,
+					audioDuration: apiDuration,
+					estimatedTranscriptionTime
+				} = postResponse.data;
 
 				if (apiDuration) audioDuration = apiDuration;
 
@@ -865,6 +869,7 @@ const commands = [
 	}),
 	new Command({
 		name: "tts",
+		cooldown: 30,
 		description: `Converte texto para voz usando personagem 'ravena'`,
 		category: "tts",
 		reactions: {
@@ -876,6 +881,7 @@ const commands = [
 	}),
 	new Command({
 		name: "tts-mulher",
+		cooldown: 30,
 		description: `Converte texto para voz usando personagem feminina`,
 		group: "ttsMulher",
 		category: "tts",
@@ -888,6 +894,7 @@ const commands = [
 	}),
 	new Command({
 		name: "tts-carioca",
+		cooldown: 30,
 		description: `Converte texto para voz usando personagem feminina`,
 		group: "ttsMulher",
 		category: "tts",
@@ -900,6 +907,7 @@ const commands = [
 
 	new Command({
 		name: "tts-carioco",
+		cooldown: 30,
 		description: `Converte texto para voz usando personagem masculino`,
 		group: "ttsHomem",
 		category: "tts",
@@ -912,6 +920,7 @@ const commands = [
 
 	new Command({
 		name: "tts-sensual",
+		cooldown: 30,
 		description: `Converte texto para voz usando personagem feminina`,
 		group: "ttsMulher",
 		category: "tts",
@@ -924,6 +933,7 @@ const commands = [
 	}),
 	new Command({
 		name: "tts-sensuel",
+		cooldown: 30,
 		description: `Converte texto para voz usando personagem masculino`,
 		category: "tts",
 		group: "ttsHomem",
@@ -936,6 +946,7 @@ const commands = [
 
 	new Command({
 		name: "tts-homem",
+		cooldown: 30,
 		description: `Converte texto para voz usando personagem masculino`,
 		category: "tts",
 		group: "ttsHomem",
@@ -948,6 +959,7 @@ const commands = [
 	}),
 	new Command({
 		name: "tts-clint",
+		cooldown: 30,
 		description: `Converte texto para voz usando personagem masculino`,
 		category: "tts",
 		group: "ttsHomem",
@@ -960,6 +972,7 @@ const commands = [
 
 	new Command({
 		name: "tts-morgan",
+		cooldown: 30,
 		description: `Converte texto para voz usando personagem masculino`,
 		category: "tts",
 		group: "ttsHomem",
@@ -972,6 +985,7 @@ const commands = [
 
 	new Command({
 		name: "tts-narrador",
+		cooldown: 30,
 		description: `Converte texto para voz usando personagem masculino`,
 		group: "ttsHomem",
 		category: "tts",
@@ -985,6 +999,7 @@ const commands = [
 
 	new Command({
 		name: "tts-rubao",
+		cooldown: 30,
 		description: `Converte texto para voz usando do Rubão do Pontaço`,
 		group: "ttsHomem",
 		category: "tts",

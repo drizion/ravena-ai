@@ -14,10 +14,7 @@ class StatsService {
 			// Ensure DB is loaded (it might be loaded by LLMService, but safe to call getSQLiteDb again)
 			// We don't strictly need the schema if it exists, but good practice or just trust it exists.
 			// Query directly.
-			const rows = await this.database.dbAll(
-				this.LLM_DB,
-				"SELECT * FROM usage_stats"
-			);
+			const rows = await this.database.dbAll(this.LLM_DB, "SELECT * FROM usage_stats");
 
 			const stats = {
 				total_requests: 0,
@@ -71,10 +68,7 @@ class StatsService {
 
 	async getComfyStats() {
 		try {
-			const rows = await this.database.dbAll(
-				this.MEDIA_DB,
-				"SELECT * FROM comfy_stats"
-			);
+			const rows = await this.database.dbAll(this.MEDIA_DB, "SELECT * FROM comfy_stats");
 
 			const stats = {
 				total_images: 0,

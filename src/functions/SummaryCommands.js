@@ -453,6 +453,7 @@ const commands = [
 			before: process.env.LOADING_EMOJI ?? "🌀",
 			after: "📋"
 		},
+		cooldown: 300,
 		method: summarizeConversation
 	}),
 
@@ -465,6 +466,7 @@ const commands = [
 			before: process.env.LOADING_EMOJI ?? "🌀",
 			after: "💬"
 		},
+		cooldown: 300,
 		method: interactWithConversation
 	})
 ];

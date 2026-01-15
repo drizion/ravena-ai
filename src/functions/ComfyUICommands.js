@@ -564,7 +564,7 @@ const commands = [
 			before: process.env.LOADING_EMOJI ?? "🌀",
 			after: "✨"
 		},
-		cooldown: 10,
+		cooldown: 60,
 		method: generateImage
 	})
 ];

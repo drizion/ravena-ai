@@ -170,7 +170,7 @@ async function handleCommandInvocation(classification, bot, message, group) {
 					result.options.caption = currentCaption ? `${introText}\n\n${currentCaption}` : introText;
 					return result;
 				}
-				
+
 				// If it's a text message or we can merge into content
 				if (typeof result.content === "string") {
 					const currentContent = result.content.trim();
@@ -581,7 +581,7 @@ const commands = [
 			before: process.env.LOADING_EMOJI ?? "🌀",
 			after: "🤖"
 		},
-		cooldown: 5,
+		cooldown: 30,
 		method: aiCommand
 	}),
 	new Command({
@@ -594,7 +594,7 @@ const commands = [
 			before: process.env.LOADING_EMOJI ?? "🌀",
 			after: "🤖"
 		},
-		cooldown: 5,
+		cooldown: 30,
 		method: aiCommand
 	}),
 	new Command({
@@ -608,7 +608,7 @@ const commands = [
 			before: process.env.LOADING_EMOJI ?? "🌀",
 			after: "🤖"
 		},
-		cooldown: 5,
+		cooldown: 30,
 		method: aiCommand
 	}),
 	new Command({
@@ -622,7 +622,7 @@ const commands = [
 			before: process.env.LOADING_EMOJI ?? "🌀",
 			after: "🤖"
 		},
-		cooldown: 5,
+		cooldown: 30,
 		method: aiCommand
 	})
 ];
