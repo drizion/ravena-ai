@@ -727,7 +727,14 @@ class EventHandler extends EventEmitter {
 				// Envia notificação para o grupo de logs
 				if (bot.grupoLogs) {
 					try {
-						const msgJoin = `🚪 Bot ${bot.id} entrou no grupo (${groupData.newGroup ? "novo" : "antigo"}): ${group.name} (${group.id})\nQuem add: ${data.responsavel.name}/${data.responsavel.id}${joinSilencioso ? "\n\n🔇 Join Silencioso" : ""}`;
+						const msgJoin = `🚪🟢 *${bot.id}* entrou no grupo:
+- 🆔 *ID:* \`${group.id}\`
+- 📃 *Nome:* \`${group.name}\` _(${groupData.newGroup ? "novo" : "antigo"})_
+- 👷‍♂️ *Responsável:*
+\`\`\`${JSON.stringify(data.responsavel, null, "\t")}\`\`\`
+- 👨‍💻 *Raw Data*:
+\`\`\`${JSON.stringify(data.group)}\`\`\`${joinSilencioso ? "\n\n🔇 _Join Silencioso_" : ""}`;
+
 						this.logger.info(`[processGroupJoin] ${msgJoin}`);
 						bot.sendMessage(bot.grupoLogs, msgJoin);
 					} catch (error) {
@@ -919,9 +926,9 @@ Para fazer a configuração do grupo sem poluir aqui, envie \`!g-painel\`, ou me
 			} else {
 				// Caso 2: Outra pessoa entrou no grupo
 				// Gera e envia mensagem de boas-vindas para o novo membro
-				this.logger.debug(`[groupJoin] Outra pessoa entrou, greetings?`, {
-					greetings: group.greetings
-				});
+				// this.logger.debug(`[groupJoin] Outra pessoa entrou, greetings?`, {
+				// 	greetings: group.greetings
+				// });
 				if (group.greetings) {
 					this.generateGreetingMessage(bot, group, data.user, chat)
 						.then((welcomes) => {
@@ -996,19 +1003,21 @@ Para fazer a configuração do grupo sem poluir aqui, envie \`!g-painel\`, ou me
 						if (bot.addSkipGroup) {
 							await bot.addSkipGroup(groupId);
 						}
-						//group.paused = true; // Sempre que o bot sai do grupo, pausa o mesmo
+						const msgLeave = `🚪🔴 *${bot.id}* saiu do grupo:
+- 🆔 *ID:* \`${group.id}\`
+- 📃 *Nome:* \`${group.name}\`
+- 👷‍♂️ *Responsável:*
+\`\`\`${JSON.stringify(data.responsavel, null, "\t")}\`\`\`
+- 👨‍💻 *Raw Data*:
+\`\`\`${JSON.stringify(data.group)}\`\`\``;
+
 						await this.database.saveGroup(group);
-						bot
-							.sendMessage(
-								bot.grupoLogs,
-								`🚪 Bot ${bot.id} saiu do grupo: '${group.name}' (${group.id})})\nQuem removeu: ${data.responsavel.name}/${data.responsavel.id}`
-							)
-							.catch((error) => {
-								this.logger.error(
-									"Erro ao enviar notificação de entrada no grupo para o grupo de logs:",
-									error
-								);
-							});
+						bot.sendMessage(bot.grupoLogs, msgLeave).catch((error) => {
+							this.logger.error(
+								"Erro ao enviar notificação de entrada no grupo para o grupo de logs:",
+								error
+							);
+						});
 					}
 				} catch (error) {
 					this.logger.error(
@@ -1018,9 +1027,9 @@ Para fazer a configuração do grupo sem poluir aqui, envie \`!g-painel\`, ou me
 				}
 			}
 
-			this.logger.debug(`[groupLeave] Outra pessoa sai, farewell? `, {
-				farewells: group?.farewells
-			});
+			// this.logger.debug(`[groupLeave] Outra pessoa saiu, farewell? `, {
+			// 	farewells: group?.farewells
+			// });
 			if (group && group.farewells && !isBotLeaving) {
 				const farewells = await this.processFarewellMessage(group, data.user, bot);
 				if (farewells && Array.isArray(farewells)) {
