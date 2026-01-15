@@ -289,7 +289,7 @@ class LLMService {
 				throw new Error("Chave da API Google não configurada");
 			}
 
-			const model = options.model ?? "gemini-2.5-flash";
+			const model = options.model ?? "gemini-1.5-flash";
 			this.logger.debug("[LLMService] Enviando solicitação para API Gemini:", {
 				model,
 				promptLength: options.prompt.length,
