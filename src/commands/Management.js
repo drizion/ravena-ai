@@ -4221,7 +4221,7 @@ class Management {
 				return new ReturnMessage({
 					chatId: message.author,
 					content:
-						"Você já está em um chat privado comigo. Para gerenciar um grupo, use: !g-manage [nomeDoGrupo]"
+						"Você já está em um chat privado comigo. Para gerenciar um grupo, use: !g-manage [nomeDoGrupo] (teste também: !g-painel)"
 				});
 			}
 
@@ -4234,7 +4234,7 @@ class Management {
 			// Envia mensagem para o autor no PV
 			const returnMessagePV = new ReturnMessage({
 				chatId: message.author,
-				content: `🔧 Você agora está gerenciando o grupo: *${group.name}*\n\nVocê pode usar os comandos de administração aqui no privado para configurar o grupo sem poluí-lo com mensagens de configuração.`
+				content: `🔧 Você agora está gerenciando o grupo: *${group.name}*\nVocê pode usar os comandos de administração aqui no privado para configurar o grupo sem poluí-lo com mensagens de configuração.\n\n🔥Teste também a administração web enviando: \`!g-painel\``
 			});
 
 			// Envia mensagem no grupo
