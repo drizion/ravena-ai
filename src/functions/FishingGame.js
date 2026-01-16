@@ -124,26 +124,156 @@ const weightScaleMsgs = [180, 150, 120, 100, 80, 60];
 
 // Peixes raríssimos e seus pesos adicionais
 const RARE_FISH = [
-	{ name: "Cthulhu", chance: 0.000002, weightBonus: 86665, emoji: "🐙" },
-	{ name: "Jörmungandr", chance: 0.000003, weightBonus: 26000, emoji: "🌏" },
-	{ name: "Ryūjin", chance: 0.000007, weightBonus: 11050, emoji: "⛩️" },
-	{ name: "Dai Gum Loong", chance: 0.000008, weightBonus: 9100, emoji: "🐲" },
-	{ name: "Godzilla", chance: 0.000009, weightBonus: 8190, emoji: "🦖" },
-	{ name: "Leviathan", chance: 0.00001, weightBonus: 7280, emoji: "🐉" },
-	{ name: "Bakunawa", chance: 0.000011, weightBonus: 7020, emoji: "🌑" },
-	{ name: "Hydra", chance: 0.000012, weightBonus: 5005, emoji: "🐍" },
-	{ name: "Charybdis", chance: 0.000013, weightBonus: 5980, emoji: "🌀" },
-	{ name: "Megalodon", chance: 0.000015, weightBonus: 5460, emoji: "🦈" },
-	{ name: "Aspidochelone", chance: 0.000018, weightBonus: 4290, emoji: "🏝️" },
-	{ name: "Kraken", chance: 0.00002, weightBonus: 6825, emoji: "🦑" },
-	{ name: "Makara", chance: 0.000021, weightBonus: 3705, emoji: "🐊" },
-	{ name: "Umibōzu", chance: 0.000024, weightBonus: 3250, emoji: "🌫️" },
-	{ name: "Nessie", chance: 0.000025, weightBonus: 4095, emoji: "🦕" },
-	{ name: "Taniwha", chance: 0.000028, weightBonus: 4550, emoji: "🗿" },
-	{ name: "Moby Dick", chance: 0.00003, weightBonus: 2795, emoji: "🐳" },
-	{ name: "Kelpie", chance: 0.000035, weightBonus: 2210, emoji: "🐎" },
-	{ name: "Sedna", chance: 0.000045, weightBonus: 1690, emoji: "🧜‍♀️" },
-	{ name: "Baleia", chance: 0.00005, weightBonus: 1200, emoji: "🐋" }
+	{
+		name: "Cthulhu",
+		chance: 0.000002,
+		weightBonus: 86665,
+		emoji: "🐙",
+		description: "cosmic horror, tentacles on face, giant wings, green scaly humanoid dragon"
+	},
+	{
+		name: "Jörmungandr",
+		chance: 0.000003,
+		weightBonus: 26000,
+		emoji: "🌏",
+		description: "world serpent, colossal sea snake, glowing blue scales, ancient runes"
+	},
+	{
+		name: "Ryūjin",
+		chance: 0.000007,
+		weightBonus: 11050,
+		emoji: "⛩️",
+		description: "Japanese sea dragon, long serpentine body, holding a tide jewel, regal and divine"
+	},
+	{
+		name: "Dai Gum Loong",
+		chance: 0.000008,
+		weightBonus: 9100,
+		emoji: "🐲",
+		description: "giant golden Chinese dragon, five-clawed, whiskers, flowing mane, majestic"
+	},
+	{
+		name: "Godzilla",
+		chance: 0.000009,
+		weightBonus: 8190,
+		emoji: "🦖",
+		description: "king of monsters, giant prehistoric lizard, jagged dorsal fins, blue atomic glow"
+	},
+	{
+		name: "Leviathan",
+		chance: 0.00001,
+		weightBonus: 7280,
+		emoji: "🐉",
+		description:
+			"biblical sea monster, armored plates, multi-headed, fire and steam emerging from scales"
+	},
+	{
+		name: "Bakunawa",
+		chance: 0.000011,
+		weightBonus: 7020,
+		emoji: "🌑",
+		description:
+			"moon-swallowing sea serpent, giant gills, dragon-like features, Filipino mythology"
+	},
+	{
+		name: "Hydra",
+		chance: 0.000012,
+		weightBonus: 5005,
+		emoji: "🐍",
+		description:
+			"multi-headed serpentine beast, green and purple scales, toxic breath, swampy atmosphere"
+	},
+	{
+		name: "Charybdis",
+		chance: 0.000013,
+		weightBonus: 5980,
+		emoji: "🌀",
+		description:
+			"sentient massive whirlpool, rows of sharp teeth inside a vortex, sucking everything in"
+	},
+	{
+		name: "Megalodon",
+		chance: 0.000015,
+		weightBonus: 5460,
+		emoji: "🦈",
+		description: "prehistoric apex predator shark, massive jaws, battle scars, dark gray skin"
+	},
+	{
+		name: "Aspidochelone",
+		chance: 0.000018,
+		weightBonus: 4290,
+		emoji: "🏝️",
+		description:
+			"island-sized turtle, trees and greenery on its back, coral-covered shell, ancient eyes"
+	},
+	{
+		name: "Kraken",
+		chance: 0.00002,
+		weightBonus: 6825,
+		emoji: "🦑",
+		description: "colossal cephalopod, massive powerful tentacles, beak, dark ink clouds around it"
+	},
+	{
+		name: "Makara",
+		chance: 0.000021,
+		weightBonus: 3705,
+		emoji: "🐊",
+		description:
+			"hybrid creature, crocodile body, elephant trunk, fish tail, ornate Hindu ornaments"
+	},
+	{
+		name: "Umibōzu",
+		chance: 0.000024,
+		weightBonus: 3250,
+		emoji: "🌫️",
+		description:
+			"giant shadowy sea spirit, smooth bald head, glowing white eyes, emerging from dark water"
+	},
+	{
+		name: "Nessie",
+		chance: 0.000025,
+		weightBonus: 4095,
+		emoji: "🦕",
+		description:
+			"long-necked lake monster, plesiosaur body, dark green skin, elusive and mysterious"
+	},
+	{
+		name: "Taniwha",
+		chance: 0.000028,
+		weightBonus: 4550,
+		emoji: "🗿",
+		description: "Maori guardian spirit, lizard-whale hybrid, tribal tattoo-like patterns on skin"
+	},
+	{
+		name: "Moby Dick",
+		chance: 0.00003,
+		weightBonus: 2795,
+		emoji: "🐳",
+		description:
+			"monstrous white sperm whale, scarred head, broken harpoons and ropes stuck in back"
+	},
+	{
+		name: "Kelpie",
+		chance: 0.000035,
+		weightBonus: 2210,
+		emoji: "🐎",
+		description: "shapeshifting water horse, seaweed mane, webbed hooves, predatory look"
+	},
+	{
+		name: "Sedna",
+		chance: 0.000045,
+		weightBonus: 1690,
+		emoji: "🧜‍♀️",
+		description:
+			"Inuit sea goddess, mermaid-like, long black hair flowing in water, seals and walruses around her"
+	},
+	{
+		name: "Baleia",
+		chance: 0.00005,
+		weightBonus: 1200,
+		emoji: "🐋",
+		description: "majestic giant blue whale, immense scale, barnacles on skin, graceful movement"
+	}
 ];
 
 // Itens de lixo que podem ser pescados
@@ -680,13 +810,13 @@ async function getRandomFish(fishArray, isMultiCatch = false, userData = null) {
 					chance: currentChance,
 					isRare: true,
 					emoji: rareFish.emoji,
+					description: rareFish.description,
 					baseWeight,
 					bonusWeight: rareFish.weightBonus
 				};
 			}
 		}
 	}
-
 	// Peixe normal
 	const fishIndex = Math.floor(Math.random() * fishArray.length);
 	const fishName = fishArray[fishIndex];
@@ -1110,15 +1240,22 @@ function getCurrentDateTime() {
 	return new Intl.DateTimeFormat("en-GB", options).format(now).replace(",", "");
 }
 
-async function generateRareFishImage(bot, userName, fishName, fishWeight = 10000) {
+async function generateRareFishImage(
+	bot,
+	userName,
+	fishName,
+	fishWeight = 10000,
+	fishDescription = ""
+) {
 	try {
 		const dateString = getCurrentDateTime();
 
-		const prompt = `Close-up portrait of a normal everyday person named "${userName}"" fishing an epically rare monstrous creature (fantasy) fish known as "${fishName}"" using only a wooden fishing rod. Sweat and tears.
-Epic scenario, storm, huge boats, fish is extremely large, mythical. Fantastic.
-Lightly blurred background, bokeh. Water splashing
+		const prompt = `Amateur photo with cybershot style framing, a bit blurry, dirty lens:
+Person named '${userName}' fishing an epically rare monstrous creature (fantasy) fish known as "${fishName}", ${fishDescription}
+
+Sweat and tears, joy
+Epic scenario, huge boats, creature captured mythical, fantastic, water splashing
 Dynamic, action-ready close-up composition, medium depth-of-field, hyper-detailed photorealistic-anime hybrid style, epic survival and exploration atmosphere.
-Gothic, purple-ish atmosphere, cartoony
 
 ((Write text in bottom of image centered, bold font, fantasy: ${fishName}, ${fishWeight.toFixed(2)}kg @ ${dateString}))`;
 
@@ -1598,7 +1735,8 @@ async function fishCommand(bot, message, args, group) {
 				bot,
 				userName,
 				caughtFishes[0].name,
-				caughtFishes[0].weight
+				caughtFishes[0].weight,
+				caughtFishes[0].description
 			);
 
 			if (!rareFishImage) {
