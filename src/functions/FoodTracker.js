@@ -108,14 +108,13 @@ async function comidaCommand(bot, message, args, group) {
 		const warningMsg = new ReturnMessage({
 			chatId,
 			content:
-				"⚠️ *Atenção:* Para analisar uma refeição, envie uma foto com a legenda `!comida` ou responda a uma foto com esse comando.\n\n👇 *Abaixo estão suas estatísticas atuais:*",
+				"⚠️ *Atenção:* Para analisar uma refeição, envie uma foto com a legenda `!comida` ou responda a uma foto com esse comando.",
 			options: {
 				quotedMessageId: message.origin.id._serialized,
 				evoReply: message.origin
 			}
 		});
-		const infoMsg = await comidaInfoCommand(bot, message, args, group);
-		return [warningMsg, infoMsg];
+		return warningMsg;
 	}
 
 	try {
@@ -433,7 +432,7 @@ async function comidaListaCommand(bot, message, args, group) {
 const commands = [
 	new Command({
 		name: "comida",
-		description: "Analisa uma foto de comida e registra ingredientes e calorias.",
+		description: "Envie foto de comida para registrar os ingredientes e calorias.",
 		category: "saude",
 		cooldown: 10,
 		method: comidaCommand,
