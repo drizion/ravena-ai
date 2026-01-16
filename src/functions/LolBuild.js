@@ -81,15 +81,6 @@ const commands = [
 			after: "🎮"
 		},
 		method: lolBuildCommand
-	}),
-	new Command({
-		name: "lol",
-		hidden: true,
-		category: "jogos",
-		reactions: {
-			after: "🎮"
-		},
-		method: lolBuildCommand
 	})
 ];
 

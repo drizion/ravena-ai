@@ -129,6 +129,11 @@ body {
     border-radius: 4px;
 }
 
+.info-text.hot{
+  background-color: rgba(234, 122, 122, 0.1);
+  border-left: 4px solid #c4653f;
+}
+
 /* Loading */
 .loading-container {
     text-align: center;
