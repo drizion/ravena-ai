@@ -75,24 +75,39 @@ async function classifyRequest(question, commandList, ctxContent, hasMedia) {
 			"\n\n[IMPORTANT]: The user HAS ATTACHED an image or video to this message.\nIf the user is asking to modify, stickerize, or perform an action ON the image, classify as 'command' and identify the appropriate command (e.g., sticker).\nIf the user is asking a question ABOUT the image content (e.g., 'what is in this image?'), classify as 'bot' or 'general' so it can be analyzed.";
 	}
 
-	const prompt = `Classify the following user request/question based on the available commands and context.
-    
+	const prompt = `Classify the user's intent to determine how the bot should respond.
+
 User Request: "${question}"
 ${mediaContext}
 
-Available Commands:
+### Classification Rules:
+1. **"general" (DEFAULT/CATCH-ALL)**: 
+   - User wants to KNOW something or ANALYZE something.
+   - Any question about real-world facts, finance (stocks, funds, banks), news, weather, calculations, or general knowledge.
+   - Any request to "analyze", "describe", "explain", "read", or "summarize" an image/video/text.
+   - Even if the request contains keywords found in commands (e.g., "gold", "money", "fish"), if the intent is a QUESTION, it is "general".
+   - Example: "how much is gold?", "analyze this image", "who is the president?", "o fundo MM Ouro oscilou quanto?".
+
+2. **"command" (FUNCTIONAL TOOLS)**:
+   - User wants to DO something using a specific bot feature/utility.
+   - The intent must explicitly or very closely match the *action* described in "Available Commands".
+   - MUST be a functional request (e.g., "make a sticker", "remove the background", "play the game", "stickerize this").
+   - If the request is a complex sentence or a question, it is almost never a command.
+   - Be ((EXTREMELY STRICT)). If it doesn't clearly map to a tool's primary purpose, it's "general".
+
+3. **"bot"**: 
+   - Questions about the bot's identity, status, or how to use it (e.g., "who made you?", "what can you do?", "how to create this command", "how to configure feature", "help").
+
+4. **"group"**: 
+   - Questions specifically about the current chat members or group dynamics (e.g., "who talks the most?", "is @user here?").
+
+### Available Commands:
 ${commandList}
 
-Context Info:
-${ctxContent.substring(0, 1000)}...
+### Context:
+${ctxContent.substring(0, 500)}...
 
-Return a JSON with "classification" as one of:
-- "general": General knowledge question (e.g., "what is the capital of France?", "recipe for cake").
-- "bot": Question about the bot itself, how to use a command, OR a request to ANALYZE the attached image content (e.g., "how do I make a sticker?", "who are you?", "describe this image").
-- "group": Question about the group or members (e.g., "who is @123?", "what do you think of this group?").
-- "command": The user is explicitly trying to invoke a command or asking for an action that maps directly to a command (e.g., "make a sticker of this", "weather in London").
-
-If "command", also provide "command" (the command name without prefix) and "args" (arguments string).
+Return JSON: {"classification": "...", "command": "...", "args": "..."}
 `;
 
 	try {
@@ -275,7 +290,7 @@ async function aiCommand(bot, message, args, group) {
 	const classificationResult = await classifyRequest(
 		question,
 		cmdSimpleList,
-		baseCtxContent,
+		"",
 		!!media
 	);
 
