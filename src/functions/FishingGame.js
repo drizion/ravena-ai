@@ -127,21 +127,21 @@ const RARE_FISH = [
 	{
 		name: "Cthulhu",
 		chance: 0.000002,
-		weightBonus: 86665,
+		weightBonus: 26665,
 		emoji: "🐙",
 		description: "cosmic horror, tentacles on face, giant wings, green scaly humanoid dragon"
 	},
 	{
 		name: "Jörmungandr",
 		chance: 0.000003,
-		weightBonus: 26000,
+		weightBonus: 17200,
 		emoji: "🌏",
 		description: "world serpent, colossal sea snake, glowing blue scales, ancient runes"
 	},
 	{
 		name: "Ryūjin",
 		chance: 0.000007,
-		weightBonus: 11050,
+		weightBonus: 12050,
 		emoji: "⛩️",
 		description: "Japanese sea dragon, long serpentine body, holding a tide jewel, regal and divine"
 	},
@@ -2237,7 +2237,7 @@ async function getFishingStats() {
 	for (const u of allUsers) {
 		if (u.biggest_fish_json) {
 			const bf = JSON.parse(u.biggest_fish_json);
-			if (bf && bf.weight > heaviestFishEver.weight) {
+			if (bf && bf.weight < 40000 && bf.weight > heaviestFishEver.weight) { // <10000 pra remover zueiras
 				heaviestFishEver = { ...bf, userName: u.name };
 			}
 		}
@@ -2698,7 +2698,6 @@ const commands = [
 		name: "pesca-info",
 		description: "Informações do jogo",
 		category: "jogos",
-		adminOnly: true,
 		cooldown: 60,
 		reactions: { after: "📕", error: "❌" },
 		method: fishingInfoCommand
