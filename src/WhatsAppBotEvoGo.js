@@ -61,6 +61,7 @@ class WhatsAppBotEvoGo {
 		this.version = "EvolutionGO";
 		this.wwebversion = "0";
 		this.banido = options.banido;
+		this.comandosAudioPV = false; // Futuro talvez? Considerar áudios no PV um comando
 
 		// Acesso pelo painel por terceiros
 		this.privado = options.privado ?? false;

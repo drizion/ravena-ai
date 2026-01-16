@@ -104,6 +104,9 @@ If "command", also provide "command" (the command name without prefix) and "args
 		});
 
 		try {
+			if(response.classification === "command"){
+				this.logger.debug(`[classifyRequest][command] "${question.substring(0, 100)}" -> "!${response.command} ${response.args}"`);
+			}
 			return JSON.parse(response);
 		} catch (e) {
 			logger.warn("[classifyRequest] Failed to parse JSON, defaulting to bot", response);
@@ -267,16 +270,14 @@ async function aiCommand(bot, message, args, group) {
 
 	// 4. Classification
 	// Now we classify FIRST, telling the LLM if there is media attached.
-	logger.debug(`[aiCommand] Classifying request: ${question} (Has Media: ${!!media})`);
 	const classificationResult = await classifyRequest(
 		question,
 		cmdSimpleList,
 		baseCtxContent,
 		!!media
 	);
-	logger.info(
-		`[aiCommand] Classification result: ${classificationResult.classification} (${classificationResult.command})`
-	);
+
+	logger.debug(`[aiCommand] Classified request: "${question.substring(0,100)}" (from ${message.author}, has Media: ${!!media}) -> ${classificationResult.classification ?? "Erro"}`);
 
 	// 5. Handle Classification Results
 	const aiAliases = ["ai", "ia", "gpt", "gemini"];

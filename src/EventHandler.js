@@ -408,10 +408,10 @@ class EventHandler extends EventEmitter {
 			// Armazena também áudios no histórico!
 			SummaryCommands.storeMessage(message, message.author);
 
-			if (bot.pvAI && processed.length > 0) {
+			if (bot.comandosAudioPV && bot.pvAI && processed.length > 0) {
 				// Desabilitado por enquanto
 				this.logger.debug(
-					`[processNonCommandMessage] Recebido áudio no PV e trasncrito, chamando LLM com '${processed}'`
+					`[processNonCommandMessage] Recebido áudio no PV e transcrito, chamando LLM com '${processed}'`
 				);
 				// Usa texto extraído do áudio como entrada pro LLM
 				const msgsLLM = await aiCommand(bot, message, [], group);

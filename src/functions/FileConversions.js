@@ -119,10 +119,11 @@ async function handleGetAudio(bot, message, args, group) {
 		const quotedMsg = await message.origin.getQuotedMessage();
 
 		// Verifica se a mensagem citada tem mídia
-		if (!quotedMsg.hasMedia) {
+		if (!quotedMsg?.hasMedia) {
 			return new ReturnMessage({
 				chatId,
-				content: "A mensagem citada não contém mídia."
+				content:
+					"Para extrair áudio de um vídeo/voz você precisa responder à uma mensagem que possua esta mídia (ou colocar na legenda)."
 			});
 		}
 
@@ -134,7 +135,7 @@ async function handleGetAudio(bot, message, args, group) {
 		if (!supportedTypes.includes(mediaType)) {
 			return new ReturnMessage({
 				chatId,
-				content: `Tipo de mídia não suportado: ${mediaType}. Use em áudio, voz ou vídeo.`
+				content: `*Erro extraindo áudio*: Tipo de mídia não suportado: ${mediaType}. Use em áudio, voz ou vídeo.`
 			});
 		}
 
@@ -179,7 +180,8 @@ async function handleGetVoice(bot, message, args, group) {
 		if (!quotedMsg.hasMedia) {
 			return new ReturnMessage({
 				chatId,
-				content: "A mensagem citada não contém mídia."
+				content:
+					"Para extrair áudio de um vídeo/voz você precisa responder à uma mensagem que possua esta mídia (ou colocar na legenda)."
 			});
 		}
 
@@ -191,7 +193,7 @@ async function handleGetVoice(bot, message, args, group) {
 		if (!supportedTypes.includes(mediaType)) {
 			return new ReturnMessage({
 				chatId,
-				content: `Tipo de mídia não suportado: ${mediaType}. Use em áudio, voz ou vídeo.`
+				content: `*Erro extraindo voz*: Tipo de mídia não suportado: ${mediaType}. Use em áudio, voz ou vídeo.`
 			});
 		}
 

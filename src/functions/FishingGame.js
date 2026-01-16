@@ -1772,7 +1772,7 @@ async function fishCommand(bot, message, args, group) {
 				caughtFishes[0].chance *
 				100 *
 				DEFAULT_GLOBAL_FACTORS.rareFishChance
-			).toFixed(2);
+			).toFixed(5);
 			const notificacaoPeixeRaro = new ReturnMessage({
 				content: rareFishImage,
 				options: {
