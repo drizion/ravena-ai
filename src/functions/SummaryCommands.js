@@ -24,6 +24,29 @@ database.getSQLiteDb(
 `
 );
 
+const mediaAnalysisSchema = {
+	type: "json_schema",
+	json_schema: {
+		name: "media_analysis",
+		schema: {
+			type: "object",
+			properties: {
+				description: {
+					type: "string"
+				},
+				type: {
+					type: "string",
+					enum: ["vida-real", "anime", "desenho", "jogo", "ia-generated", "documento", "outros"]
+				},
+				nsfw: {
+					type: "boolean"
+				}
+			},
+			required: ["description", "type", "nsfw"]
+		}
+	}
+};
+
 /**
  * Analisa um vídeo e retorna uma descrição
  * @param {Object} message - A mensagem contendo o vídeo
@@ -65,15 +88,23 @@ async function analyzeVideo(message) {
 		// Chama LLM
 		const completionOptions = {
 			prompt:
-				"Analyze the video frames provided and return a brief description ((in pt-BR, portuguese brazil)) in the following format: Video[xxxx xxxx xxx]. Describe the main actions and events in the video.",
+				"Analyze the video frames provided and return a brief description ((in pt-BR, portuguese brazil)). Describe the main actions and events in the video. Also classify the type (real life, anime, game, etc) and if it contains NSFW content.",
 			systemContext: `You are an expert bot in video processing and analysis`,
 			images: frames,
+			response_format: mediaAnalysisSchema,
 			debugPrompt: false,
 			timeout: 60000
 		};
 
 		const response = await llmService.getCompletion(completionOptions);
-		return response;
+		try {
+			const parsed = JSON.parse(response);
+			const nsfwTag = parsed.nsfw ? "nsfw" : "sfw";
+			return `Video[${parsed.type}|${nsfwTag}|${parsed.description}]`;
+		} catch (e) {
+			logger.warn("Falha ao analisar JSON do vídeo, retornando cru:", response);
+			return `Video[outros|sfw|${response}]`;
+		}
 	} catch (error) {
 		logger.error("Erro ao analisar vídeo:", error);
 		return false;
@@ -319,9 +350,10 @@ async function storeMessage(message, chatId) {
 			) {
 				const completionOptions = {
 					prompt:
-						"Analyze the picture and return a brief description ((in pt-BR, portuguese brazil)) in the following format ((try to stay below 200 characters)): Imagem[xxxx xxxx xxx]",
+						"Analyze the picture and return a brief description ((in pt-BR, portuguese brazil)) ((try to stay below 200 characters)). Also classify the type (real life, anime, game, etc) and if it contains NSFW content.",
 					systemContext: `You are an expert bot in image processing and analysis`,
 					image: message.content.data,
+					response_format: mediaAnalysisSchema,
 					debugPrompt: false
 				};
 
@@ -333,8 +365,19 @@ async function storeMessage(message, chatId) {
 					!response.includes("Não foi poss") &&
 					!response.includes("Ocorreu um erro")
 				) {
-					textContent = message.caption ? `${response}\nLegenda: ${message.caption}` : response;
-					logger.info(`[${chatId}][storeMessage] Imagem interpretada: ${textContent}`);
+					try {
+						const parsed = JSON.parse(response);
+						const nsfwTag = parsed.nsfw ? "nsfw" : "sfw";
+						const finalString = `Imagem[${parsed.type}|${nsfwTag}|${parsed.description}]`;
+						textContent = message.caption
+							? `${finalString}\nLegenda: ${message.caption}`
+							: finalString;
+						logger.info(`[${chatId}][storeMessage] Imagem interpretada: ${textContent}`);
+					} catch (e) {
+						logger.warn("Falha ao analisar JSON da imagem, retornando cru:", response);
+						// Fallback if not JSON
+						textContent = message.caption ? `${response}\nLegenda: ${message.caption}` : response;
+					}
 				}
 			}
 		} else if (message.type === "video" && llmUp) {
