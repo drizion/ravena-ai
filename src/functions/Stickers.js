@@ -370,6 +370,89 @@ async function squareStickerCommand(bot, message, args, group, cropType) {
 				// Baixa o sticker original para extrair a mídia
 				const stickerMedia = await quotedMsg.downloadMedia();
 
+				// Verifica se é WebP para processamento especial
+				if (stickerMedia.mimetype.includes("webp")) {
+					try {
+						const buffer = Buffer.from(stickerMedia.data, "base64");
+						const image = sharp(buffer, { animated: true });
+						const metadata = await image.metadata();
+
+						if (metadata.pages > 1) {
+							// WebP Animado -> GIF (via sharp) -> MP4 (via ffmpeg)
+							// Resolve incompatibilidade do ffmpeg com chunks ANIM do WebP
+							const gifBuffer = await image.gif({ loop: 0 }).toBuffer();
+							const inputPath = await saveTempMedia(gifBuffer, "image/gif");
+							const outputPath = inputPath.replace(".gif", ".mp4");
+
+							await new Promise((resolve, reject) => {
+								ffmpeg(inputPath)
+									.outputOptions([
+										"-y",
+										"-an",
+										"-c:v libx264",
+										"-preset veryfast",
+										"-crf 32",
+										"-pix_fmt yuv420p",
+										"-movflags faststart",
+										"-vf scale=trunc(iw/2)*2:trunc(ih/2)*2"
+									])
+									.output(outputPath)
+									.on("end", resolve)
+									.on("error", (err, stdout, stderr) => {
+										logger.error(`FFmpeg error: ${err.message}`);
+										logger.error(`FFmpeg stderr: ${stderr}`);
+										reject(err);
+									})
+									.run();
+							});
+
+							const mp4Buffer = await fs.readFile(outputPath);
+							const mp4Media = new MessageMedia(
+								"video/mp4",
+								mp4Buffer.toString("base64"),
+								"sticker.mp4"
+							);
+
+							// Limpar arquivos temporários
+							await fs.unlink(inputPath).catch(() => {});
+							await fs.unlink(outputPath).catch(() => {});
+
+							return new ReturnMessage({
+								chatId,
+								content: mp4Media,
+								options: {
+									sendMediaAsSticker: false,
+									caption: "Sticker Animation",
+									quotedMessageId: message.origin.id._serialized,
+									evoReply: message.origin
+								}
+							});
+						} else if (metadata.hasAlpha) {
+							// WebP Transparente -> PNG (Documento)
+							const pngBuffer = await image.png().toBuffer();
+							const pngMedia = new MessageMedia(
+								"image/png",
+								pngBuffer.toString("base64"),
+								"sticker.png"
+							);
+
+							return new ReturnMessage({
+								chatId,
+								content: pngMedia,
+								options: {
+									sendMediaAsDocument: true,
+									caption: "Sticker Transparente",
+									quotedMessageId: message.origin.id._serialized,
+									evoReply: message.origin
+								}
+							});
+						}
+					} catch (error) {
+						logger.error("Erro ao processar sticker especial:", error);
+						// Continua para o fallback padrão em caso de erro
+					}
+				}
+
 				// Retorna a mídia original (não como sticker)
 				return new ReturnMessage({
 					chatId,
