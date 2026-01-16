@@ -25,12 +25,15 @@ class StreamSystem {
 		this.streamMonitor = null; // Não cria uma nova instância aqui
 		this.dataPath = bot.database.databasePath;
 		this.mediaPath = path.join(this.dataPath, "media");
+		this.initialized = false;
 	}
 
 	/**
 	 * Inicializa o sistema de monitoramento
 	 */
 	async initialize() {
+		if (this.initialized) return true;
+
 		try {
 			//this.logger.info(`[Bot ${this.bot.id}] Inicializando sistema de monitoramento de streams`);
 
@@ -64,6 +67,7 @@ class StreamSystem {
 				);
 			}
 
+			this.initialized = true;
 			return true;
 		} catch (error) {
 			this.logger.error(

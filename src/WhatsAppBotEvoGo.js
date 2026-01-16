@@ -154,7 +154,6 @@ class WhatsAppBotEvoGo {
 
 		if (!this.streamSystem) {
 			this.streamSystem = new StreamSystem(this);
-			this.streamMonitor = this.streamSystem.streamMonitor;
 		}
 
 		// Client Fake
@@ -1468,6 +1467,8 @@ class WhatsAppBotEvoGo {
 
 	async _onInstanceConnected() {
 		this.streamSystem.initialize();
+		this.streamMonitor = this.streamSystem.streamMonitor;
+
 		this._sendStartupNotifications();
 		this.fetchAndPrepareBlockedContacts();
 

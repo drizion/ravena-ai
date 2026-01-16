@@ -104,6 +104,29 @@ async function listMonitoredChannels(bot, message, args, group) {
 	}
 }
 
+function avisoStreamSystem(bot, chatId) {
+	try {
+		logger.warn(
+			"[avisoStreamSystem] Comando de stream usado mas sistema não inicializado, forçando inicialização"
+		);
+		bot.streamSystem.initialize();
+		bot.streamMonitor = bot.streamSystem.streamMonitor;
+
+		return new ReturnMessage({
+			chatId,
+			content:
+				"O sistema de monitoramento de streams não está inicializado.\nO bot irá tentar reinicializar o sistema, tente novamente em breve."
+		});
+	} catch (e) {
+		logger.error("[avisoStreamSystem] Erro tentando inicializar sistema de streams", e);
+		return new ReturnMessage({
+			chatId,
+			content:
+				"O sistema de monitoramento de streams não está inicializado e não foi possível reinicializar o sistema."
+		});
+	}
+}
+
 /**
  * Mostra o status atual dos canais monitorados
  * @param {WhatsAppBot} bot - Instância do bot
@@ -125,10 +148,7 @@ async function showStreamStatus(bot, message, args, group) {
 
 		// Verifica se o StreamMonitor está inicializado
 		if (!bot.streamMonitor) {
-			return new ReturnMessage({
-				chatId,
-				content: "O sistema de monitoramento de streams não está inicializado."
-			});
+			return avisoStreamSystem(bot, chatId);
 		}
 
 		// Obtém canais configurados para este grupo
@@ -249,10 +269,7 @@ async function listOnlineStreamers(bot, message, args, group) {
 
 		// Verifica se o StreamMonitor está inicializado
 		if (!bot.streamMonitor) {
-			return new ReturnMessage({
-				chatId,
-				content: "O sistema de monitoramento de streams não está inicializado."
-			});
+			return avisoStreamSystem(bot, chatId);
 		}
 
 		// Obtém o status atual de todos os streams
@@ -352,10 +369,7 @@ async function showLiveInfo(bot, message, args, group) {
 
 		// Verifica se o StreamMonitor está inicializado
 		if (!bot.streamMonitor) {
-			return new ReturnMessage({
-				chatId,
-				content: "O sistema de monitoramento de streams não está inicializado."
-			});
+			return avisoStreamSystem(bot, chatId);
 		}
 
 		// Se não foram fornecidos argumentos, busca todas as streams configuradas no grupo
@@ -484,10 +498,7 @@ async function showLiveKick(bot, message, args, group) {
 
 		// Verifica se o StreamMonitor está inicializado
 		if (!bot.streamMonitor) {
-			return new ReturnMessage({
-				chatId,
-				content: "O sistema de monitoramento de streams não está inicializado."
-			});
+			return avisoStreamSystem(bot, chatId);
 		}
 
 		// Se não foram fornecidos argumentos, busca todas as streams configuradas no grupo
@@ -736,10 +747,7 @@ async function showPopularStreams(bot, message, args, group) {
 
 		// Verifica se o StreamMonitor está inicializado
 		if (!bot.streamMonitor) {
-			return new ReturnMessage({
-				chatId,
-				content: "O sistema de monitoramento de streams não está inicializado."
-			});
+			return avisoStreamSystem(bot, chatId);
 		}
 
 		// Configura as opções de busca
