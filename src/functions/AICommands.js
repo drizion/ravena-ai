@@ -104,8 +104,10 @@ If "command", also provide "command" (the command name without prefix) and "args
 		});
 
 		try {
-			if(response.classification === "command"){
-				this.logger.debug(`[classifyRequest][command] "${question.substring(0, 100)}" -> "!${response.command} ${response.args}"`);
+			if (response.classification === "command") {
+				this.logger.debug(
+					`[classifyRequest][command] "${question.substring(0, 100)}" -> "!${response.command} ${response.args}"`
+				);
 			}
 			return JSON.parse(response);
 		} catch (e) {
@@ -277,7 +279,9 @@ async function aiCommand(bot, message, args, group) {
 		!!media
 	);
 
-	logger.debug(`[aiCommand] Classified request: "${question.substring(0,100)}" (from ${message.author}, has Media: ${!!media}) -> ${classificationResult.classification ?? "Erro"}`);
+	logger.debug(
+		`[aiCommand] Classified request: "${question.substring(0, 100)}" (from ${message.author}, has Media: ${!!media}) -> ${classificationResult.classification ?? "Erro"}`
+	);
 
 	// 5. Handle Classification Results
 	const aiAliases = ["ai", "ia", "gpt", "gemini"];
