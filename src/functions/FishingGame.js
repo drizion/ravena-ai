@@ -127,6 +127,7 @@ const RARE_FISH = [
 	{
 		name: "Cthulhu",
 		chance: 0.000002,
+		monthlyLimit: 1,
 		weightBonus: 26665,
 		emoji: "🐙",
 		description: "cosmic horror, tentacles on face, giant wings, green scaly humanoid dragon"
@@ -134,6 +135,7 @@ const RARE_FISH = [
 	{
 		name: "Jörmungandr",
 		chance: 0.000003,
+		monthlyLimit: 1,
 		weightBonus: 17200,
 		emoji: "🌏",
 		description: "world serpent, colossal sea snake, glowing blue scales, ancient runes"
@@ -141,6 +143,7 @@ const RARE_FISH = [
 	{
 		name: "Ryūjin",
 		chance: 0.000007,
+		monthlyLimit: 1,
 		weightBonus: 12050,
 		emoji: "⛩️",
 		description: "Japanese sea dragon, long serpentine body, holding a tide jewel, regal and divine"
@@ -148,6 +151,7 @@ const RARE_FISH = [
 	{
 		name: "Dai Gum Loong",
 		chance: 0.000008,
+		monthlyLimit: 1,
 		weightBonus: 9100,
 		emoji: "🐲",
 		description: "giant golden Chinese dragon, five-clawed, whiskers, flowing mane, majestic"
@@ -155,6 +159,7 @@ const RARE_FISH = [
 	{
 		name: "Godzilla",
 		chance: 0.000009,
+		monthlyLimit: 1,
 		weightBonus: 8190,
 		emoji: "🦖",
 		description: "king of monsters, giant prehistoric lizard, jagged dorsal fins, blue atomic glow"
@@ -162,6 +167,7 @@ const RARE_FISH = [
 	{
 		name: "Leviathan",
 		chance: 0.00001,
+		monthlyLimit: 1,
 		weightBonus: 7280,
 		emoji: "🐉",
 		description:
@@ -170,6 +176,7 @@ const RARE_FISH = [
 	{
 		name: "Bakunawa",
 		chance: 0.000011,
+		monthlyLimit: 1,
 		weightBonus: 7020,
 		emoji: "🌑",
 		description:
@@ -178,6 +185,7 @@ const RARE_FISH = [
 	{
 		name: "Hydra",
 		chance: 0.000012,
+		monthlyLimit: 1,
 		weightBonus: 5005,
 		emoji: "🐍",
 		description:
@@ -186,6 +194,7 @@ const RARE_FISH = [
 	{
 		name: "Charybdis",
 		chance: 0.000013,
+		monthlyLimit: 1,
 		weightBonus: 5980,
 		emoji: "🌀",
 		description:
@@ -194,6 +203,7 @@ const RARE_FISH = [
 	{
 		name: "Megalodon",
 		chance: 0.000015,
+		monthlyLimit: 1,
 		weightBonus: 5460,
 		emoji: "🦈",
 		description: "prehistoric apex predator shark, massive jaws, battle scars, dark gray skin"
@@ -201,6 +211,7 @@ const RARE_FISH = [
 	{
 		name: "Aspidochelone",
 		chance: 0.000018,
+		monthlyLimit: 1,
 		weightBonus: 4290,
 		emoji: "🏝️",
 		description:
@@ -209,6 +220,7 @@ const RARE_FISH = [
 	{
 		name: "Kraken",
 		chance: 0.00002,
+		monthlyLimit: 1,
 		weightBonus: 6825,
 		emoji: "🦑",
 		description: "colossal cephalopod, massive powerful tentacles, beak, dark ink clouds around it"
@@ -216,6 +228,7 @@ const RARE_FISH = [
 	{
 		name: "Makara",
 		chance: 0.000021,
+		monthlyLimit: 1,
 		weightBonus: 3705,
 		emoji: "🐊",
 		description:
@@ -224,6 +237,7 @@ const RARE_FISH = [
 	{
 		name: "Umibōzu",
 		chance: 0.000024,
+		monthlyLimit: 1,
 		weightBonus: 3250,
 		emoji: "🌫️",
 		description:
@@ -232,6 +246,7 @@ const RARE_FISH = [
 	{
 		name: "Nessie",
 		chance: 0.000025,
+		monthlyLimit: 1,
 		weightBonus: 4095,
 		emoji: "🦕",
 		description:
@@ -240,6 +255,7 @@ const RARE_FISH = [
 	{
 		name: "Taniwha",
 		chance: 0.000028,
+		monthlyLimit: 1,
 		weightBonus: 4550,
 		emoji: "🗿",
 		description: "Maori guardian spirit, lizard-whale hybrid, tribal tattoo-like patterns on skin"
@@ -247,6 +263,7 @@ const RARE_FISH = [
 	{
 		name: "Moby Dick",
 		chance: 0.00003,
+		monthlyLimit: 1,
 		weightBonus: 2795,
 		emoji: "🐳",
 		description:
@@ -255,6 +272,7 @@ const RARE_FISH = [
 	{
 		name: "Kelpie",
 		chance: 0.000035,
+		monthlyLimit: 1,
 		weightBonus: 2210,
 		emoji: "🐎",
 		description: "shapeshifting water horse, seaweed mane, webbed hooves, predatory look"
@@ -262,6 +280,7 @@ const RARE_FISH = [
 	{
 		name: "Sedna",
 		chance: 0.000045,
+		monthlyLimit: 2,
 		weightBonus: 1690,
 		emoji: "🧜‍♀️",
 		description:
@@ -270,6 +289,7 @@ const RARE_FISH = [
 	{
 		name: "Baleia",
 		chance: 0.00005,
+		monthlyLimit: 3,
 		weightBonus: 1200,
 		emoji: "🐋",
 		description: "majestic giant blue whale, immense scale, barnacles on skin, graceful movement"
@@ -559,7 +579,7 @@ const DEFAULT_GLOBAL_FACTORS = {
 	trashChance: 1.0,
 	buffChance: 1.0,
 	debuffChance: 0.8,
-	rareFishChance: 1,
+	rareFishChance: 1.5,
 	weightFactor: 1.0
 };
 
@@ -757,6 +777,17 @@ async function clearInventory(userId) {
 
 // --- LÓGICA DO JOGO ---
 
+async function getMonthlyCatchCount(fishName) {
+	const now = new Date();
+	const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+	const row = await database.dbGet(
+		dbName,
+		"SELECT COUNT(*) as c FROM fishing_legendary_history WHERE fish_name = ? AND timestamp >= ?",
+		[fishName, startOfMonth]
+	);
+	return row ? row.c : 0;
+}
+
 /**
  * Obtém peixe aleatório do array de peixes com escala de dificuldade
  */
@@ -772,32 +803,43 @@ async function getRandomFish(fishArray, isMultiCatch = false, userData = null) {
 
 	// Se for pescaria múltipla, não permite peixes raros
 	if (!isMultiCatch) {
-		// Sorteia peixe raro com chances muito baixas
-		const buffsAplicados = [];
+		const rng = Math.random();
+		let rareBuffValue = 0;
+
+		if (userData && userData.buffs) {
+			const rareChanceBuff = userData.buffs.find(
+				(b) => b.type === "rare_chance_boost" && b.remainingUses > 0
+			);
+			if (rareChanceBuff) {
+				// We don't consume it here, handled in handleBuffDecrement
+				rareBuffValue = rareChanceBuff.value;
+			}
+		}
+
 		for (const rareFish of RARE_FISH) {
 			let currentChance = rareFish.chance;
 
-			let rareBoostApplied = false;
-			if (userData && userData.buffs && !rareBoostApplied) {
-				const rareChanceBuff = userData.buffs.find(
-					(b) => b.type === "rare_chance_boost" && b.remainingUses > 0
-				);
-				if (rareChanceBuff) {
-					rareChanceBuff.remainingUses = 0; // Test
-					rareBoostApplied = true;
-
-					buffsAplicados.push(rareChanceBuff.value);
-					currentChance += rareChanceBuff.value;
-				}
+			if (rareBuffValue > 0) {
+				currentChance += rareBuffValue;
 			}
 
 			// Aplica fator global
 			currentChance *= DEFAULT_GLOBAL_FACTORS.rareFishChance;
 
-			if (Math.random() < currentChance) {
+			if (rng < currentChance) {
+				// Potential Catch - Check Limits
+				const caughtCount = await getMonthlyCatchCount(rareFish.name);
+				if (caughtCount >= rareFish.monthlyLimit) {
+					logger.debug(
+						`[getRandomFish] Limit reached for ${rareFish.name} (${caughtCount}/${rareFish.monthlyLimit}). Skipped.`
+					);
+					continue;
+				}
+
 				logger.debug(
-					`[getRandomFish] RARO CAPTURADO: Chance original ${rareFish.chance} x globalFactor ${DEFAULT_GLOBAL_FACTORS.rareFishChance} x buffs ${JSON.stringify(buffsAplicados)}`
+					`[getRandomFish] RARO CAPTURADO: Chance base ${rareFish.chance} | Buff ${rareBuffValue} | RNG ${rng} < ${currentChance}`
 				);
+
 				const baseWeight = parseFloat(
 					(Math.random() * (MAX_FISH_WEIGHT - MIN_FISH_WEIGHT) + MIN_FISH_WEIGHT).toFixed(2)
 				);
@@ -817,6 +859,7 @@ async function getRandomFish(fishArray, isMultiCatch = false, userData = null) {
 			}
 		}
 	}
+
 	// Peixe normal
 	const fishIndex = Math.floor(Math.random() * fishArray.length);
 	const fishName = fishArray[fishIndex];
@@ -2237,7 +2280,8 @@ async function getFishingStats() {
 	for (const u of allUsers) {
 		if (u.biggest_fish_json) {
 			const bf = JSON.parse(u.biggest_fish_json);
-			if (bf && bf.weight < 40000 && bf.weight > heaviestFishEver.weight) { // <10000 pra remover zueiras
+			if (bf && bf.weight < 40000 && bf.weight > heaviestFishEver.weight) {
+				// <10000 pra remover zueiras
 				heaviestFishEver = { ...bf, userName: u.name };
 			}
 		}

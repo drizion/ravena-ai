@@ -287,12 +287,7 @@ async function aiCommand(bot, message, args, group) {
 
 	// 4. Classification
 	// Now we classify FIRST, telling the LLM if there is media attached.
-	const classificationResult = await classifyRequest(
-		question,
-		cmdSimpleList,
-		"",
-		!!media
-	);
+	const classificationResult = await classifyRequest(question, cmdSimpleList, "", !!media);
 
 	logger.debug(
 		`[aiCommand] Classified request: "${question.substring(0, 100)}" (from ${message.author}, has Media: ${!!media}) -> ${classificationResult.classification ?? "Erro"}`
