@@ -319,7 +319,7 @@ async function aiCommand(bot, message, args, group) {
 
 	if (classificationResult.classification === "general") {
 		// Minimal context
-		systemContext = `Você é ravenabot, um assistente virtual. Responda de forma útil e direta.${customPersonalidade}`;
+		systemContext = `${baseCtxContent}. Responda de forma útil e direta.${customPersonalidade}`;
 	} else if (classificationResult.classification === "group") {
 		// Group context + History
 		const msgsRecentes = (await getRecentMessages(chatId)).slice(0, 15);
