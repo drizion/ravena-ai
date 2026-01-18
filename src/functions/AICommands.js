@@ -119,7 +119,7 @@ Return JSON: {"classification": "...", "command": "...", "args": "..."}
 		});
 
 		try {
-			if (response.classification === "command") {
+			if (response.classification == "command") {
 				this.logger.debug(
 					`[classifyRequest][command] "${question.substring(0, 100)}" -> "!${response.command} ${response.args}"`
 				);
@@ -290,7 +290,7 @@ async function aiCommand(bot, message, args, group) {
 	const classificationResult = await classifyRequest(question, cmdSimpleList, "", !!media);
 
 	logger.debug(
-		`[aiCommand] Classified request: "${question.substring(0, 100)}" (from ${message.author}, has Media: ${!!media}) -> ${classificationResult.classification ?? "Erro"}`
+		`[aiCommand] Classified request: "${question.substring(0, 100)}" (from ${message.author}, has Media: ${!!media}) -> ${classificationResult.classification ?? "Erro"} ${classificationResult.command ?? ""}`
 	);
 
 	// 5. Handle Classification Results

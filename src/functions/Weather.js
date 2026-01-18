@@ -429,7 +429,7 @@ async function handleWeatherCommand(bot, message, args, group) {
 const commands = [
 	new Command({
 		name: "clima",
-		description: "Mostra o clima atual e previsão para uma localização",
+		description: "Pesquisa e mostra o clima / previsão do tempo para uma localização",
 		category: "utilidades",
 		reactions: {
 			before: process.env.LOADING_EMOJI ?? "🌀",
