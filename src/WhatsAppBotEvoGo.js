@@ -2455,24 +2455,34 @@ class WhatsAppBotEvoGo {
 	}
 
 	getLidFromPn(PN, chat) {
-		//this.logger.debug(`[getLidFromPn] `, {PN, chat});
-		if (chat?.Participants) {
-			return chat?.Participants?.find((p) => p.PhoneNumber.startsWith(PN))?.LID ?? PN;
-		} else {
-			return chat?.participants?.find((p) => p.id?._serialized.startsWith(PN))?.phoneNumber ?? PN;
-		}
+		const participants = chat?.Participants || chat?.participants || [];
+
+		const found = participants.find((p) => {
+			const number = p.PhoneNumber || p.phoneNumber || p.id?._serialized || "";
+			return number.startsWith(PN);
+		});
+
+		return found ? found.LID || found.lid || found.phoneNumber : PN;
 	}
 
 	getPnFromLid(lid, chat) {
-		//this.logger.debug(`[getPnFromLid] `, {lid, chat});
-		if (chat?.Participants) {
-			return (
-				chat?.Participants?.find((p) => p.LID.startsWith(lid) || p.JID.startsWith(lid))
-					?.PhoneNumber ?? lid
-			);
-		} else {
-			return chat?.participants?.find((p) => p.id?._serialized.startsWith(lid))?.phoneNumber ?? lid;
-		}
+		// 1. Normalize the list: Get participants regardless of case
+		const participants = chat?.Participants || chat?.participants || [];
+
+		// 2. Find the user: Check all potential ID fields for a match
+		const found = participants.find(
+			(p) =>
+				// We check LID, JID (and their lowercase variants), or the serialized ID
+				// Using ?. prevents errors if a field doesn't exist
+				p.LID?.startsWith(lid) ||
+				p.lid?.startsWith(lid) ||
+				p.JID?.startsWith(lid) ||
+				p.jid?.startsWith(lid) ||
+				p.id?._serialized?.startsWith(lid)
+		);
+
+		// 3. Return: The normalized PhoneNumber, or fallback to the input lid
+		return found ? found.PhoneNumber || found.phoneNumber : lid;
 	}
 
 	notInWhitelist(author) {
