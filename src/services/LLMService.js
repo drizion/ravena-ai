@@ -14,9 +14,8 @@ class LLMService {
 	 */
 	constructor(config = {}) {
 		this.logger = new Logger("llm-service");
-		this.openRouterKey = config.openRouterKey ?? process.env.OPENROUTER_API_KEY;
 		this.openAIKey = config.openAIKey ?? process.env.OPENAI_API_KEY;
-		this.googleKey = config.googleKey ?? process.env.GOOGLE_API_KEY;
+		this.geminiKey = config.geminiKey ?? process.env.GEMINI_API_KEY;
 		this.deepseekKey = config.deepseekKey ?? process.env.DEEPSEEK_API_KEY;
 		this.localEndpoint =
 			config.localEndpoint ?? process.env.LOCAL_LLM_ENDPOINT ?? "http://localhost:1234";
@@ -67,25 +66,35 @@ class LLMService {
 					throw new Error("Resposta inválida ou vazia do Ollama");
 				}
 			},
+
 			{
-				name: "ollama-gemma3:12b-it-qat",
+				name: 'gemini',
 				method: async (options) => {
-					options.model = "gemma3:12b-it-qat";
-					options.timeout = options.timeout ?? 60000;
-					options.ignoreVideo = true;
-					const response = await this.ollamaCompletion({
-						customEndpoint: "http://192.168.3.200:12345",
-						...options
-					});
-					if (response && response.message && response.message.content) {
-						return response.message.content;
-					}
-					if (response && response.choices && response.choices[0] && response.choices[0].message) {
-						return response.choices[0].message.content;
-					}
-					throw new Error("Resposta inválida ou vazia do Ollama");
+					const response = await this.geminiCompletion(options);
+					return response.candidates[0].content.parts[0].text;
 				}
 			}
+
+			// {
+			// 	name: "ollama-gemma3:12b-it-qat",
+			// 	method: async (options) => {
+			// 		options.model = "gemma3:12b-it-qat";
+			// 		options.timeout = options.timeout ?? 60000;
+			// 		options.ignoreVideo = true;
+			// 		const response = await this.ollamaCompletion({
+			// 			customEndpoint: "http://192.168.3.200:12345",
+			// 			...options
+			// 		});
+			// 		if (response && response.message && response.message.content) {
+			// 			return response.message.content;
+			// 		}
+			// 		if (response && response.choices && response.choices[0] && response.choices[0].message) {
+			// 			return response.choices[0].message.content;
+			// 		}
+			// 		throw new Error("Resposta inválida ou vazia do Ollama");
+			// 	}
+			// }
+
 			// {
 			// 	name: 'lmstudio',
 			// 	method: async (options) => {
@@ -93,18 +102,11 @@ class LLMService {
 			// 		return response.choices[0].message.content;
 			// 	}
 			// },
-			// {
-			// 	name: 'gemini',
-			// 	method: async (options) => {
-			// 		const response = await this.geminiCompletion(options);
-			// 		return response.candidates[0].content.parts[0].text;
-			// 	}
-			// }
 		];
 
 		this.providerQueue = [...this.providerDefinitions];
 		this.lastQueueChangeTimestamp = 0;
-		this.resetQueueTimeout = 30 * 60 * 1000; // 30 minutos
+		this.resetQueueTimeout = 10 * 60 * 1000; // 10 minutos
 	}
 
 	/**
@@ -127,7 +129,7 @@ class LLMService {
 			requestType = "image";
 		}
 
-		// OpenAI / Deepseek / LMStudio / OpenRouter
+		// OpenAI / Deepseek / LMStudio
 		if (response.usage) {
 			promptTokens = response.usage.prompt_tokens || 0;
 			completionTokens = response.usage.completion_tokens || 0;
@@ -219,61 +221,6 @@ class LLMService {
 	}
 
 	/**
-	 * Envia uma solicitação de completação para OpenRouter
-	 * @param {Object} options - Opções de solicitação
-	 * @param {string} options.prompt - O texto do prompt
-	 * @param {string} [options.model='google/gemini-2.5-flash:free'] - O modelo a usar
-	 * @param {number} [options.maxTokens=1000] - Número máximo de tokens a gerar
-	 * @param {number} [options.temperature=0.7] - Temperatura de amostragem
-	 * @returns {Promise<Object>} - A resposta da API
-	 */
-	async openRouterCompletion(options) {
-		try {
-			if (!this.openRouterKey) {
-				this.logger.error("Chave da API OpenRouter não configurada");
-				throw new Error("Chave da API OpenRouter não configurada");
-			}
-
-			const model = options.model ?? "google/gemini-2.5-flash:free";
-			this.logger.debug("Enviando solicitação para API OpenRouter:", {
-				model,
-				promptLength: options.prompt.length,
-				maxTokens: options.maxTokens ?? 5000
-			});
-
-			const response = await axios.post(
-				"https://openrouter.ai/api/v1/chat/completions",
-				{
-					model,
-					messages: [{ role: "user", content: options.prompt }],
-					max_tokens: options.maxTokens ?? 5000,
-					temperature: options.temperature ?? 0.7
-				},
-				{
-					headers: {
-						Authorization: `Bearer ${this.openRouterKey}`,
-						"Content-Type": "application/json"
-					},
-					timeout: options.timeout ?? this.apiTimeout
-				}
-			);
-
-			// this.logger.debug('Resposta recebida da API OpenRouter', {
-			//	 status: response.status,
-			//	 data: response.data,
-			//	 contentLength: JSON.stringify(response.data).length
-			// });
-
-			this._trackUsage("OpenRouter", response.data, model, options);
-
-			return response.data;
-		} catch (error) {
-			this.logger.error("Erro ao chamar API OpenRouter:", error.message);
-			throw error;
-		}
-	}
-
-	/**
 	 * Envia uma solicitação de completação para API Gemini
 	 * @param {Object} options - Opções de solicitação
 	 * @param {string} options.prompt - O texto do prompt
@@ -284,9 +231,9 @@ class LLMService {
 	 */
 	async geminiCompletion(options) {
 		try {
-			if (!this.googleKey) {
-				this.logger.error("Chave da API Google não configurada");
-				throw new Error("Chave da API Google não configurada");
+			if (!this.geminiKey) {
+				this.logger.error("Chave da API Gemini não configurada");
+				throw new Error("Chave da API Gemini não configurada");
 			}
 
 			const model = options.model ?? "gemini-1.5-flash";
@@ -296,19 +243,64 @@ class LLMService {
 				maxTokens: options.maxTokens ?? 5000
 			});
 
-			//if(options.systemContext){
-			//	this.logger.info(`[geminiCompletion] Usando ctx personalizado: ${options.systemContext.trim(0, 30)}...`);
-			//}
-
-			this.logger.info(`[LLMService][geminiCompletion] Prompt: ${options.prompt.trim(0, 30)}...`);
+			this.logger.info(`[LLMService][geminiCompletion] Prompt: ${this.summarizeString(options.prompt)}`);
 
 			// Endpoint da API Gemini
-			const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.googleKey}`;
+			const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.geminiKey}`;
+
+			// Prepare parts with text prompt
+			const parts = [{ text: options.prompt }];
+
+			// Handle images if present
+			if (options.images || options.image) {
+				let imagesToProcess = options.images ? options.images : [options.image];
+				
+				if (options.ignoreVideo) {
+					imagesToProcess = [imagesToProcess[0]];
+				}
+
+				for (const img of imagesToProcess) {
+					let base64Image;
+					let mimeType = "image/jpeg"; // Default fallback
+
+					if (img.startsWith("data:image")) {
+						// Attempt to extract mime type from data URI
+						const matches = img.match(/^data:(.+);base64,(.+)$/);
+						if (matches) {
+							mimeType = matches[1];
+							base64Image = matches[2];
+						} else {
+							// Simple fallback if regex fails but starts with data:image
+							base64Image = img.split(",")[1];
+						}
+					} else if (fs.existsSync(img)) {
+						base64Image = fs.readFileSync(img, "base64");
+						const ext = path.extname(img).toLowerCase().replace('.', '');
+						if (ext === 'png') mimeType = 'image/png';
+						else if (ext === 'webp') mimeType = 'image/webp';
+						else if (ext === 'heic') mimeType = 'image/heic';
+						else if (ext === 'heif') mimeType = 'image/heif';
+						// default remains jpeg
+					} else {
+						// Assume raw base64 string
+						base64Image = img;
+					}
+
+					if (base64Image) {
+						parts.push({
+							inline_data: {
+								mime_type: mimeType,
+								data: base64Image
+							}
+						});
+					}
+				}
+			}
 
 			const response = await axios.post(
 				endpoint,
 				{
-					contents: [{ role: "user", parts: [{ text: options.prompt }] }],
+					contents: [{ role: "user", parts: parts }],
 					system_instruction: {
 						parts: [
 							{
@@ -341,6 +333,9 @@ class LLMService {
 			return response.data;
 		} catch (error) {
 			this.logger.error("[LLMService] Erro ao chamar API Gemini:", error.message);
+			if (error.response) {
+				this.logger.error("[LLMService] Gemini API Response Error:", JSON.stringify(error.response.data));
+			}
 			throw error;
 		}
 	}
@@ -834,19 +829,6 @@ class LLMService {
 					!response.choices[0].message
 				) {
 					this.logger.error("Resposta inválida da API Local:", response);
-					return "Erro: Não foi possível gerar uma resposta. Por favor, tente novamente mais tarde.";
-				}
-				return response.choices[0].message.content;
-
-			case "openrouter":
-				response = await this.openRouterCompletion(options);
-				if (
-					!response ||
-					!response.choices ||
-					!response.choices[0] ||
-					!response.choices[0].message
-				) {
-					this.logger.error("Resposta inválida da API OpenRouter:", response);
 					return "Erro: Não foi possível gerar uma resposta. Por favor, tente novamente mais tarde.";
 				}
 				return response.choices[0].message.content;
