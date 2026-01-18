@@ -38,6 +38,7 @@ class CacheManager {
 		// Database setup
 		this.database = Database.getInstance();
 		this.DB_NAME = "cache";
+		this.isFlushing = false;
 
 		// Initialize Tables
 		this.database.getSQLiteDb(
@@ -220,8 +221,9 @@ class CacheManager {
 	}
 
 	async flushPendingWrites() {
-		if (this.pendingWrites.size === 0) return;
+		if (this.isFlushing || this.pendingWrites.size === 0) return;
 
+		this.isFlushing = true;
 		this.logger.debug(`Flushing cache items to disk...`);
 
 		// Clone map for processing
@@ -252,6 +254,8 @@ class CacheManager {
 			try {
 				await this.database.dbRun(this.DB_NAME, "ROLLBACK");
 			} catch (_) {}
+		} finally {
+			this.isFlushing = false;
 		}
 	}
 
