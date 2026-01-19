@@ -4,8 +4,29 @@ let isAdminMode = false;
 let selectedBots = [];
 let activePeriod = 'today';
 let messageTimestamps = [];
+let botMessageTimestamps = {};
 let averageMsgsHr = 0;
 let hasInitializedRealtime = false;
+
+// Function to animate number change
+function animateValue(obj, start, end, duration) {
+    if (!obj) return;
+    if (obj._currentAnimation) cancelAnimationFrame(obj._currentAnimation);
+    
+    let startTimestamp = null;
+    const step = (timestamp) => {
+        if (!startTimestamp) startTimestamp = timestamp;
+        const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+        obj.innerText = Math.floor(progress * (end - start) + start);
+        if (progress < 1) {
+            obj._currentAnimation = window.requestAnimationFrame(step);
+        } else {
+             obj.innerText = end;
+             delete obj._currentAnimation;
+        }
+    };
+    obj._currentAnimation = window.requestAnimationFrame(step);
+}
 
 function updateRealtimeCounter() {
     const now = Date.now();
@@ -17,10 +38,41 @@ function updateRealtimeCounter() {
     
     const msgsCounterDiv = document.getElementById('msgsCounter');
     if (msgsCounterDiv) {
-        msgsCounterDiv.innerHTML = `
-            <span>Processando no momento</span>
-            <span class="count">${realtimeRate} msgs/h (média de ${averageMsgsHr} msgs/h)</span>
-        `;
+        // Find existing value or default to 0
+        const countSpan = msgsCounterDiv.querySelector('.count-val');
+        let currentVal = 0;
+        
+        if (countSpan) {
+            currentVal = parseInt(countSpan.innerText, 10) || 0;
+            if (currentVal !== realtimeRate) {
+                 animateValue(countSpan, currentVal, realtimeRate, 950);
+            }
+        } else {
+             msgsCounterDiv.innerHTML = `
+                <span>Processando no momento</span>
+                <span class="count"><span class="count-val">${realtimeRate}</span> msgs/h (média de ${averageMsgsHr} msgs/h)</span>
+            `;
+        }
+    }
+}
+
+function updateBotRealtimeCounters() {
+    const now = Date.now();
+    
+    for (const [botId, timestamps] of Object.entries(botMessageTimestamps)) {
+        // Filter timestamps
+        botMessageTimestamps[botId] = timestamps.filter(t => now - t <= 60000);
+        
+        const count = botMessageTimestamps[botId].length;
+        const realtimeRate = count * 60;
+        
+        const element = document.getElementById(`msgs-hr-${botId}`);
+        if (element) {
+            const currentVal = parseInt(element.innerText, 10) || 0;
+            if (currentVal !== realtimeRate) {
+                animateValue(element, currentVal, realtimeRate, 950);
+            }
+        }
     }
 }
 
@@ -238,8 +290,18 @@ function renderBots(data) {
     }
     // Calcula o total de mensagens/hora de todos os bots
     let totalMsgsHr = 0;
+    const now = Date.now();
     data.bots.forEach(bot => {
-        totalMsgsHr += Math.round(bot.msgsHr || 0);
+        const msgs = Math.round(bot.msgsHr || 0);
+        totalMsgsHr += msgs;
+
+        if (!botMessageTimestamps[bot.id]) {
+            botMessageTimestamps[bot.id] = [];
+            const initialCount = Math.round(msgs / 60);
+            for (let i = 0; i < initialCount; i++) {
+                botMessageTimestamps[bot.id].push(now - Math.floor(Math.random() * 60000));
+            }
+        }
     });
     
     averageMsgsHr = totalMsgsHr;
@@ -324,7 +386,12 @@ function renderBotCard(botContainer, data, bot){
     const statusDesc = getStatusDescription(minutesSinceLastMessage, bot.connected);
     const phoneNumber = formatPhoneNumber(extractPhoneFromBotId(bot.id, data.bots)).replace("+55","").trim();
     const whatsappUrl = formatWhatsAppUrl(phoneNumber);
-    const msgsHr = Math.round(bot.msgsHr || 0);
+    let msgsHr = Math.round(bot.msgsHr || 0);
+    if (botMessageTimestamps[bot.id]) {
+        const now = Date.now();
+        const recent = botMessageTimestamps[bot.id].filter(t => now - t <= 60000);
+        msgsHr = recent.length * 60;
+    }
     const msgActivityClass = getMessageActivityClass(msgsHr);
     
     const avgResponseTime = bot.responseTime ? bot.responseTime.avg || 0 : 0;
@@ -388,11 +455,12 @@ function renderBotCard(botContainer, data, bot){
             </div>
             <div class="detail-item">
                 <span class="detail-label">Msgs/hora:</span>
-                <span class="detail-value-highlight">
-                    ${msgsHr}
+                <span class="detail-value-highlight tooltip-container">
+                    <span id="msgs-hr-${bot.id}">${msgsHr}</span>
                     <span class="msgs-badge ${msgActivityClass}">
                         ${msgsHr === 0 ? '💤' : msgsHr > 100 ? '🔥' : msgsHr > 50 ? '📊' : '📝'}
                     </span>
+                    <span class="tooltip-text">Média: ${Math.round(bot.msgsHr || 0)} msgs/h</span>
                 </span>
             </div>
             <div class="detail-item">
@@ -408,24 +476,27 @@ function renderBotCard(botContainer, data, bot){
     }
 
     botCard.innerHTML = `
-        <div class="bot-header">
-            <div class="bot-title">
-                <a href="${whatsappUrl}" target="_blank" title="Abrir chat no WhatsApp">
-                    <img src="whatsapp.png" alt="WhatsApp" class="whatsapp-icon">
-                </a>
-                <div class="bot-name">${bot.id}</div>
+        <div class="bot-card-bg"></div>
+        <div class="bot-card-content">
+            <div class="bot-header">
+                <div class="bot-title">
+                    <a href="${whatsappUrl}" target="_blank" title="Abrir chat no WhatsApp">
+                        <img src="whatsapp.png" alt="WhatsApp" class="whatsapp-icon">
+                    </a>
+                    <div class="bot-name">${bot.id}</div>
+                </div>
+                <div class="status-indicator" title="${statusDesc}">${statusEmoji}</div>
             </div>
-            <div class="status-indicator" title="${statusDesc}">${statusEmoji}</div>
-        </div>
-        <div class="bot-details">
-            <div class="detail-item">
-                <span class="detail-label">Telefone:</span>
-                <span class="detail-value">${phoneNumber || 'Não disponível'}</span>
+            <div class="bot-details">
+                <div class="detail-item">
+                    <span class="detail-label">Telefone:</span>
+                    <span class="detail-value">${phoneNumber || 'Não disponível'}</span>
+                </div>
+                ${divResponsavel}
+                ${divMsgs}
+                ${detalhes}
+                ${buttonsHtml}
             </div>
-            ${divResponsavel}
-            ${divMsgs}
-            ${detalhes}
-            ${buttonsHtml}
         </div>
     `;
     
@@ -854,6 +925,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data && data.type === 'message') {
                 lastActivity = Date.now();
                 messageTimestamps.push(Date.now());
+
+                if (data.botId) {
+                     if (!botMessageTimestamps[data.botId]) botMessageTimestamps[data.botId] = [];
+                     botMessageTimestamps[data.botId].push(Date.now());
+                     updateBotRealtimeCounters();
+                }
+
                 updateRealtimeCounter();
 
                 if (activityLight) {
@@ -871,7 +949,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Update realtime counter every second to decay count
-        setInterval(updateRealtimeCounter, 1000);
+        setInterval(() => {
+            updateRealtimeCounter();
+            updateBotRealtimeCounters();
+        }, 1000);
 
         socket.on('service-status', (services) => {
             // Update Evolution Status
@@ -887,6 +968,98 @@ document.addEventListener('DOMContentLoaded', () => {
         
     } else {
         console.warn('Socket.io not found.');
+    }
+
+    // Matrix Background Animation
+    const canvas = document.getElementById('matrix-bg');
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        
+        // Setting the width and height of the canvas
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        // Setting up the columns
+        const fontSize = 16;
+        const columns = canvas.width / fontSize;
+        
+        // Setting up the drops
+        const drops = [];
+        for (let x = 0; x < columns; x++) {
+            drops[x] = Math.floor(Math.random() * -50); // Start above the screen with some randomness
+        }
+        
+        // Initial solid fill to prevent "all characters" glich
+        ctx.fillStyle = "#05060d";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Setting up the characters
+        const chars = "0123456789ABCDEFRAVENA"; // Binary + Ravena
+        
+        let lastDraw = 0;
+        
+        const draw = (timestamp) => {
+            // Calculate speed based on message activity
+            // Min < 500 msgs/hr (slow)
+            // Max > 15000 msgs/hr (fast)
+            
+            const currentMsgsHr = messageTimestamps ? messageTimestamps.length * 60 : 0;
+            const minMsgs = 500;
+            const maxMsgs = 15000;
+            
+            // Map msgs/hr to delay (ms between frames)
+            // Faster means lower delay.
+            // 500 msgs -> 100ms delay?
+            // 15000 msgs -> 20ms delay?
+            
+            let factor = (currentMsgsHr - minMsgs) / (maxMsgs - minMsgs);
+            if (factor < 0) factor = 0;
+            if (factor > 1) factor = 1;
+            
+            const minDelay = 20;
+            const maxDelay = 120;
+            const delay = maxDelay - (factor * (maxDelay - minDelay));
+            
+            if (timestamp - lastDraw < delay) {
+                requestAnimationFrame(draw);
+                return;
+            }
+            lastDraw = timestamp;
+
+            // Translucent background to show trail
+            ctx.fillStyle = "rgba(5, 6, 13, 0.05)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = "#85e413"; // Green text
+            ctx.font = fontSize + "px monospace";
+            
+            for (let i = 0; i < drops.length; i++) {
+                // Random character
+                const text = chars.charAt(Math.floor(Math.random() * chars.length));
+                
+                // x = i * fontSize, y = value of drops[i] * fontSize
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                
+                // Sending the drop back to the top randomly after it has crossed the screen
+                // adding randomness to the reset to make the drops scattered on the Y axis
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                
+                // Incrementing Y coordinate
+                drops[i]++;
+            }
+            requestAnimationFrame(draw);
+        };
+        
+        requestAnimationFrame(draw);
+        
+        // Resize listener
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+             // Re-init drops if needed, but simple resize is okay for background
+        });
     }
 });
 

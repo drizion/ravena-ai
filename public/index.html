@@ -11,6 +11,7 @@
     <link rel="manifest" href="/site.webmanifest">
 </head>
 <body>
+    <canvas id="matrix-bg"></canvas>
     <div class="container">
         <header>
             <h1  class="banner">ravenabot - status</h1>
@@ -18,12 +19,36 @@
             <div class="status-grid-container" style="position: relative; margin-bottom: 20px;">
                 <table class="status-table" style="margin: 0 auto; border-collapse: collapse;">
                     <tr class="status-lights-row">
-                         <td style="padding: 5px 25px;"><div id="service-evolutiongo" class="status-indicator-light" title="Evolution V3 / Serviço principal do WhatsApp"></div></td>
-                         <td style="padding: 5px 25px;"><div id="api-imagine" class="status-indicator-light" title="!imagine / Servidor IA de Imagens (ComfyUI/Z-Image)"></div></td>
-                         <td style="padding: 5px 25px;"><div id="api-llm" class="status-indicator-light" title="!ia/!resumo/!interagir / Servidor IA de linguagem (LLM)"></div></td>
-                         <td style="padding: 5px 25px;"><div id="api-whisper" class="status-indicator-light" title="!stt / Servidor conversão de voz para texto (Whisper)"></div></td>
-                         <td style="padding: 5px 25px;"><div id="api-alltalk" class="status-indicator-light" title="!tts / Servidor conversão de texto para voz (AllTalkV2)"></div></td>
-                         <td style="padding: 5px 25px;"><div id="message-activity" class="status-indicator-light" title="Atividade / Cada piscada é uma mensagem enviada/recebida"></div></td>
+                         <td style="padding: 5px 25px;">
+                            <div id="service-evolutiongo" class="status-indicator-light tooltip-container">
+                                <span class="tooltip-text">Evolution V3 / Serviço principal do WhatsApp</span>
+                            </div>
+                         </td>
+                         <td style="padding: 5px 25px;">
+                            <div id="api-imagine" class="status-indicator-light tooltip-container">
+                                <span class="tooltip-text">!imagine / Servidor IA de Imagens (ComfyUI/Z-Image)</span>
+                            </div>
+                         </td>
+                         <td style="padding: 5px 25px;">
+                            <div id="api-llm" class="status-indicator-light tooltip-container">
+                                <span class="tooltip-text">!ia/!resumo/!interagir / Servidor IA de linguagem (LLM)</span>
+                            </div>
+                         </td>
+                         <td style="padding: 5px 25px;">
+                            <div id="api-whisper" class="status-indicator-light tooltip-container">
+                                <span class="tooltip-text">!stt / Servidor conversão de voz para texto (Whisper)</span>
+                            </div>
+                         </td>
+                         <td style="padding: 5px 25px;">
+                            <div id="api-alltalk" class="status-indicator-light tooltip-container">
+                                <span class="tooltip-text">!tts / Servidor conversão de texto para voz (AllTalkV2)</span>
+                            </div>
+                         </td>
+                         <td style="padding: 5px 25px;">
+                            <div id="message-activity" class="status-indicator-light tooltip-container">
+                                <span class="tooltip-text">Atividade / Cada piscada é uma mensagem enviada/recebida</span>
+                            </div>
+                         </td>
                     </tr>
                     <tr class="status-labels-row" style="color: #b7b7c5; font-size: 0.8rem; text-align: center;">
                         <td>Evolution</td>

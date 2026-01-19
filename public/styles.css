@@ -23,6 +23,17 @@ body {
     min-height: 100vh;
 }
 
+#matrix-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -10;
+    pointer-events: none;
+    opacity: 0.5;
+}
+
 .container {
     max-width: 90%;
     margin: 0 auto;
@@ -133,47 +144,59 @@ h1 {
 }
 
  .bot-card {
-  background-color: var(--dark-purple);
+  /* background-color: var(--dark-purple);  Moved to .bot-card-bg */
   border-radius: 8px;
-  padding: 20px;
+  /* padding: 20px; Moved to .bot-card-content */
   transition: transform 0.3s ease;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
-  border-bottom: 4px solid transparent;
+  /* border-bottom: 4px solid transparent; Moved to .bot-card-bg */
 
   /* Establishes a positioning context for the ::before pseudo-element */
   position: relative; 
   
   /* Clips the oversized ::before element so it doesn't spill out */
-  overflow: hidden; 
+  /* overflow: hidden; REMOVED to allow tooltips */
+  /* z-index: 1; REMOVED to simplify stacking */
 }
 
-/* This rule ensures the actual content (text, images) of the card
-   sits on top of the animated background. */
-.bot-card > * {
-  position: relative;
-  z-index: 1;
- }
+.bot-card-bg {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  z-index: 0; /* Base layer of card */
+  background-color: var(--dark-purple);
+  border-bottom: 4px solid transparent;
+}
+
+.bot-card-content {
+    position: relative;
+    z-index: 1; /* Content above background */
+    padding: 20px;
+}
+
+
  
  .bot-card:hover {
   transform: translateY(-5px);
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
  }
 /* Updated VIP class with the animation */
- .bot-card.vip {
+ .bot-card.vip .bot-card-bg {
   background-color: #06256d;
   border-bottom-color: var(--gold-color);
   box-shadow: 0 6px 12px rgba(255, 215, 0, 0.2);
 }
 
 /* We use a ::before pseudo-element for the animated background */
-.bot-card.vip::before {
+.bot-card.vip .bot-card-bg::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 200%; /* Make the background twice as tall to allow for scrolling */
-  z-index: 0;
+  z-index: 1;
   
   /* Create multiple gold speckles of different sizes and positions */
   background-image: 
@@ -192,14 +215,14 @@ h1 {
 }
 
 /* This pseudo-element creates a gradient overlay to fade the speckles out at the top */
-.bot-card.vip::after {
+.bot-card.vip .bot-card-bg::after {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 0; /* Sits on top of ::before but below the card content */
+  z-index: 1; /* Sits on top of ::before but below the card content */
   background: linear-gradient(
     to top,
     rgba(26, 16, 60, 0) 80%,  /* Transparent until 80% of the way up */
@@ -207,21 +230,21 @@ h1 {
   );
 }
 
-.bot-card.comunitario {
+.bot-card.comunitario .bot-card-bg {
   background-color: #1d0355;
   border-bottom-color: var(--communist-red);
   box-shadow: 0 6px 12px rgba(204, 0, 0, 0.2);
 }
 
 /* Background animation for Comunitario class */
-.bot-card.comunitario::before {
+.bot-card.comunitario .bot-card-bg::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 200%;
-  z-index: 0;
+  z-index: 1;
   background-image: 
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Ctext x='50%25' y='50%25' font-size='8' fill='rgba(204,0,0,0.7)' text-anchor='middle' dominant-baseline='middle'%3E☭%3C/text%3E%3C/svg%3E"),
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Ctext x='50%25' y='50%25' font-size='6' fill='rgba(204,0,0,0.5)' text-anchor='middle' dominant-baseline='middle'%3E☭%3C/text%3E%3C/svg%3E");
@@ -241,14 +264,14 @@ h1 {
 }
 
 /* Gradient overlay for Comunitario class to fade symbols at the top */
-.bot-card.comunitario::after {
+.bot-card.comunitario .bot-card-bg::after {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 0;
+  z-index: 1;
   background: linear-gradient(
     to top,
     rgba(26, 16, 60, 0) 80%,

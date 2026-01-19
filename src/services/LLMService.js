@@ -224,7 +224,7 @@ class LLMService {
 	 * Envia uma solicitação de completação para API Gemini
 	 * @param {Object} options - Opções de solicitação
 	 * @param {string} options.prompt - O texto do prompt
-	 * @param {string} [options.model='gemini-1.5-flash'] - O modelo a usar
+	 * @param {string} [options.model='gemini-2.5-flash-lite'] - O modelo a usar
 	 * @param {number} [options.maxTokens=1000] - Número máximo de tokens a gerar
 	 * @param {number} [options.temperature=0.7] - Temperatura de amostragem
 	 * @returns {Promise<Object>} - A resposta da API
@@ -236,7 +236,7 @@ class LLMService {
 				throw new Error("Chave da API Gemini não configurada");
 			}
 
-			const model = "gemini-1.5-flash";
+			const model = "gemini-2.5-flash-lite";
 			this.logger.debug("[LLMService] Enviando solicitação para API Gemini:", {
 				model,
 				promptLength: options.prompt.length,
