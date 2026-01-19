@@ -68,7 +68,7 @@ class LLMService {
 			},
 
 			{
-				name: 'gemini',
+				name: "gemini",
 				method: async (options) => {
 					const response = await this.geminiCompletion(options);
 					return response.candidates[0].content.parts[0].text;
@@ -236,14 +236,16 @@ class LLMService {
 				throw new Error("Chave da API Gemini não configurada");
 			}
 
-			const model = options.model ?? "gemini-1.5-flash";
+			const model = "gemini-1.5-flash";
 			this.logger.debug("[LLMService] Enviando solicitação para API Gemini:", {
 				model,
 				promptLength: options.prompt.length,
 				maxTokens: options.maxTokens ?? 5000
 			});
 
-			this.logger.info(`[LLMService][geminiCompletion] Prompt: ${this.summarizeString(options.prompt)}`);
+			this.logger.info(
+				`[LLMService][geminiCompletion] Prompt: ${this.summarizeString(options.prompt)}`
+			);
 
 			// Endpoint da API Gemini
 			const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.geminiKey}`;
@@ -254,7 +256,7 @@ class LLMService {
 			// Handle images if present
 			if (options.images || options.image) {
 				let imagesToProcess = options.images ? options.images : [options.image];
-				
+
 				if (options.ignoreVideo) {
 					imagesToProcess = [imagesToProcess[0]];
 				}
@@ -275,11 +277,11 @@ class LLMService {
 						}
 					} else if (fs.existsSync(img)) {
 						base64Image = fs.readFileSync(img, "base64");
-						const ext = path.extname(img).toLowerCase().replace('.', '');
-						if (ext === 'png') mimeType = 'image/png';
-						else if (ext === 'webp') mimeType = 'image/webp';
-						else if (ext === 'heic') mimeType = 'image/heic';
-						else if (ext === 'heif') mimeType = 'image/heif';
+						const ext = path.extname(img).toLowerCase().replace(".", "");
+						if (ext === "png") mimeType = "image/png";
+						else if (ext === "webp") mimeType = "image/webp";
+						else if (ext === "heic") mimeType = "image/heic";
+						else if (ext === "heif") mimeType = "image/heif";
 						// default remains jpeg
 					} else {
 						// Assume raw base64 string
@@ -300,7 +302,7 @@ class LLMService {
 			const response = await axios.post(
 				endpoint,
 				{
-					contents: [{ role: "user", parts: parts }],
+					contents: [{ role: "user", parts }],
 					system_instruction: {
 						parts: [
 							{
@@ -334,7 +336,10 @@ class LLMService {
 		} catch (error) {
 			this.logger.error("[LLMService] Erro ao chamar API Gemini:", error.message);
 			if (error.response) {
-				this.logger.error("[LLMService] Gemini API Response Error:", JSON.stringify(error.response.data));
+				this.logger.error(
+					"[LLMService] Gemini API Response Error:",
+					JSON.stringify(error.response.data)
+				);
 			}
 			throw error;
 		}
