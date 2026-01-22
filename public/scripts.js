@@ -1015,9 +1015,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(fetchHealthData, 30000);
     setInterval(fetchTopDonates, 5 * 60 * 1000); // Atualiza doações a cada 5 minutos
 
-    // Socket.io connection for realtime activity
-    if (typeof io !== 'undefined') {
-        const socket = io();
+    // SSE connection for realtime activity
+    if (window.EventSource) {
+        const evtSource = new EventSource("/api/stream");
         const activityLight = document.getElementById('message-activity');
         const overlay = document.getElementById('ws-loading-overlay');
         
@@ -1070,17 +1070,19 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }, 1000);
 
-        socket.on('connect', () => {
+        evtSource.onopen = () => {
             if (overlay) overlay.style.display = 'none';
-        });
+        };
 
-        socket.on('disconnect', () => {
+        evtSource.onerror = (err) => {
+            // Browser automatically tries to reconnect
             if (overlay) overlay.style.display = 'flex';
              // Also grey out activity
              if (activityLight) activityLight.className = 'status-indicator-light activity-grey';
-        });
+        };
 
-        socket.on('activity', (data) => {
+        evtSource.addEventListener('activity', (e) => {
+            const data = JSON.parse(e.data);
             if (data && data.type === 'message') {
                 lastActivity = Date.now();
                 messageTimestamps.push(Date.now());
@@ -1113,7 +1115,8 @@ document.addEventListener('DOMContentLoaded', () => {
             updateBotRealtimeCounters();
         }, 1000);
 
-        socket.on('service-status', (services) => {
+        evtSource.addEventListener('service-status', (e) => {
+            const services = JSON.parse(e.data);
             // Update Evolution Status
             evolutionStatus = services.evolutiongo;
             updateStatusLight('service-evolutiongo', services.evolutiongo);
@@ -1126,7 +1129,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
     } else {
-        console.warn('Socket.io not found.');
+        console.warn('SSE not supported.');
     }
 
     // Matrix Background Animation

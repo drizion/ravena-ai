@@ -8,7 +8,6 @@ const upload = multer({ dest: "uploads/" });
 const fs = require("fs").promises;
 const qrcode = require("qr-base64");
 const { exec, spawn } = require("child_process");
-const { Server } = require("socket.io");
 const axios = require("axios");
 const WebManagement = require("./utils/WebManagement");
 const { CATEGORY_EMOJIS, COMMAND_ORDER } = require("./functions/MenuOrder");
@@ -56,12 +55,11 @@ class BotAPI {
 			data: []
 		};
 
-		this.io = null;
+		this.sseClients = [];
+
 		if (this.eventHandler) {
 			this.eventHandler.on("activity", (data) => {
-				if (this.io) {
-					this.io.emit("activity", data);
-				}
+				this.broadcastSSE("activity", data);
 			});
 		}
 
@@ -88,11 +86,21 @@ class BotAPI {
 	}
 
 	/**
-	 * Verifica o status dos serviços externos e emite via Socket.IO
+	 * Broadcast SSE event to all connected clients
+	 * @param {string} type - Event type
+	 * @param {Object} data - Event data
+	 */
+	broadcastSSE(type, data) {
+		this.sseClients.forEach((res) => {
+			res.write(`event: ${type}\n`);
+			res.write(`data: ${JSON.stringify(data)}\n\n`);
+		});
+	}
+
+	/**
+	 * Verifica o status dos serviços externos e emite via SSE
 	 */
 	async checkServices() {
-		// if (!this.io) return; // Allow running without io to save status file
-
 		const services = {
 			evolutiongo: "unknown",
 			imagine: "down",
@@ -163,9 +171,7 @@ class BotAPI {
 
 		this.lastServicesStatus = services;
 
-		if (this.io) {
-			this.io.emit("service-status", services);
-		}
+		this.broadcastSSE("service-status", services);
 
 		try {
 			await fs.writeFile(
@@ -191,6 +197,29 @@ class BotAPI {
 	 * Configura rotas da API
 	 */
 	setupRoutes() {
+		// Endpoint SSE para streaming de eventos
+		this.app.get("/api/stream", (req, res) => {
+			// 1. Set Headers
+			res.setHeader("Content-Type", "text/event-stream");
+			res.setHeader("Cache-Control", "no-cache");
+			res.setHeader("Connection", "keep-alive");
+			res.flushHeaders();
+
+			// 2. Send initial data (current service status)
+			if (this.lastServicesStatus) {
+				res.write(`event: service-status\n`);
+				res.write(`data: ${JSON.stringify(this.lastServicesStatus)}\n\n`);
+			}
+
+			// 3. Add to clients list
+			this.sseClients.push(res);
+
+			// 4. Handle disconnect
+			req.on("close", () => {
+				this.sseClients = this.sseClients.filter((client) => client !== res);
+			});
+		});
+
 		// Endpoint de verificação de saúde
 		this.app.get("/health", async (req, res) => {
 			try {
@@ -2445,15 +2474,7 @@ class BotAPI {
 				this.server = this.app.listen(this.port, () => {
 					this.logger.info(`Servidor API escutando na porta ${this.port}`);
 
-					this.io = new Server(this.server);
-					this.io.on("connection", (socket) => {
-						// this.logger.debug('Novo cliente conectado via Socket.IO');
-						if (this.lastServicesStatus) {
-							socket.emit("service-status", this.lastServicesStatus);
-						}
-					});
-
-					// Realiza uma verificação inicial logo após iniciar o IO
+					// Realiza uma verificação inicial logo após iniciar
 					this.checkServices();
 
 					resolve();
