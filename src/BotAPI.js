@@ -1885,29 +1885,33 @@ class BotAPI {
 	 */
 	processDailyData(reports) {
 		try {
-			// Inicializa array de 24 posições para contagem por hora
-			const hourCounts = Array(24).fill(0);
-			const hourTotals = Array(24).fill(0);
+			const hourlyTotalsByDate = {};
 
-			// Processa cada relatório
 			reports.forEach((report) => {
 				if (report.period && report.period.start && report.messages) {
 					const date = new Date(report.period.start);
-					const hour = date.getHours();
+					date.setMinutes(0, 0, 0);
+					const key = date.toISOString();
 
-					// Soma mensagens totais deste relatório
 					const totalMsgs = (report.messages.totalReceived ?? 0) + (report.messages.totalSent ?? 0);
 
-					// Adiciona ao contador de horas e totais
-					hourCounts[hour]++;
-					hourTotals[hour] += totalMsgs;
+					if (!hourlyTotalsByDate[key]) hourlyTotalsByDate[key] = 0;
+					hourlyTotalsByDate[key] += totalMsgs;
 				}
 			});
 
-			// Calcula média por hora
-			const hourlyAverages = hourTotals.map((total, index) => {
+			const hourSums = Array(24).fill(0);
+			const hourCounts = Array(24).fill(0);
+
+			Object.entries(hourlyTotalsByDate).forEach(([key, total]) => {
+				const hour = new Date(key).getHours();
+				hourSums[hour] += total;
+				hourCounts[hour]++;
+			});
+
+			const hourlyAverages = hourSums.map((sum, index) => {
 				const count = hourCounts[index];
-				return count > 0 ? Math.round(total / count) : 0;
+				return count > 0 ? Math.round(sum / count) : 0;
 			});
 
 			return {
@@ -1926,29 +1930,30 @@ class BotAPI {
 	 */
 	processWeeklyData(reports) {
 		try {
-			// Inicializa arrays para os 7 dias da semana
-			const dayCounts = Array(7).fill(0);
-			const dayTotals = Array(7).fill(0);
+			const dailyTotals = {};
 
-			// Processa cada relatório
 			reports.forEach((report) => {
 				if (report.period && report.period.start && report.messages) {
-					const date = new Date(report.period.start);
-					const day = date.getDay(); // 0-6 (Domingo-Sábado)
-
-					// Soma mensagens totais deste relatório
+					const dateString = new Date(report.period.start).toISOString().split("T")[0];
 					const totalMsgs = (report.messages.totalReceived ?? 0) + (report.messages.totalSent ?? 0);
 
-					// Adiciona ao contador de dias e totais
-					dayCounts[day]++;
-					dayTotals[day] += totalMsgs;
+					if (!dailyTotals[dateString]) dailyTotals[dateString] = 0;
+					dailyTotals[dateString] += totalMsgs;
 				}
 			});
 
-			// Calcula média por dia da semana
-			const dailyAverages = dayTotals.map((total, index) => {
+			const daySums = Array(7).fill(0);
+			const dayCounts = Array(7).fill(0);
+
+			Object.entries(dailyTotals).forEach(([dateString, total]) => {
+				const dayOfWeek = new Date(dateString).getUTCDay();
+				daySums[dayOfWeek] += total;
+				dayCounts[dayOfWeek]++;
+			});
+
+			const dailyAverages = daySums.map((sum, index) => {
 				const count = dayCounts[index];
-				return count > 0 ? Math.round(total / count) : 0;
+				return count > 0 ? Math.round(sum / count) : 0;
 			});
 
 			return {
@@ -1967,6 +1972,7 @@ class BotAPI {
 	 */
 	processMonthlyData(reports) {
 		try {
+			// Mantido apenas para compatibilidade, mas não será usado no filtro 'monthly'
 			// Inicializa arrays para os 31 dias do mês
 			const dayCounts = Array(31).fill(0);
 			const dayTotals = Array(31).fill(0);
@@ -2060,8 +2066,31 @@ class BotAPI {
 				yearly: {}
 			};
 
+			// Special handling for monthly (now: Weekly Messages per Bot)
+			const processMonthly = () => {
+				const botStats = this.botStatsCache.data;
+				const filteredStats = botStats.filter(
+					(b) => selectedBots.includes(b.id) && b.id !== "TOTAL"
+				);
+
+				const categories = filteredStats.map((b) => b.id);
+				const data = filteredStats.map((b) => b.week || 0);
+
+				return {
+					days: categories, // Reusing 'days' field for categories
+					series: [
+						{
+							name: "Msgs na Semana",
+							data
+						}
+					]
+				};
+			};
+
 			// Função auxiliar para processar dados por período
 			const processData = (periodKey) => {
+				if (periodKey === "monthly") return processMonthly();
+
 				const periodData = this.analyticsCache[periodKey];
 
 				let combinedValues = null;
@@ -2096,63 +2125,120 @@ class BotAPI {
 					case "weekly":
 						seriesName = "Média Msgs/Dia";
 						break;
-					case "monthly":
-						seriesName = "Msgs no mês";
-						break;
 					case "yearly":
 						seriesName = "Msgs no ano";
 						break;
 				}
 
-				// Processamento específico para o gráfico anual (current year + aggregation)
+				// Processamento específico para o gráfico anual (current year + intelligent aggregation)
 				if (periodKey === "yearly" && dates && combinedValues) {
 					const currentYear = new Date().getFullYear();
-					const filteredDates = [];
-					const filteredValues = [];
+					const currentMonth = new Date().getMonth(); // 0 = Jan, 11 = Dec
 
-					// Filtra apenas o ano atual
+					// Filter only current year first
+					const currentYearData = [];
 					for (let i = 0; i < dates.length; i++) {
 						if (dates[i].startsWith(currentYear)) {
-							filteredDates.push(dates[i]);
-							filteredValues.push(combinedValues[i]);
+							currentYearData.push({ date: dates[i], value: combinedValues[i] });
 						}
 					}
 
-					// Agregação (Agrupa a cada X dias para reduzir pontos)
-					// Se tivermos muitos pontos (ex: > 60), agrupa.
-					// Como é ano corrente, pode ter até 365. Vamos tentar manter uns ~24-30 pontos.
-					// 365 / 30 ~= 12 dias. Vamos usar blocos de 10 dias, ou quinzenal.
-					// O usuário pediu algo como '01/01 - 05/02'
+					const finalCategories = [];
+					const dailySeriesData = [];
+					const monthlySeriesData = [];
 
-					const aggregatedDates = [];
-					const aggregatedValues = [];
-					const chunkSize = 7; // Agrupa por semana
+					const monthNames = [
+						"Janeiro",
+						"Fevereiro",
+						"Março",
+						"Abril",
+						"Maio",
+						"Junho",
+						"Julho",
+						"Agosto",
+						"Setembro",
+						"Outubro",
+						"Novembro",
+						"Dezembro"
+					];
 
-					for (let i = 0; i < filteredDates.length; i += chunkSize) {
-						const chunkDates = filteredDates.slice(i, i + chunkSize);
-						const chunkValues = filteredValues.slice(i, i + chunkSize);
+					// Logic:
+					// If Jan/Feb/Mar (Q1) -> Show All Days (Spline)
+					// If > Mar -> Show Last 2 Months as Days, Older as Month Totals (Bar)
 
-						// Soma os valores do chunk
-						const sum = chunkValues.reduce((a, b) => a + b, 0);
+					if (currentMonth <= 2) {
+						// Q1 Strategy: All days
+						currentYearData.forEach((item) => {
+							const parts = item.date.split("-");
+							finalCategories.push(`${parts[2]}/${parts[1]}`); // DD/MM
+							dailySeriesData.push(item.value);
+							monthlySeriesData.push(null); // No bars
+						});
+					} else {
+						// Q2+ Strategy: Mixed
+						// Cutoff date: 1st of (CurrentMonth - 1)
+						// E.g. If July (6), Cutoff is June (5) 1st.
+						const cutoffMonthIndex = currentMonth - 1;
+						// Actually logic requested: "April to December: Show all days from last two months"
+						// Last two months = Current Month + Previous Month.
+						// So Cutoff is indeed the start of Previous Month.
 
-						// Cria label 'DD/MM - DD/MM'
-						const formatDate = (dateStr) => {
-							const parts = dateStr.split("-"); // YYYY-MM-DD
-							return `${parts[2]}/${parts[1]}`;
-						};
+						const monthlyTotals = {}; // monthIndex -> total
 
-						const startLabel = formatDate(chunkDates[0]);
-						const endLabel = formatDate(chunkDates[chunkDates.length - 1]);
+						currentYearData.forEach((item) => {
+							const d = new Date(item.date + "T12:00:00"); // Avoid TZ issues
+							const mIdx = d.getMonth();
 
-						// Se for apenas 1 dia no chunk (ex: ultimo)
-						const label = startLabel === endLabel ? startLabel : `${startLabel} - ${endLabel}`;
+							if (mIdx < cutoffMonthIndex) {
+								// Accumulate for Monthly Bar
+								if (!monthlyTotals[mIdx]) monthlyTotals[mIdx] = 0;
+								monthlyTotals[mIdx] += item.value;
+							} else {
+								// Keep for Daily Line (processed later to ensure order)
+							}
+						});
 
-						aggregatedDates.push(label);
-						aggregatedValues.push(sum);
+						// Push Monthly Bars
+						for (let i = 0; i < cutoffMonthIndex; i++) {
+							if (monthlyTotals[i] !== undefined) {
+								finalCategories.push(monthNames[i]);
+								monthlySeriesData.push(monthlyTotals[i]);
+								dailySeriesData.push(null);
+							}
+						}
+
+						// Push Daily Lines
+						currentYearData.forEach((item) => {
+							const d = new Date(item.date + "T12:00:00");
+							const mIdx = d.getMonth();
+							if (mIdx >= cutoffMonthIndex) {
+								const parts = item.date.split("-");
+								finalCategories.push(`${parts[2]}/${parts[1]}`);
+								dailySeriesData.push(item.value);
+								monthlySeriesData.push(null);
+							}
+						});
 					}
 
-					dates = aggregatedDates;
-					combinedValues = aggregatedValues;
+					return {
+						dates: finalCategories, // repurposed categories
+						series: [
+							{
+								name: "Total Mensal",
+								type: "column",
+								data: monthlySeriesData,
+								color: "#3e0ea7",
+								yAxis: 0
+							},
+							{
+								name: "Total Diário",
+								type: "areaspline",
+								data: dailySeriesData,
+								color: "#04a9f0",
+								yAxis: 0
+							}
+						]
+					};
 				}
 
 				const seriesData = [
@@ -2168,9 +2254,7 @@ class BotAPI {
 					days:
 						periodKey === "weekly"
 							? ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]
-							: periodKey === "monthly"
-								? Array.from({ length: 31 }, (_, i) => i + 1)
-								: null,
+							: null,
 					dates: periodKey === "yearly" ? (dates ?? []) : null,
 					values: null,
 					series: seriesData

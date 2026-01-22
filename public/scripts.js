@@ -7,6 +7,7 @@ let messageTimestamps = [];
 let botMessageTimestamps = {};
 let averageMsgsHr = 0;
 let hasInitializedRealtime = false;
+const BOT_STATS_CACHE_KEY = 'ravena_bot_stats_v1';
 
 // Function to animate number change
 function animateValue(obj, start, end, duration) {
@@ -664,6 +665,9 @@ function processAnalyticsData(data) {
 async function fetchAnalyticsData() {
     try {
         document.querySelectorAll('.chart-container').forEach(container => {
+            // Skip the weekly bot chart (monthlyMessageChart) as it's handled by fetchBotDetailedStats
+            if (container.id === 'monthlyMessageChart') return;
+            
             container.innerHTML = `
                 <h3 class="chart-title">${container.querySelector('.chart-title')?.textContent || 'Carregando...'}</h3>
                 <div class="loading-container">
@@ -703,6 +707,7 @@ async function fetchAnalyticsData() {
     } catch (error) {
         console.error('Erro ao buscar dados de análise:', error);
         document.querySelectorAll('.chart-container').forEach(container => {
+            if (container.id === 'monthlyMessageChart') return;
             container.innerHTML = `
                 <h3 class="chart-title">${container.querySelector('.chart-title')?.textContent || 'Erro'}</h3>
                 <div style="text-align: center; padding: 30px;">
@@ -729,7 +734,7 @@ function renderCharts(data) {
     
     renderDailyChart(data.daily, commonOptions);
     renderWeeklyChart(data.weekly, commonOptions);
-    renderMonthlyChart(data.monthly, commonOptions);
+    // renderMonthlyChart removed - handled by fetchBotDetailedStats
     renderYearlyChart(data.yearly, commonOptions);
 }
 
@@ -751,13 +756,112 @@ function renderWeeklyChart(data, commonOptions) {
     Highcharts.chart(container, { ...commonOptions, chart: { ...commonOptions.chart, type: 'column' }, xAxis: { ...commonOptions.xAxis, categories: data.days, title: { text: 'Dia da Semana', style: { color: '#b7b7c5' } } }, tooltip: { formatter: function() { return `<b>${this.x}</b><br/>${this.series.name}: <b>${this.y}</b> msgs`; }, backgroundColor: 'rgba(35, 6, 109, 0.9)', style: { color: '#fff' }, borderWidth: 0 }, series: data.series });
 }
 
-function renderMonthlyChart(data, commonOptions) {
+function renderBotWeeklyChartFromStats(botStats) {
     const container = document.getElementById('monthlyMessageChart');
-    if (!data || !data.days || !data.series || data.series.length === 0) {
-        container.innerHTML = `<h3 class="chart-title">Média de Mensagens do Mês</h3><p style="text-align: center; padding: 30px; color: #b7b7c5;">Nenhum dado disponível</p>`;
+    if (!container) return;
+
+    if (!botStats || botStats.length === 0) {
+        container.innerHTML = `<h3 class="chart-title">Msgs/bot (Semanal)</h3><p style="text-align: center; padding: 30px; color: #b7b7c5;">Nenhum dado disponível</p>`;
         return;
     }
-    Highcharts.chart(container, { ...commonOptions, chart: { ...commonOptions.chart, type: 'spline' }, xAxis: { ...commonOptions.xAxis, categories: data.days, title: { text: 'Dia do Mês', style: { color: '#b7b7c5' } } }, tooltip: { formatter: function() { return `<b>Dia ${this.x}</b><br/>${this.series.name}: <b>${this.y}</b> msgs`; }, backgroundColor: 'rgba(35, 6, 109, 0.9)', style: { color: '#fff' }, borderWidth: 0 }, series: data.series });
+
+    // Filter TOTAL row and use only selected bots if applicable (or all)
+    // We reuse selectedBots global filter
+    let filtered = botStats.filter(b => b.id !== 'TOTAL');
+    if (selectedBots && selectedBots.length > 0) {
+        // If selectedBots is populated, we might want to filter? 
+        // Or show all since this chart is specific to comparing bots?
+        // User asked for "Display each bot as a bar graph", implying all or filtered.
+        // Let's filter to respect the global filter if active
+        filtered = filtered.filter(b => selectedBots.includes(b.id));
+    }
+    
+    // Fallback if filter removed everything (e.g. initial load logic)
+    if (filtered.length === 0) filtered = botStats.filter(b => b.id !== 'TOTAL');
+
+    const botColors = {
+        'ravenaviip': '#FFD700',
+        'ravenavip': '#FFFFE0',
+        'ravena2': '#008000',
+        'ravena4': '#FFFF00',
+        'ravena5': '#FFC0CB',
+        'ravena10': '#0000FF',
+        'rav-pru': '#CD5C5C',
+        'rav-ric': '#B22222',
+        'rav-arkanis': '#DC143C',
+        'rav-arkaniss': '#8B0000'
+    };
+
+    const categories = filtered.map(b => b.id);
+    const data = filtered.map(b => ({
+        y: b.week || 0,
+        color: botColors[b.id] || '#47486c'
+    }));
+
+    const commonOptions = {
+        chart: { backgroundColor: 'transparent', style: { fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif' } },
+        credits: { enabled: false },
+        exporting: { enabled: true },
+        legend: { enabled: false },
+        xAxis: { labels: { style: { color: '#b7b7c5' } }, lineColor: '#47486c', tickColor: '#47486c' },
+        yAxis: { title: { text: 'Mensagens', style: { color: '#b7b7c5' } }, labels: { style: { color: '#b7b7c5' } }, gridLineColor: 'rgba(71, 72, 108, 0.3)' },
+    };
+
+    Highcharts.chart(container, {
+        ...commonOptions,
+        chart: { ...commonOptions.chart, type: 'column' },
+        title: { text: null },
+        xAxis: {
+            ...commonOptions.xAxis,
+            categories: categories,
+            title: { text: null },
+            labels: { style: { color: '#b7b7c5', fontSize: '10px' }, rotation: -45 }
+        },
+        yAxis: {
+            ...commonOptions.yAxis,
+            title: { text: 'Msgs/Semana', style: { color: '#b7b7c5' } }
+        },
+        tooltip: {
+            formatter: function() {
+                return `<b>${this.x}</b><br/>Semana: <b>${this.point.y}</b> msgs`;
+            },
+            backgroundColor: 'rgba(35, 6, 109, 0.9)',
+            style: { color: '#fff' },
+            borderWidth: 0
+        },
+        series: [{
+            name: 'Msgs na Semana',
+            data: data,
+            colorByPoint: true
+        }]
+    });
+    
+    // Ensure title is present (Highcharts replaces innerHTML)
+    // We can just rely on the chart rendering, or add title via Highcharts 'title' config (but we set it to null to match style)
+    // The design has <h3 class="chart-title"> outside chart? No, it's inside .chart-container. 
+    // Highcharts replaces content of container. We should re-add title or use Highcharts title.
+    // Looking at renderDailyChart, it overwrites innerHTML on error, but on success uses Highcharts.
+    // The HTML structure has <h3> then <div id="chart">? No.
+    // <div class="chart-container" id="dailyMessageChart"><h3 class="chart-title">Title</h3></div>
+    // Highcharts renders INTO the container, usually appending or replacing.
+    // Highcharts.chart(container, ...) replaces the container's content? No, it appends SVG.
+    // But usually it clears the container if we pass the container ID.
+    // Wait, existing functions: `container.innerHTML = ...title...` implies it wipes it.
+    // Then `Highcharts.chart(container` might wipe the title if `container` is the wrapper.
+    // Let's fix this by using Highcharts title or ensuring title is preserved.
+    // The previous code: `container.innerHTML = ...title...loading...` then `Highcharts.chart(container, ...)`
+    // Highcharts by default puts the chart inside the element. If the element has children (the H3), they might be removed or pushed down?
+    // Highcharts wipes the container content.
+    // So we should use Highcharts title option, OR put the chart in a sub-div.
+    // For now, I'll stick to Highcharts title but styled to match.
+    // Actually, let's look at `renderDailyChart`. It calls `Highcharts.chart(container...`. 
+    // If the H3 is lost, we should add it back or use Highcharts title.
+    // Let's enable Highcharts title with proper style.
+    
+    // Actually, looking at previous code `const titleEl = container.querySelector('.chart-title');` after chart render...
+    // Highcharts *destroys* the content of the container. 
+    // So we should pass the title to Highcharts configuration.
+    // I'll update the config to include the title.
 }
 
 function renderYearlyChart(data, commonOptions) {
@@ -766,18 +870,73 @@ function renderYearlyChart(data, commonOptions) {
         container.innerHTML = `<h3 class="chart-title">Total de Mensagens por Dia do Ano</h3><p style="text-align: center; padding: 30px; color: #b7b7c5;">Nenhum dado disponível</p>`;
         return;
     }
-    Highcharts.chart(container, { ...commonOptions, chart: { ...commonOptions.chart, type: 'areaspline', zoomType: 'x' }, xAxis: { ...commonOptions.xAxis, categories: data.dates, labels: { ...commonOptions.xAxis.labels, rotation: -45, step: Math.ceil(data.dates.length / 30) }, title: { text: 'Data', style: { color: '#b7b7c5' } } }, tooltip: { formatter: function() { return `<b>${this.x}</b><br/>${this.series.name}: <b>${this.y}</b> msgs`; }, backgroundColor: 'rgba(35, 6, 109, 0.9)', style: { color: '#fff' }, borderWidth: 0 }, series: data.series });
+    
+    Highcharts.chart(container, {
+        ...commonOptions,
+        chart: { ...commonOptions.chart, zoomType: 'x' }, // Removed specific type to allow series override
+        xAxis: {
+            ...commonOptions.xAxis,
+            categories: data.dates, // data.dates now contains mixed labels (Month Names + DD/MM)
+            labels: {
+                ...commonOptions.xAxis.labels,
+                rotation: -45,
+                step: 1 // Show all labels if possible, or let Highcharts decide
+            },
+            title: { text: null }
+        },
+        tooltip: {
+            shared: false, // Don't share because points are mutually exclusive (Bar OR Line)
+            formatter: function() {
+                // If it's a bar (Month Total)
+                if (this.series.type === 'column') {
+                    return `<b>${this.x}</b><br/>${this.series.name}: <b>${this.y}</b> msgs`;
+                }
+                // If it's a line (Daily)
+                return `<b>${this.x}</b><br/>${this.series.name}: <b>${this.y}</b> msgs`;
+            },
+            backgroundColor: 'rgba(35, 6, 109, 0.9)',
+            style: { color: '#fff' },
+            borderWidth: 0
+        },
+        series: data.series // Series array already contains type: 'column'/'areaspline'
+    });
 }
 
 async function fetchBotDetailedStats() {
+    // 1. Try Load from Cache
+    try {
+        const cached = localStorage.getItem(BOT_STATS_CACHE_KEY);
+        if (cached) {
+            const data = JSON.parse(cached);
+            if (data && Array.isArray(data)) {
+                // console.log("Loaded stats from cache");
+                renderBotStatsTable(data);
+                renderBotWeeklyChartFromStats(data);
+            }
+        }
+    } catch (e) { console.warn("Cache load error", e); }
+
     try {
         const response = await fetch('/api/bot-stats');
         if (!response.ok) throw new Error('Erro ao buscar estatísticas');
         const data = await response.json();
+        
+        // 2. Save to Cache
+        try {
+            localStorage.setItem(BOT_STATS_CACHE_KEY, JSON.stringify(data));
+        } catch (e) {}
+
+        // 3. Render Fresh Data
         renderBotStatsTable(data);
+        renderBotWeeklyChartFromStats(data);
+
     } catch (error) {
         console.error('Erro:', error);
-        document.querySelector('#botStatsTable tbody').innerHTML = `<tr><td colspan="7" style="text-align: center; color: #ff5555;">Erro ao carregar dados</td></tr>`;
+        // Only show error in table if cache also failed (table empty)
+        const tbody = document.querySelector('#botStatsTable tbody');
+        if(!tbody.hasChildNodes() || tbody.children.length <= 1) {
+             tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #ff5555;">Erro ao carregar dados</td></tr>`;
+        }
     }
 }
 
@@ -981,36 +1140,37 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Setting up the columns
         const fontSize = 16;
-        const columns = canvas.width / fontSize;
+        const columns = Math.ceil(canvas.width / fontSize);
         
-        // Setting up the drops
-        const drops = [];
+        // Code Snippets Storage
+        let codeSnippets = ["RAVENA", "SYSTEM", "ONLINE", "CODING", "MATRIX", "NODEJS", "JAVASCRIPT", "MOOTHZ"];
+        fetch('code-snippets.json')
+            .then(r => r.json())
+            .then(data => {
+                if(data && data.length > 0) codeSnippets = data;
+            })
+            .catch(e => console.log("Snippets load error", e));
+
+        // State for each column: { y: number, text: string, charIdx: number }
+        const columnState = [];
         for (let x = 0; x < columns; x++) {
-            drops[x] = Math.floor(Math.random() * -50); // Start above the screen with some randomness
+            columnState[x] = {
+                y: Math.floor(Math.random() * -50),
+                text: codeSnippets[Math.floor(Math.random() * codeSnippets.length)],
+                charIdx: 0
+            };
         }
         
         // Initial solid fill to prevent "all characters" glich
         ctx.fillStyle = "#05060d";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        // Setting up the characters
-        const chars = "0123456789ABCDEFRAVENA"; // Binary + Ravena
-        
         let lastDraw = 0;
         
         const draw = (timestamp) => {
-            // Calculate speed based on message activity
-            // Min < 500 msgs/hr (slow)
-            // Max > 15000 msgs/hr (fast)
-            
             const currentMsgsHr = messageTimestamps ? messageTimestamps.length * 60 : 0;
             const minMsgs = 500;
             const maxMsgs = 15000;
-            
-            // Map msgs/hr to delay (ms between frames)
-            // Faster means lower delay.
-            // 500 msgs -> 100ms delay?
-            // 15000 msgs -> 20ms delay?
             
             let factor = (currentMsgsHr - minMsgs) / (maxMsgs - minMsgs);
             if (factor < 0) factor = 0;
@@ -1033,21 +1193,27 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.fillStyle = "#85e413"; // Green text
             ctx.font = fontSize + "px monospace";
             
-            for (let i = 0; i < drops.length; i++) {
-                // Random character
-                const text = chars.charAt(Math.floor(Math.random() * chars.length));
+            for (let i = 0; i < columnState.length; i++) {
+                const state = columnState[i];
+                
+                // Get char from current snippet
+                // If snippet is shorter than charIdx, loop or use space?
+                // Using loop
+                const char = state.text.charAt(state.charIdx % state.text.length);
                 
                 // x = i * fontSize, y = value of drops[i] * fontSize
-                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                ctx.fillText(char, i * fontSize, state.y * fontSize);
                 
-                // Sending the drop back to the top randomly after it has crossed the screen
-                // adding randomness to the reset to make the drops scattered on the Y axis
-                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
-                    drops[i] = 0;
+                // Reset if off screen
+                if (state.y * fontSize > canvas.height && Math.random() > 0.975) {
+                    state.y = 0;
+                    state.charIdx = 0;
+                    state.text = codeSnippets[Math.floor(Math.random() * codeSnippets.length)];
                 }
                 
-                // Incrementing Y coordinate
-                drops[i]++;
+                // Increment Y coordinate and char index
+                state.y++;
+                state.charIdx++;
             }
             requestAnimationFrame(draw);
         };
@@ -1058,7 +1224,18 @@ document.addEventListener('DOMContentLoaded', () => {
         window.addEventListener('resize', () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-             // Re-init drops if needed, but simple resize is okay for background
+            // Simple resize might break columns logic, ideally re-init columns
+             // Re-init needed for columns count change
+             const newColumns = Math.ceil(canvas.width / fontSize);
+             if(newColumns > columnState.length) {
+                 for(let i=columnState.length; i<newColumns; i++) {
+                     columnState[i] = {
+                        y: Math.floor(Math.random() * -50),
+                        text: codeSnippets[Math.floor(Math.random() * codeSnippets.length)],
+                        charIdx: 0
+                     };
+                 }
+             }
         });
     }
 });
