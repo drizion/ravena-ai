@@ -2559,6 +2559,16 @@ class WhatsAppBotEvoGo {
 		}
 	}
 
+	async createContact(phoneNumber, name, surname) {
+		this.logger.warn(
+			`[${this.id}] WhatsAppBotEvoGo.createContact is a mock. Fetching real contact instead.`
+		);
+		const formattedNumber = phoneNumber.endsWith("@s.whatsapp.net")
+			? phoneNumber
+			: `${phoneNumber.replace(/\D/g, "")}@s.whatsapp.net`;
+		return await this.getContactDetails(formattedNumber, `${name} ${surname}`);
+	}
+
 	async destroy() {
 		if (this.webhookServer) this.webhookServer.close();
 		if (this.loadReport) this.loadReport.destroy();
