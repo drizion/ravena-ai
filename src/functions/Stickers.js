@@ -698,7 +698,8 @@ const commands = [
 	}),
 	new Command({
 		name: "sq",
-		description: "Sticker quadrado, cortado no meio (q), em cima (qc) ou em baixo (qb)",
+		description:
+			"Sticker quadrado, cortado no meio (sq), cima (sqc), baixo (sqb) ou esticado (sqe)",
 		category: "midia",
 		group: "sstickerqua",
 		needsMedia: true,
@@ -714,7 +715,8 @@ const commands = [
 	}),
 	new Command({
 		name: "stickerq",
-		description: "Sticker quadrado, cortado no meio (q), em cima (qc) ou em baixo (qb)",
+		description:
+			"Sticker quadrado, cortado no meio (sq), cima (sqc), baixo (sqb) ou esticado (sqe)",
 		category: "midia",
 		group: "sstickerqua",
 		needsMedia: true,
@@ -730,7 +732,8 @@ const commands = [
 	}),
 	new Command({
 		name: "sqc",
-		description: "Sticker quadrado, cortado no meio (q), em cima (qc) ou em baixo (qb)",
+		description:
+			"Sticker quadrado, cortado no meio (sq), cima (sqc), baixo (sqb) ou esticado (sqe)",
 		category: "midia",
 		group: "sstickerqua",
 		needsMedia: true,
@@ -746,7 +749,8 @@ const commands = [
 	}),
 	new Command({
 		name: "stickerqc",
-		description: "Sticker quadrado, cortado no meio (q), em cima (qc) ou em baixo (qb)",
+		description:
+			"Sticker quadrado, cortado no meio (sq), cima (sqc), baixo (sqb) ou esticado (sqe)",
 		category: "midia",
 		group: "sstickerqua",
 		needsMedia: true,
@@ -763,7 +767,8 @@ const commands = [
 
 	new Command({
 		name: "sqb",
-		description: "Sticker quadrado, cortado no meio (q), em cima (qc) ou em baixo (qb)",
+		description:
+			"Sticker quadrado, cortado no meio (sq), cima (sqc), baixo (sqb) ou esticado (sqe)",
 		category: "midia",
 		group: "sstickerqua",
 		needsMedia: true,
@@ -779,7 +784,8 @@ const commands = [
 	}),
 	new Command({
 		name: "stickerqb",
-		description: "Sticker quadrado, cortado no meio (q), em cima (qc) ou em baixo (qb)",
+		description:
+			"Sticker quadrado, cortado no meio (sq), cima (sqc), baixo (sqb) ou esticado (sqe)",
 		category: "midia",
 		group: "sstickerqua",
 		needsMedia: true,

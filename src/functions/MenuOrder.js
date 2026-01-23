@@ -131,6 +131,8 @@ const COMMAND_ORDER = [
 	"p-baixar",
 	"p-excluir",
 	"ajuda",
+	"manage",
+	"painel",
 	"info",
 	"setName",
 	"setPrefixo",

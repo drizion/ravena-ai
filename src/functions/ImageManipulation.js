@@ -656,7 +656,6 @@ const commands = [
 		name: "distort",
 		description: "Aplica efeito de distorção a uma imagem",
 		category: "midia",
-		group: "imageEffect",
 		needsMedia: true,
 		reactions: {
 			before: process.env.LOADING_EMOJI ?? "🌀",
@@ -710,7 +709,6 @@ const commands = [
 		name: "morejpeg",
 		description: "Aplica compressão JPEG extrema",
 		category: "midia",
-		group: "imageEffect",
 		needsMedia: true,
 		reactions: {
 			before: process.env.LOADING_EMOJI ?? "🌀",
