@@ -308,6 +308,11 @@ class Management {
 				description: "Gera um link para gerenciar o bot via web"
 			}
 		};
+
+		this.help = {
+			naoEncontrado:
+				"\n\n> Dica: Você só pode alterar comandos *criados* neste grupo, não os fixos do bot. Você pode silenciar o comando original (!g-mute pesca) e criar um atalho com nome diferente para o seu (Ex.: !g-addCmd peska {cmd-pesca})"
+		};
 	}
 
 	/**
@@ -2174,7 +2179,7 @@ class Management {
 
 		return new ReturnMessage({
 			chatId: group.id,
-			content: `Comando '${commandName}' não encontrado.`
+			content: `Comando personalizado '${commandName}' não encontrado.${this.help.naoEncontrado}`
 		});
 	}
 
@@ -2239,7 +2244,7 @@ class Management {
 
 		return new ReturnMessage({
 			chatId: group.id,
-			content: `Comando '${commandName}' não encontrado.`
+			content: `Comando personalizado '${commandName}' não encontrado.${this.help.naoEncontrado}`
 		});
 	}
 
@@ -5147,7 +5152,7 @@ class Management {
 
 		return new ReturnMessage({
 			chatId: group.id,
-			content: `Comando '${commandName}' não encontrado.`
+			content: `Comando personalizado '${commandName}' não encontrado.${this.help.naoEncontrado}`
 		});
 	}
 
@@ -5207,7 +5212,7 @@ class Management {
 
 		return new ReturnMessage({
 			chatId: group.id,
-			content: `Comando '${commandName}' não encontrado.`
+			content: `Comando personalizado '${commandName}' não encontrado.${this.help.naoEncontrado}`
 		});
 	}
 	/**
@@ -5262,7 +5267,7 @@ class Management {
 		if (!command) {
 			return new ReturnMessage({
 				chatId: group.id,
-				content: `Comando personalizado '${commandName}' não encontrado.`
+				content: `Comando personalizado '${commandName}' não encontrado.${this.help.naoEncontrado}`
 			});
 		}
 
@@ -5378,7 +5383,7 @@ class Management {
 		if (!command) {
 			return new ReturnMessage({
 				chatId: group.id,
-				content: `Comando personalizado '${commandName}' não encontrado.`
+				content: `Comando personalizado '${commandName}' não encontrado.${this.help.naoEncontrado}`
 			});
 		}
 

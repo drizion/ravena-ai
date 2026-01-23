@@ -5,6 +5,7 @@
 • Digite `!cmd` para ver todos os comandos disponíveis
 • Também dá pra ver os comandos aqui (mais fácil): https://ravena.moothz.win/cmd
 • Posso ser adicionada em grupos, envie `!convite` para saber mais
+• Esse é um bot gratuito, o que significa que ele não tem custos pra você usar, ou seja, não precisar pagar. Em outras palavras, é grátis!
 • Acesse o site oficial: https://ravena.moothz.win
 
 🔥 *Usos comuns aqui no PV:*
