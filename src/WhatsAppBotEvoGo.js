@@ -922,6 +922,14 @@ class WhatsAppBotEvoGo {
 				}
 				await writeFileAsync(filePath, base64Data, "base64");
 
+				setTimeout(
+					(fp) => {
+						if (fs.existsSync(fp)) fs.unlinkSync(fp);
+					},
+					10 * 60 * 1000,
+					filePath
+				);
+
 				const fileUrl = `${process.env.BOT_DOMAIN_LOCAL ?? process.env.BOT_DOMAIN}/attachments/${fileName}`;
 
 				const media = { url: fileUrl, mimetype, filename: fileName, filePath, base64: base64Data };
