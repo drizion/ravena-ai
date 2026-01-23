@@ -1177,16 +1177,17 @@ async function applyItemEffect(userData, item) {
 					break;
 				case "lose_smallest_fish":
 					if (userData.fishes.length > 0) {
-						let smallestFishIndex = 0;
-						for (let i = 1; i < userData.fishes.length; i++) {
-							if (userData.fishes[i].weight < userData.fishes[smallestFishIndex].weight) {
-								smallestFishIndex = i;
-							}
-						}
-						const removedFish = userData.fishes[smallestFishIndex];
+						const candidates = userData.fishes.map((f, i) => ({ index: i, fish: f }));
+						candidates.sort((a, b) => a.fish.weight - b.fish.weight);
+
+						const poolSize = Math.min(3, candidates.length);
+						const randomIndex = Math.floor(Math.random() * poolSize);
+						const chosenCandidate = candidates[randomIndex];
+
+						const removedFish = chosenCandidate.fish;
 						await removeFishFromInventory(userData.userId, removedFish.dbId);
-						userData.fishes.splice(smallestFishIndex, 1);
-						userData.inventoryWeight -= removedFish.weight;
+						userData.fishes.splice(chosenCandidate.index, 1);
+						if (removedFish.weight <= 35000) userData.inventoryWeight -= removedFish.weight;
 						effectMessage = `\n\n${item.emoji} Uma ${item.name} levou seu ${removedFish.name} embora!`;
 					} else {
 						effectMessage = `\n\n${item.emoji} Uma ${item.name} revirou suas coisas, mas não havia peixes para levar.`;
@@ -1605,15 +1606,20 @@ async function fishCommand(bot, message, args, group) {
 				// Add to inventory
 				await addFishToInventory(userId, modifiedFish);
 				userData.fishes.push(modifiedFish);
-				userData.totalWeight = (userData.totalWeight || 0) + modifiedFish.weight;
-				userData.inventoryWeight = (userData.inventoryWeight || 0) + modifiedFish.weight;
-				userData.totalCatches = (userData.totalCatches ?? 0) + 1;
+
+				// Only add to stats if NOT a meme fish
+				if (modifiedFish.weight <= 35000) {
+					userData.totalWeight = (userData.totalWeight || 0) + modifiedFish.weight;
+					userData.inventoryWeight = (userData.inventoryWeight || 0) + modifiedFish.weight;
+					userData.totalCatches = (userData.totalCatches ?? 0) + 1;
+				}
+
 				caughtFishes.push(modifiedFish);
 
 				if (!userData.biggestFish || modifiedFish.weight > userData.biggestFish.weight)
 					userData.biggestFish = modifiedFish;
 
-				if (groupId) {
+				if (groupId && modifiedFish.weight <= 35000) {
 					await updateGroupStats(
 						groupId,
 						userId,
@@ -1636,11 +1642,14 @@ async function fishCommand(bot, message, args, group) {
 					// Remove from local data
 					userData.fishes.pop();
 					caughtFishes.pop();
-					userData.totalCatches--;
-					userData.totalWeight -= modifiedFish.weight;
-					userData.inventoryWeight -= modifiedFish.weight;
-					if (groupId) {
-						await updateGroupStats(groupId, userId, userName, modifiedFish.weight, false, null);
+
+					if (modifiedFish.weight <= 35000) {
+						userData.totalCatches--;
+						userData.totalWeight -= modifiedFish.weight;
+						userData.inventoryWeight -= modifiedFish.weight;
+						if (groupId) {
+							await updateGroupStats(groupId, userId, userName, modifiedFish.weight, false, null);
+						}
 					}
 				}
 			}
@@ -1668,31 +1677,31 @@ async function fishCommand(bot, message, args, group) {
 		const currentMaxInventory = getMaxInventory(userData);
 
 		while (userData.fishes.length > currentMaxInventory) {
-			// Find smallest fish, prioritizing OLD fishes (not just caught)
-			let smallestIndex = -1;
-			let smallestWeight = Number.MAX_VALUE;
-
-			// First pass: try to find smallest among OLD fishes
+			// Find candidates: prioritize old fish
+			const candidates = [];
 			for (let i = 0; i < userData.fishes.length; i++) {
-				if (caughtFishes.includes(userData.fishes[i])) continue; // Skip newly caught
-
-				if (userData.fishes[i].weight < smallestWeight) {
-					smallestWeight = userData.fishes[i].weight;
-					smallestIndex = i;
+				if (!caughtFishes.includes(userData.fishes[i])) {
+					candidates.push({ index: i, fish: userData.fishes[i] });
 				}
 			}
 
-			// Second pass: if we didn't find any old fish (unlikely, unless we caught > MAX), check all
-			if (smallestIndex === -1) {
+			// If no old fish (only new ones), consider all fish
+			if (candidates.length === 0) {
 				for (let i = 0; i < userData.fishes.length; i++) {
-					if (userData.fishes[i].weight < smallestWeight) {
-						smallestWeight = userData.fishes[i].weight;
-						smallestIndex = i;
-					}
+					candidates.push({ index: i, fish: userData.fishes[i] });
 				}
 			}
 
-			const removed = userData.fishes[smallestIndex];
+			// Sort candidates by weight
+			candidates.sort((a, b) => a.fish.weight - b.fish.weight);
+
+			// Pick one of the top 3 lightest candidates
+			const poolSize = Math.min(3, candidates.length);
+			const randomIndex = Math.floor(Math.random() * poolSize);
+			const chosenCandidate = candidates[randomIndex];
+
+			const removed = chosenCandidate.fish;
+			const smallestIndex = chosenCandidate.index;
 
 			if (!removed.dbId) {
 				const fishRow = await database.dbGet(
@@ -1706,12 +1715,12 @@ async function fishCommand(bot, message, args, group) {
 			if (removed.dbId) {
 				await removeFishFromInventory(userId, removed.dbId);
 				userData.fishes.splice(smallestIndex, 1);
-				userData.inventoryWeight -= removed.weight;
+				if (removed.weight <= 35000) userData.inventoryWeight -= removed.weight;
 				effectMessage += `\n\n⚠️ Inventário cheio! O peixe *${removed.name}* (${removed.weight.toFixed(2)}kg) foi solto.`;
 			} else {
 				// Safety fallback if DB sync failed, just remove from memory array to avoid infinite loop
 				userData.fishes.splice(smallestIndex, 1);
-				userData.inventoryWeight -= removed.weight;
+				if (removed.weight <= 35000) userData.inventoryWeight -= removed.weight;
 			}
 		}
 
@@ -1897,6 +1906,12 @@ async function fishingDataCommand(bot, message, args, group) {
 
 		// Stats
 		msg += `🐛 *Iscas:* ${userData.baits}/${maxBaits}\n`;
+		if (userData.baits < maxBaits) {
+			const nextRegen = getNextBaitRegenTime(userData);
+			const nextMin = Math.ceil(nextRegen.secondsUntilNextBait / 60);
+			const allMin = Math.ceil(nextRegen.secondsUntilAllBaits / 60);
+			msg += `> Próxima em ${nextMin} min, todas em ${allMin} min\n`;
+		}
 		msg += `🎒 *Inventário:* ${fishes.length}/${maxInventory}\n`;
 		msg += `🎣 *Arremessos:* ${userData.totalBaitsUsed ?? 0}\n`;
 		msg += `🗑️ *Lixos:* ${userData.totalTrashCaught ?? 0}\n`;
@@ -1919,7 +1934,11 @@ async function fishingDataCommand(bot, message, args, group) {
 				if (refItem) icon = refItem.emoji;
 
 				if (buff.remainingUses > 100) {
-					msg += `${icon} ${buff.originalName}\n`;
+					let bonusText = "";
+					if (buff.type === "inventory_slot") bonusText = `(+${buff.value} inv.)`;
+					else if (buff.type === "max_baits") bonusText = `(+${buff.value} iscas)`;
+					else bonusText = `(Perm.)`;
+					msg += `${icon} ${buff.originalName} ${bonusText}\n`;
 				} else {
 					msg += `${icon} ${buff.originalName} (${buff.remainingUses}x)\n`;
 				}
