@@ -900,10 +900,45 @@ class LLMService {
 			} catch (error) {
 				this.logger.error(`Erro ao usar provedor ${provider.name}:`, error.message);
 
-				// Rebaixa o provedor que falhou, movendo-o para o final da fila.
-				this.logger.warn(`[LLMService] Rebaixando provedor ${provider.name} para o final da fila.`);
-				this.providerQueue.push(this.providerQueue.shift());
-				this.lastQueueChangeTimestamp = Date.now();
+				let isGeminiRateLimit = false;
+				if (provider.name === "gemini") {
+					// Check error details for Rate Limit (429 / RESOURCE_EXHAUSTED)
+					if (error.response && error.response.data && error.response.data.error) {
+						const errData = error.response.data.error;
+						if (errData.code === 429 || errData.status === "RESOURCE_EXHAUSTED") {
+							isGeminiRateLimit = true;
+							let retrySeconds = 60;
+							if (errData.details) {
+								const retryInfo = errData.details.find(
+									(d) => d["@type"] && d["@type"].includes("RetryInfo")
+								);
+								if (retryInfo && retryInfo.retryDelay) {
+									retrySeconds = parseFloat(retryInfo.retryDelay);
+								}
+							}
+							const waitTime = retrySeconds * 1000 * 10; // 10x longer
+							this.logger.warn(
+								`[LLMService] Gemini Quota Exceeded. Removing from queue for ${waitTime / 1000}s.`
+							);
+
+							this.providerQueue.shift(); // Remove from queue
+
+							setTimeout(() => {
+								this.logger.info(`[LLMService] Re-adding Gemini to provider queue.`);
+								this.providerQueue.push(provider);
+							}, waitTime);
+						}
+					}
+				}
+
+				if (!isGeminiRateLimit) {
+					// Rebaixa o provedor que falhou, movendo-o para o final da fila.
+					this.logger.warn(
+						`[LLMService] Rebaixando provedor ${provider.name} para o final da fila.`
+					);
+					this.providerQueue.push(this.providerQueue.shift());
+					this.lastQueueChangeTimestamp = Date.now();
+				}
 			}
 		}
 
