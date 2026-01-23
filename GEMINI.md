@@ -27,3 +27,5 @@ Create by group admins using management commands
 
 # More
 Will be specified in the prompts
+
+For database schema and structure, see: DATABASES.md
