@@ -1173,14 +1173,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const draw = (timestamp) => {
             const currentMsgsHr = messageTimestamps ? messageTimestamps.length * 60 : 0;
             const minMsgs = 500;
-            const maxMsgs = 15000;
+            const maxMsgs = 20000;
             
             let factor = (currentMsgsHr - minMsgs) / (maxMsgs - minMsgs);
             if (factor < 0) factor = 0;
             if (factor > 1) factor = 1;
             
-            const minDelay = 20;
-            const maxDelay = 120;
+            // Faster settings: Lower delay means faster animation
+            const minDelay = 15; 
+            const maxDelay = 70;
             const delay = maxDelay - (factor * (maxDelay - minDelay));
             
             if (timestamp - lastDraw < delay) {
