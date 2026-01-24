@@ -95,6 +95,8 @@ class WhatsAppBot {
 		// Pro painel
 		this.status = "INITIALIZING";
 
+		this.skipGroupInfo = [];
+
 		// Monitora estabilidade dos bots entre eles
 		this.stabilityMonitor = options.stabilityMonitor ?? false;
 
@@ -102,6 +104,38 @@ class WhatsAppBot {
 		this.adminUtils = AdminUtils.getInstance();
 
 		this.sessionDir = path.join(__dirname, "..", ".wwebjs_auth", this.id);
+	}
+
+	async _loadSkipGroupInfo() {
+		try {
+			const SkipGroups = require("./utils/SkipGroups");
+			this.skipGroupInfo = await SkipGroups.getInstance().getSkippedGroups(this.id);
+			this.logger.info(
+				`[SkipGroups] Carregados ${this.skipGroupInfo.length} grupos ignorados para o bot ${this.id}.`
+			);
+		} catch (error) {
+			this.logger.error(`[SkipGroups] Erro ao carregar grupos ignorados:`, error);
+			this.skipGroupInfo = [];
+		}
+	}
+
+	async addSkipGroup(groupId) {
+		if (!this.skipGroupInfo.includes(groupId)) {
+			this.skipGroupInfo.push(groupId);
+			const SkipGroups = require("./utils/SkipGroups");
+			await SkipGroups.getInstance().addSkippedGroup(this.id, groupId);
+			this.logger.info(`[SkipGroups] Grupo ${groupId} adicionado à lista de ignorados.`);
+		}
+	}
+
+	async removeSkipGroup(groupId) {
+		const initialLength = this.skipGroupInfo.length;
+		this.skipGroupInfo = this.skipGroupInfo.filter((id) => id !== groupId);
+		if (this.skipGroupInfo.length < initialLength) {
+			const SkipGroups = require("./utils/SkipGroups");
+			await SkipGroups.getInstance().removeSkippedGroup(this.id, groupId);
+			this.logger.info(`[SkipGroups] Grupo ${groupId} removido da lista de ignorados.`);
+		}
 	}
 
 	/**
@@ -116,6 +150,8 @@ class WhatsAppBot {
 			grupoInteracao: this.grupoInteracao,
 			grupoEstabilidade: this.grupoEstabilidade
 		});
+
+		await this._loadSkipGroupInfo();
 
 		this.database.registerBotInstance(this);
 
@@ -307,7 +343,8 @@ class WhatsAppBot {
 			}
 
 			// Inicializa o sistema de streaming agora que estamos conectados
-			this.streamSystem = new StreamSystem(this);
+			this.streamSystem = StreamSystem.getInstance();
+			this.streamSystem.registerBot(this);
 			await this.streamSystem.initialize();
 			this.streamMonitor = this.streamSystem.streamMonitor;
 		});

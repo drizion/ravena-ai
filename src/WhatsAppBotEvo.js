@@ -147,7 +147,8 @@ class WhatsAppBotEvo {
 		this.blockedContacts = [];
 
 		if (!this.streamSystem) {
-			this.streamSystem = new StreamSystem(this);
+			this.streamSystem = StreamSystem.getInstance();
+			this.streamSystem.registerBot(this);
 			this.streamMonitor = this.streamSystem.streamMonitor;
 		}
 
@@ -1122,6 +1123,7 @@ class WhatsAppBotEvo {
 
 	async _onInstanceConnected() {
 		this.streamSystem.initialize();
+		this.streamMonitor = this.streamSystem.streamMonitor;
 		this._sendStartupNotifications();
 		this.fetchAndPrepareBlockedContacts();
 

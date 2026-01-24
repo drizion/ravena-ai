@@ -106,11 +106,14 @@ async function listMonitoredChannels(bot, message, args, group) {
 
 function avisoStreamSystem(bot, chatId) {
 	try {
+		const StreamSystem = require("../StreamSystem");
+		const streamSystem = StreamSystem.getInstance();
 		logger.warn(
 			"[avisoStreamSystem] Comando de stream usado mas sistema não inicializado, forçando inicialização"
 		);
-		bot.streamSystem.initialize();
-		bot.streamMonitor = bot.streamSystem.streamMonitor;
+		streamSystem.initialize(); // É async mas aqui chamamos fire-and-forget
+		bot.streamSystem = streamSystem;
+		bot.streamMonitor = streamSystem.streamMonitor;
 
 		return new ReturnMessage({
 			chatId,
@@ -418,6 +421,7 @@ async function showLiveInfo(bot, message, args, group) {
 
 							// Simula o evento de mudança de título
 							await bot.streamSystem.changeGroupTitleForStream(
+								bot,
 								group,
 								channelConfig,
 								eventData,
@@ -462,6 +466,7 @@ async function showLiveInfo(bot, message, args, group) {
 
 					// Simula o evento de mudança de título
 					await bot.streamSystem.changeGroupTitleForStream(
+						bot,
 						group,
 						channelConfig,
 						eventData,
@@ -544,6 +549,7 @@ async function showLiveKick(bot, message, args, group) {
 
 							// Simula o evento de mudança de título
 							await bot.streamSystem.changeGroupTitleForStream(
+								bot,
 								group,
 								channelConfig,
 								eventData,
@@ -588,6 +594,7 @@ async function showLiveKick(bot, message, args, group) {
 
 					// Simula o evento de mudança de título
 					await bot.streamSystem.changeGroupTitleForStream(
+						bot,
 						group,
 						channelConfig,
 						eventData,

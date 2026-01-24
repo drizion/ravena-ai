@@ -153,7 +153,8 @@ class WhatsAppBotEvoGo {
 		this.blockedContacts = [];
 
 		if (!this.streamSystem) {
-			this.streamSystem = new StreamSystem(this);
+			this.streamSystem = StreamSystem.getInstance();
+			this.streamSystem.registerBot(this);
 		}
 
 		// Client Fake
