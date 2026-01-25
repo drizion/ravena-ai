@@ -160,6 +160,16 @@ class StreamSystem {
 		// Itera sobre os bots registrados para encontrar os que podem participar do grupo
 		for (const bot of this.bots) {
 			try {
+				// Verifica compatibilidade de plataforma
+				const isWhatsAppGroup = groupId.toString().includes("@");
+				if (bot.useTelegram) {
+					// Bot Telegram não pode enviar para grupo WhatsApp
+					if (isWhatsAppGroup) continue;
+				} else {
+					// Bot WhatsApp não pode enviar para grupo Telegram (que não tem @)
+					if (!isWhatsAppGroup) continue;
+				}
+
 				// Verifica flag se o bot já foi marcado como não estando no grupo
 				if (bot.skipGroupInfo?.includes(groupId)) continue;
 
@@ -405,7 +415,7 @@ class StreamSystem {
 						for (const res of resultados) {
 							// Adaptação para verificar erro na resposta do bot
 							// Exemplo: { error: "failed to get group members: you're not participating in that group" }
-							if (res.error) {
+							if (res && res.error) {
 								const errMsg =
 									typeof res.error === "string"
 										? res.error
