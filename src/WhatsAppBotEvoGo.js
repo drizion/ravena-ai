@@ -1325,11 +1325,12 @@ class WhatsAppBotEvoGo {
 		this.startupTime = Date.now();
 		this.lastMessageReceived = Date.now();
 
+		const webhookPath = `/webhook/evogo/${this.instanceName}`;
 		const instanceDesc = this.websocket
 			? `Websocket`
-			: `Webhook on ${this.instanceName}:${this.webhookPort}`;
+			: `Webhook on ${this.webhookHost}:${this.webhookPort}${webhookPath}`;
 		this.logger.info(
-			`[${this.startupTime}][${this.id}] Initializing EvolutionGO API bot instance ${this.instanceName} (Evo Instance: ${instanceDesc})`
+			`[${this.startupTime}][${this.id}] Init EvoGoAPI bot instance ${this.instanceName}: ${instanceDesc})`
 		); // , { instanceInfo }
 
 		try {
@@ -1342,16 +1343,12 @@ class WhatsAppBotEvoGo {
 				this.webhookApp.use(express.json({ limit: "500mb" }));
 				this.webhookApp.use(express.urlencoded({ extended: true, limit: "500mb" }));
 
-				const webhookPath = `/webhook/evogo/${this.instanceName}`;
 				this.webhookApp.post(webhookPath, this._handleWebhook.bind(this));
 				this.webhookApp.get(webhookPath, this._handleWebhook.bind(this));
 
 				await new Promise((resolve, reject) => {
 					this.webhookServer = this.webhookApp
 						.listen(this.webhookPort, () => {
-							this.logger.info(
-								`Webhook listener for bot ${this.instanceName} started on ${this.webhookHost}:${this.webhookPort}${webhookPath}`
-							);
 							resolve();
 						})
 						.on("error", (err) => {
@@ -1374,7 +1371,7 @@ class WhatsAppBotEvoGo {
 	}
 
 	async _checkInstanceStatusAndConnect(isRetry = false, forceConnect = false) {
-		this.logger.info(`Checking instance status for ${this.instanceName}...`);
+		//this.logger.info(`Checking instance status for ${this.instanceName}...`);
 		try {
 			let response;
 			try {
@@ -1712,9 +1709,9 @@ class WhatsAppBotEvoGo {
 				//this.logger.info(`[${this.id}] Added other bot '${botId}' to internal ignore list.`);
 			}
 		}
-		this.logger.info(
-			`[${this.id}] Ignored contacts/bots list size: ${this.blockedContacts.length}`
-		);
+		// this.logger.info(
+		// 	`[${this.id}] Ignored contacts/bots list size: ${this.blockedContacts.length}`
+		// );
 	}
 
 	async formatMessage(data) {
@@ -2160,8 +2157,6 @@ class WhatsAppBotEvoGo {
 					origin: { getChat: async () => await this.getChatDetails(groupId) }
 				};
 
-				this.logger.debug(`[_handleGroupParticipantsUpdate] `, { eventData });
-
 				if (action === "add" || action === "join") {
 					if (this.eventHandler?.onGroupJoin) this.eventHandler.onGroupJoin(this, eventData);
 				} else if (action === "remove" || action === "leave") {
@@ -2343,9 +2338,7 @@ class WhatsAppBotEvoGo {
 	async _loadSkipGroupInfo() {
 		try {
 			this.skipGroupInfo = await SkipGroups.getInstance().getSkippedGroups(this.id);
-			this.logger.info(
-				`[SkipGroups] Loaded ${this.skipGroupInfo.length} skipped groups for bot ${this.id}.`
-			);
+			//this.logger.info(`[SkipGroups] Loaded ${this.skipGroupInfo.length} skipped groups for bot ${this.id}.`);
 		} catch (error) {
 			this.logger.error(`[SkipGroups] Error loading skip groups:`, error);
 			this.skipGroupInfo = [];

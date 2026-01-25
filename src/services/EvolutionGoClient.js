@@ -33,7 +33,7 @@ class EvolutionGoClient {
 			}
 		});
 
-		this.logger.info(`EvolutionGoClient inicializado em: ${this.baseUrl}`);
+		//this.logger.info(`EvolutionGoClient inicializado em: ${this.baseUrl}`);
 	}
 
 	/**

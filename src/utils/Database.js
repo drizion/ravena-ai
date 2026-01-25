@@ -50,7 +50,7 @@ class Database {
 	}
 
 	registerBotInstance(bot) {
-		this.logger.info(`[registerBotInstance] Registered: ${bot.id}`);
+		//this.logger.info(`[registerBotInstance] Registered: ${bot.id}`);
 		this.botInstances.push(bot);
 	}
 

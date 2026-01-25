@@ -42,15 +42,15 @@ async function main() {
 			logger.info(`Nenhum bot definido no bots.json.`);
 			return;
 		} else {
-			logger.info(`Inicializando ${rBots.length} bots:\n${JSON.stringify(rBots, null, "\t")}`);
+			logger.info(`Inicializando ${rBots.length} bots...`);
 		}
 
-		logger.info(`Configuração de Chrome: Path=${chromePath || "padrão"}, Headless=${headlessMode}`);
+		
 
 		let redisDbAtual = 0;
 		for (const rBot of rBots) {
 			if (!rBot.enabled) continue;
-
+			
 			let newRBot;
 			if (rBot.useDiscord) {
 				logger.info(`Inicializando '${rBot.nome}' como Discord Bot`);
@@ -222,7 +222,7 @@ async function main() {
 				newRBot.initialize();
 				await sleep(500);
 			} else {
-				logger.info(`Inicializando '${rBot.nome}' como whatsapp-web.js`);
+				logger.info(`Inicializando '${rBot.nome}' como whatsapp-web.js | Path=${chromePath || "padrão"}, Headless=${headlessMode}`);
 				newRBot = new WhatsAppBot({
 					id: rBot.nome,
 					banido: rBot.banido ?? false,

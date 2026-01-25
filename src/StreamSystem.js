@@ -52,7 +52,7 @@ class StreamSystem {
 			if (this.streamMonitor) {
 				bot.streamMonitor = this.streamMonitor;
 			}
-			this.logger.info(`Bot registrado no sistema de streams: ${bot.id}`);
+			//this.logger.info(`Bot registrado no sistema de streams: ${bot.id}`);
 		}
 	}
 

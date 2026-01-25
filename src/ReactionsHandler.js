@@ -31,7 +31,7 @@ class ReactionsHandler {
 			const files = await fs.readdir(this.functionsPath);
 			const jsFiles = files.filter((file) => file.endsWith(".js"));
 
-			this.logger.info(`Encontrados ${jsFiles.length} arquivos de função para verificar reações`);
+			//this.logger.info(`Encontrados ${jsFiles.length} arquivos de função para verificar reações`);
 
 			const modulosComErro = [];
 			// Carrega cada módulo de função
@@ -55,7 +55,7 @@ class ReactionsHandler {
 			}
 
 			const numReactionCommands = Object.keys(this.reactionCommands).length;
-			this.logger.info(`Carregados ${numReactionCommands} comandos de reação`);
+			//this.logger.info(`Carregados ${numReactionCommands} comandos de reação`);
 
 			if (modulosComErro.length > 0) {
 				this.logger.warn(

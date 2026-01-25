@@ -117,10 +117,6 @@ class CacheManager {
 				this.logger.error("CacheManager: Failed to initialize Redis client:", error.message);
 				this.redisClient = null;
 			}
-		} else {
-			this.logger.info(
-				"CacheManager: No Redis configured. Using in-memory cache with SQLite persistence."
-			);
 		}
 
 		// Start flush timer
