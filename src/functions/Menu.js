@@ -302,12 +302,50 @@ async function sendCommandList(bot, message, args, group) {
 		const chatId = message.group ?? message.author;
 		logger.debug(`Enviando lista de comandos para ${chatId}`);
 
-		// Obtém todos os comandos fixos
-		const fixedCommands = bot.eventHandler.commandHandler.fixedCommands.getAllCommands();
+		// Define o prefixo do comando
+		const prefix = group && group.prefix ? group.prefix : bot.prefix;
 
-		// Obtém comandos personalizados para este grupo
+		// Obtém configurações de silenciamento
+		const mutedCategories =
+			group && Array.isArray(group.mutedCategories) ? group.mutedCategories : [];
+		const mutedStrings = group && Array.isArray(group.mutedStrings) ? group.mutedStrings : [];
+
+		// Obtém todos os comandos fixos e filtra
+		const fixedCommands = bot.eventHandler.commandHandler.fixedCommands
+			.getAllCommands()
+			.filter((cmd) => {
+				// Filtra por categoria
+				if (cmd.category && mutedCategories.includes(cmd.category.toLowerCase())) {
+					return false;
+				}
+
+				// Filtra por string silenciada
+				const fullCmdName = `${prefix}${cmd.name}`.toLowerCase();
+				if (mutedStrings.some((str) => fullCmdName.startsWith(str.toLowerCase()))) {
+					return false;
+				}
+
+				return true;
+			});
+
+		// Obtém comandos personalizados para este grupo e filtra
 		const customCommands = group
-			? (await database.getCustomCommands(group.id)).filter((cmd) => cmd.active && !cmd.deleted)
+			? (await database.getCustomCommands(group.id)).filter((cmd) => {
+					if (!cmd.active || cmd.deleted) return false;
+
+					// Filtra por categoria (se houver)
+					if (cmd.category && mutedCategories.includes(cmd.category.toLowerCase())) {
+						return false;
+					}
+
+					// Filtra por string silenciada
+					const fullCmdName = `${prefix}${cmd.startsWith}`.toLowerCase();
+					if (mutedStrings.some((str) => fullCmdName.startsWith(str.toLowerCase()))) {
+						return false;
+					}
+
+					return true;
+				})
 			: [];
 
 		// Lê o cabeçalho do menu
@@ -315,9 +353,6 @@ async function sendCommandList(bot, message, args, group) {
 
 		// Agrupa comandos fixos por categoria
 		const categorizedCommands = groupCommandsByCategory(fixedCommands);
-
-		// Define o prefixo do comando
-		const prefix = group && group.prefix ? group.prefix : bot.prefix;
 
 		// Constrói mensagem
 		let menuText = "🤖 *Comandos Ravenabot*🐦‍⬛\n";
@@ -365,6 +400,18 @@ async function sendCommandList(bot, message, args, group) {
 		// Ocupam muito espaço, movidos para o !cmd-g
 		menuText += "\n⚙️ *Comandos de Gerenciamento:*\n";
 		menuText += `• *Movidos!* Consulte enviando \`!cmd-g\`\n`;
+
+		// 3. Informações sobre itens ignorados
+		if (mutedCategories.length > 0 || mutedStrings.length > 0) {
+			menuText += "\n🚫 *Ignorados/Silenciados:*\n";
+			if (mutedCategories.length > 0) {
+				menuText += `• *Categorias:* ${mutedCategories.join(", ")}\n`;
+			}
+			if (mutedStrings.length > 0) {
+				menuText += `• *Comandos:* ${mutedStrings.join(", ")}\n`;
+			}
+			menuText += `> Use os comandos de gerencia ou o !g-painel para ignorar/designorar comandos e categorias`;
+		}
 
 		// Retorna a mensagem com o menu
 		return new ReturnMessage({

@@ -39,14 +39,30 @@ const classifyQuestionSchema = {
 /**
  * Helper to get command lists formatted for the prompt
  */
-function getCommandLists(bot) {
+function getCommandLists(bot, group = null) {
 	const fixedCommands = bot.eventHandler.commandHandler.fixedCommands.getAllCommands();
 	const managementCommands = bot.eventHandler.commandHandler.management.getManagementCommands();
 
 	let cmdSimpleList = "";
 	let cmdGerenciaSimplesList = "";
 
+	const prefix = group && group.prefix !== undefined ? group.prefix : bot.prefix;
+	const mutedCategories =
+		group && Array.isArray(group.mutedCategories) ? group.mutedCategories : [];
+	const mutedStrings = group && Array.isArray(group.mutedStrings) ? group.mutedStrings : [];
+
 	for (const cmd of fixedCommands) {
+		// Filter by category
+		if (cmd.category && mutedCategories.includes(cmd.category.toLowerCase())) {
+			continue;
+		}
+
+		// Filter by muted strings (e.g. if "!sticker" is in mutedStrings, filter out the sticker command)
+		const fullCmdName = `${prefix}${cmd.name}`.toLowerCase();
+		if (mutedStrings.some((str) => fullCmdName.startsWith(str.toLowerCase()))) {
+			continue;
+		}
+
 		if (
 			cmd.description &&
 			cmd.description.length > 0 &&
@@ -54,12 +70,17 @@ function getCommandLists(bot) {
 			!cmd.hidden
 		) {
 			const usage = cmd.usage ? ` | Uso: ${cmd.usage}` : "";
-			cmdSimpleList += `- ${bot.prefix}${cmd.name}: ${cmd.description}${usage}\n`;
+			cmdSimpleList += `- ${prefix}${cmd.name}: ${cmd.description}${usage}\n`;
 		}
 	}
 	for (const cmd in managementCommands) {
+		const fullCmdName = `${prefix}g-${cmd}`.toLowerCase();
+		if (mutedStrings.some((str) => fullCmdName.startsWith(str.toLowerCase()))) {
+			continue;
+		}
+
 		const desc = managementCommands[cmd].description;
-		cmdGerenciaSimplesList += `- ${bot.prefix}g-${cmd}: ${desc}\n`;
+		cmdGerenciaSimplesList += `- ${prefix}g-${cmd}: ${desc}\n`;
 	}
 
 	return { cmdSimpleList, cmdGerenciaSimplesList };
@@ -242,7 +263,7 @@ async function aiCommand(bot, message, args, group) {
 	const ctxPath = path.join(database.databasePath, "textos", "llm_context.txt");
 	const baseCtxContent = (await fs.readFile(ctxPath, "utf8")) || "";
 
-	const { cmdSimpleList, cmdGerenciaSimplesList } = getCommandLists(bot);
+	const { cmdSimpleList, cmdGerenciaSimplesList } = getCommandLists(bot, group);
 
 	// 2. Prepare Question/Prompt
 	let question = args.length > 0 ? args.join(" ") : (message.caption ?? message.content);
