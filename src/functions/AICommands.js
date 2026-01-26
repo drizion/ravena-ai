@@ -141,12 +141,12 @@ Return JSON: {"classification": "...", "command": "...", "args": "..."}
 			}
 			return JSON.parse(response);
 		} catch (e) {
-			logger.warn("[classifyRequest] Failed to parse JSON, defaulting to bot", response);
-			return { classification: "bot" };
+			logger.warn("[classifyRequest] Failed to parse JSON, defaulting to general", response);
+			return { classification: "general" };
 		}
 	} catch (e) {
 		logger.error("[classifyRequest] Error classifying", e);
-		return { classification: "bot" };
+		return { classification: "general" };
 	}
 }
 
@@ -255,7 +255,9 @@ async function aiCommand(bot, message, args, group) {
 
 	// 1. Get Base Context and Lists
 	const ctxPath = path.join(database.databasePath, "textos", "llm_context.txt");
+	const botCtxPath = path.join(database.databasePath, "textos", "llm_bot_context.txt");
 	const baseCtxContent = (await fs.readFile(ctxPath, "utf8")) || "";
+	const botCtxContent = (await fs.readFile(botCtxPath, "utf8")) || "";
 
 	const { cmdSimpleList, cmdGerenciaSimplesList } = getCommandLists(bot, group);
 
@@ -314,8 +316,8 @@ async function aiCommand(bot, message, args, group) {
 		classificationResult.classification === "command" &&
 		aiAliases.includes(classificationResult.command?.toLowerCase().replace(/!/g, ""))
 	) {
-		logger.debug("[aiCommand] Self-invocation detected, reclassifying to bot");
-		classificationResult.classification = "bot";
+		logger.debug("[aiCommand] Self-invocation detected, reclassifying to general");
+		classificationResult.classification = "general";
 	}
 
 	// CASE A: Command Invocation (e.g. "make sticker", "weather in paris")
@@ -360,7 +362,7 @@ async function aiCommand(bot, message, args, group) {
 		}
 		systemContext = `${baseCtxContent}\n${customPersonalidade}\n${historicoCtx}`;
 	} else {
-		// Bot related (default) - Full context
+		// Bot related - Full context
 		const variaveisReturn = await bot.eventHandler.commandHandler.management.listVariables(
 			bot,
 			message,
@@ -369,7 +371,7 @@ async function aiCommand(bot, message, args, group) {
 		);
 		const variaveisList = variaveisReturn.content;
 
-		systemContext = `${baseCtxContent}\n\n## Comandos que você pode processar:\n\n${cmdSimpleList}\n\nPara os comandos personalizados criados com g-addCmd, você pode usar variáveis:\n${variaveisList}\n\nEstes são os comandos usados apenas por administradores: ${cmdGerenciaSimplesList}\n\n${customPersonalidade}`;
+		systemContext = `${baseCtxContent}\n${botCtxContent}\n\n## Comandos que você pode processar:\n\n${cmdSimpleList}\n\nPara os comandos personalizados criados com g-addCmd, você pode usar variáveis:\n${variaveisList}\n\nEstes são os comandos usados apenas por administradores: ${cmdGerenciaSimplesList}\n\n${customPersonalidade}`;
 	}
 
 	systemContext +=
