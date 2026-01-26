@@ -95,6 +95,14 @@ class Management {
 				method: "setCustomCommandInPv",
 				description: "A resposta do comando será enviada no PV (comandos personalizados)"
 			},
+			"cmd-enviarTudo": {
+				method: "toggleSendAllResponses",
+				description: "Envia todas as respostas do comando (se houver mais de uma)"
+			},
+			"cmd-responder": {
+				method: "toggleReply",
+				description: "Ativa/Desativa se o comando deve responder citando a mensagem"
+			},
 			"cmd-react": {
 				method: "setReaction",
 				description: "Reaçao quando usar o comando"
@@ -587,6 +595,9 @@ class Management {
 			responseContent = bodyTexto;
 		}
 
+		// Obtém menções da mensagem citada
+		const mentions = quotedMsg ? quotedMsg.mentions || [] : [];
+
 		// Cria o comando personalizado
 		const customCommand = {
 			startsWith: commandTrigger,
@@ -594,7 +605,7 @@ class Management {
 			adminOnly: false,
 			ignoreInteract: false,
 			sendAllResponses: false,
-			mentions: [],
+			mentions,
 			cooldown: 0,
 			react: null,
 			reply: true,
@@ -616,9 +627,23 @@ class Management {
 		// Recarrega comandos
 		await bot.eventHandler.commandHandler.loadCustomCommandsForGroup(group.id);
 
+		let content = `Comando personalizado '${commandTrigger}' adicionado com sucesso.`;
+
+		if (mentions.length > 0) {
+			content += `\n\nEstes membros serão mencionados na mensagem:\n`;
+			mentions.forEach((m) => {
+				// Formata para mostrar apenas o número, se possível
+				const num = m.split("@")[0];
+				content += `- @${num}\n`;
+			});
+		}
+
 		return new ReturnMessage({
 			chatId: group.id,
-			content: `Comando personalizado '${commandTrigger}' adicionado com sucesso.`
+			content,
+			options: {
+				mentions // Menciona eles na mensagem de confirmação também
+			}
 		});
 	}
 
@@ -925,6 +950,111 @@ class Management {
 		return new ReturnMessage({
 			chatId: group.id,
 			content: `Comando personalizado '${commandTrigger}' ${command.replyInPvivate ? " agora é respondido no PV da pessoa que solicitou" : " agora é respondido dentro do grupo (padrão)"}.`
+		});
+	}
+
+	/**
+	 * Alterna a opção de enviar todas as respostas do comando
+	 * @param {WhatsAppBot} bot - Instância do bot
+	 * @param {Object} message - Dados da mensagem
+	 * @param {Array} args - Argumentos do comando
+	 * @param {Object} group - Dados do grupo
+	 * @returns {Promise<ReturnMessage>} Mensagem de retorno
+	 */
+	async toggleSendAllResponses(bot, message, args, group) {
+		if (!group) {
+			return new ReturnMessage({
+				chatId: message.author,
+				content: "Este comando só pode ser usado em grupos."
+			});
+		}
+
+		if (args.length === 0) {
+			return new ReturnMessage({
+				chatId: group.id,
+				content: "Por favor, forneça o comando personalizado. Exemplo: !g-cmd-enviarTudo saudação"
+			});
+		}
+
+		const commandTrigger = args.join(" ").trim().toLowerCase();
+
+		// Obtém comandos personalizados para este grupo
+		const commands = await this.database.getCustomCommands(group.id);
+		const command = commands.find(
+			(cmd) => cmd.startsWith?.trim()?.toLowerCase() === commandTrigger && !cmd.deleted
+		);
+
+		if (!command) {
+			return new ReturnMessage({
+				chatId: group.id,
+				content: `Comando personalizado '${commandTrigger}' não encontrado.`
+			});
+		}
+
+		// Toggle
+		command.sendAllResponses = !command.sendAllResponses;
+
+		// Atualiza o comando
+		await this.database.updateCustomCommand(group.id, command);
+		this.database.clearCache(`commands:${group.id}`);
+		await bot.eventHandler.commandHandler.loadCustomCommandsForGroup(group.id);
+
+		return new ReturnMessage({
+			chatId: group.id,
+			content: `Comando personalizado '${commandTrigger}' agora ${command.sendAllResponses ? "envia TODAS as respostas" : "envia UMA resposta aleatória"}.`
+		});
+	}
+
+	/**
+	 * Alterna a opção de responder (reply/quote)
+	 * @param {WhatsAppBot} bot - Instância do bot
+	 * @param {Object} message - Dados da mensagem
+	 * @param {Array} args - Argumentos do comando
+	 * @param {Object} group - Dados do grupo
+	 * @returns {Promise<ReturnMessage>} Mensagem de retorno
+	 */
+	async toggleReply(bot, message, args, group) {
+		if (!group) {
+			return new ReturnMessage({
+				chatId: message.author,
+				content: "Este comando só pode ser usado em grupos."
+			});
+		}
+
+		if (args.length === 0) {
+			return new ReturnMessage({
+				chatId: group.id,
+				content: "Por favor, forneça o comando personalizado. Exemplo: !g-cmd-responder saudação"
+			});
+		}
+
+		const commandTrigger = args.join(" ").trim().toLowerCase();
+
+		// Obtém comandos personalizados para este grupo
+		const commands = await this.database.getCustomCommands(group.id);
+		const command = commands.find(
+			(cmd) => cmd.startsWith?.trim()?.toLowerCase() === commandTrigger && !cmd.deleted
+		);
+
+		if (!command) {
+			return new ReturnMessage({
+				chatId: group.id,
+				content: `Comando personalizado '${commandTrigger}' não encontrado.`
+			});
+		}
+
+		// Toggle (default is true usually, so undefined = true)
+		if (command.reply === undefined) command.reply = true;
+		command.reply = !command.reply;
+
+		// Atualiza o comando
+		await this.database.updateCustomCommand(group.id, command);
+		this.database.clearCache(`commands:${group.id}`);
+		await bot.eventHandler.commandHandler.loadCustomCommandsForGroup(group.id);
+
+		return new ReturnMessage({
+			chatId: group.id,
+			content: `Comando personalizado '${commandTrigger}' agora ${command.reply ? "responde citando a mensagem" : "apenas envia a mensagem (sem quote)"}.`
 		});
 	}
 
@@ -5712,6 +5842,7 @@ class Management {
 			authorName: message.authorName ?? "Unknown",
 			groupName: group.name,
 			groupId: group.id,
+			botId: bot.id,
 			createdAt: now.toISOString(),
 			expiresAt: expiration.toISOString()
 		};

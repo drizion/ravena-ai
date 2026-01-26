@@ -882,6 +882,40 @@ class BotAPI {
 					return res.status(404).json({ message: "Group not found" });
 				}
 
+				// Fetch participants if possible
+				let participants = [];
+				try {
+					// Find the specific bot that issued the command
+					let bot = this.bots.find((b) => b.id === webManagementData.botId && b.isConnected);
+
+					// Fallback to any connected bot if specific bot not found/connected
+					if (!bot) {
+						bot = this.bots.find((b) => b.isConnected);
+					}
+
+					if (bot) {
+						const chat = await bot.client.getChatById(id);
+						if (chat && chat.participants) {
+							participants = chat.participants.map((p) => {
+								const pn =
+									p.phoneNumber || (p.id?._serialized ? p.id._serialized.split("@")[0] : "0000");
+								const lid = p.lid || (p.id?._serialized ? p.id._serialized : "");
+								const name = `Membro ${pn.slice(-4)}`;
+
+								return {
+									lid,
+									pn,
+									name,
+									admin: p.isAdmin || p.isSuperAdmin
+								};
+							});
+						}
+					}
+				} catch (e) {
+					this.logger.error("Error fetching participants:", e);
+				}
+				groupData.participants = participants;
+
 				this.logger.info(`[management][${token}][${id}] Group ${groupData.name}`);
 				return res.json(groupData);
 			} catch (error) {

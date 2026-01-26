@@ -129,13 +129,17 @@ document.addEventListener('DOMContentLoaded', () => {
         variableModal: document.getElementById('variable-modal'),
         emojiModal: document.getElementById('emoji-modal'),
         customDialogModal: document.getElementById('custom-dialog-modal'),
+        memberModal: document.getElementById('member-modal'),
         
-        closeModalBtns: document.querySelectorAll('.close-modal, .close-modal-btn, .close-stream-modal, .close-variable-modal, .close-emoji-modal, .close-dialog'),
+        closeModalBtns: document.querySelectorAll('.close-modal, .close-modal-btn, .close-stream-modal, .close-variable-modal, .close-emoji-modal, .close-dialog, .close-member-modal'),
         closeUploadBtns: document.querySelectorAll('.close-upload'),
         
         // Sticky Footer
         stickySaveBar: document.getElementById('sticky-save-bar'),
         btnGlobalSave: document.getElementById('btn-global-save'),
+
+        // General
+        btnViewMembers: document.getElementById('btn-view-members'),
 
         // Command Form
         cmdTrigger: document.getElementById('cmd-trigger'),
@@ -143,12 +147,20 @@ document.addEventListener('DOMContentLoaded', () => {
         cmdInteract: document.getElementById('cmd-interact'),
         cmdReplyQuote: document.getElementById('cmd-reply-quote'),
         cmdSendAll: document.getElementById('cmd-send-all'),
+        cmdAdminOnly: document.getElementById('cmd-admin-only'),
         cmdEmoji: document.getElementById('cmd-emoji'),
         cmdResponsesList: document.getElementById('cmd-responses-list'),
         btnSaveCmd: document.getElementById('btn-save-cmd'),
         btnDeleteCmd: document.getElementById('btn-delete-cmd'),
         cmdMetadata: document.getElementById('cmd-metadata'),
         modalTitle: document.getElementById('modal-title'),
+        btnAddTag: document.getElementById('btn-add-tag'),
+        cmdTagsList: document.getElementById('cmd-tags-list'),
+
+        // Member Modal
+        memberModalTitle: document.getElementById('member-modal-title'),
+        memberSearch: document.getElementById('member-search'),
+        memberTableBody: document.getElementById('member-table-body'),
 
         // Stream Form
         streamModalTitle: document.getElementById('stream-modal-title'),
@@ -1005,7 +1017,9 @@ document.addEventListener('DOMContentLoaded', () => {
             els.cmdInteract.checked = !cmd.ignoreInteract;
             els.cmdReplyQuote.checked = cmd.reply !== false; 
             els.cmdSendAll.checked = !!cmd.sendAllResponses;
+            els.cmdAdminOnly.checked = !!cmd.adminOnly;
             els.cmdEmoji.value = cmd.react || '';
+            currentCmdMentions = cmd.mentions || [];
             
             if (cmd.responses) {
                 cmd.responses.forEach(r => addResponseInput('text', r));
@@ -1018,11 +1032,14 @@ document.addEventListener('DOMContentLoaded', () => {
             els.cmdInteract.checked = true;
             els.cmdReplyQuote.checked = true;
             els.cmdSendAll.checked = false;
+            els.cmdAdminOnly.checked = false;
             els.cmdEmoji.value = '';
+            currentCmdMentions = [];
             addResponseInput('text', '');
             els.cmdMetadata.innerHTML = '';
         }
 
+        renderCmdTags();
         els.cmdModal.classList.remove('hidden');
     }
 
@@ -1256,7 +1273,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const newCmd = {
             startsWith: trigger, responses: responses, active: els.cmdActive.checked,
             ignoreInteract: !els.cmdInteract.checked, reply: els.cmdReplyQuote.checked,
-            sendAllResponses: els.cmdSendAll.checked, react: els.cmdEmoji.value.trim() || null,
+            sendAllResponses: els.cmdSendAll.checked, adminOnly: els.cmdAdminOnly.checked,
+            react: els.cmdEmoji.value.trim() || null,
+            mentions: currentCmdMentions,
             count: currentEditingCmd ? currentEditingCmd.count : 0,
             metadata: currentEditingCmd ? currentEditingCmd.metadata : { createdBy: 'Painel Web', createdAt: Date.now() }
         };
@@ -1309,6 +1328,122 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // --- Member Modal Logic ---
+
+    let onMemberSelect = null; // Callback for when a member is selected
+
+    function renderMembers(filter = '') {
+        const tbody = els.memberTableBody;
+        tbody.innerHTML = '';
+        
+        const participants = groupData.participants || [];
+        const filtered = participants.filter(p => {
+            const search = filter.toLowerCase();
+            const pn = p.pn ? p.pn.split('@')[0] : '';
+            const lid = p.lid ? p.lid.split('@')[0] : '';
+            return (pn && pn.includes(search)) || (lid && lid.includes(search));
+        });
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Nenhum membro encontrado</td></tr>';
+            return;
+        }
+
+        filtered.forEach(p => {
+            const tr = document.createElement('tr');
+            
+            let actionBtn = '';
+            if (onMemberSelect) {
+                actionBtn = `<button class="btn btn-xs btn-success btn-select-member"><i class="fas fa-check"></i> Selecionar</button>`;
+            } else {
+                actionBtn = '<span class="text-muted">-</span>';
+            }
+
+            const pn = p.pn ? p.pn.split('@')[0] : '-';
+            const lid = p.lid ? p.lid.split('@')[0] : '-';
+
+            tr.innerHTML = `
+                <td>${pn} ${p.admin ? '<span class="badge badge-warning">Admin</span>' : ''}</td>
+                <td style="font-family: monospace; font-size: 0.9em;">${lid}</td>
+                <td>${actionBtn}</td>
+            `;
+
+            if (onMemberSelect) {
+                tr.querySelector('.btn-select-member').onclick = () => {
+                    onMemberSelect(p);
+                    els.memberModal.classList.add('hidden');
+                };
+            }
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    if (els.btnViewMembers) {
+        els.btnViewMembers.onclick = () => {
+            onMemberSelect = null;
+            els.memberModalTitle.textContent = 'Membros do Grupo';
+            els.memberSearch.value = '';
+            renderMembers();
+            els.memberModal.classList.remove('hidden');
+        };
+    }
+
+    if (els.memberSearch) {
+        els.memberSearch.addEventListener('input', (e) => {
+            renderMembers(e.target.value);
+        });
+    }
+
+    // Fix: Close Member Modal
+    if (els.closeModalBtns) {
+        // This is handled in setupEventListeners below via querySelectorAll('.close-member-modal')
+    }
+
+    // --- Command Mentions Logic ---
+
+    let currentCmdMentions = [];
+
+    if (els.btnAddTag) {
+        els.btnAddTag.onclick = () => {
+            onMemberSelect = (member) => {
+                const id = member.lid || member.pn; // Store full ID for backend
+                if (!currentCmdMentions.includes(id)) {
+                    currentCmdMentions.push(id);
+                    renderCmdTags();
+                }
+            };
+            els.memberModalTitle.textContent = 'Selecionar Membro';
+            els.memberSearch.value = '';
+            renderMembers();
+            els.memberModal.classList.remove('hidden');
+        };
+    }
+
+    function renderCmdTags() {
+        const container = els.cmdTagsList;
+        container.innerHTML = '';
+        
+        currentCmdMentions.forEach(id => {
+            // Find member info
+            const participants = groupData.participants || [];
+            // Try to find by LID or PN
+            const member = participants.find(p => p.lid === id || p.pn === id || (p.pn + '@s.whatsapp.net') === id);
+            
+            const displayId = member ? (member.pn ? member.pn.split('@')[0] : (member.lid ? member.lid.split('@')[0] : id.split('@')[0])) : id.split('@')[0];
+            
+            const tag = document.createElement('span');
+            tag.className = 'tag';
+            tag.innerHTML = `${displayId} <span class="remove">&times;</span>`;
+            
+            tag.querySelector('.remove').onclick = () => {
+                currentCmdMentions = currentCmdMentions.filter(m => m !== id);
+                renderCmdTags();
+            };
+            container.appendChild(tag);
+        });
+    }
+
     function setupEventListeners() {
         els.retryBtn.addEventListener('click', () => window.location.reload());
         
@@ -1339,13 +1474,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        document.querySelectorAll('.close-modal, .close-modal-btn, .close-stream-modal, .close-variable-modal, .close-emoji-modal, .close-dialog').forEach(b => {
+        document.querySelectorAll('.close-modal, .close-modal-btn, .close-stream-modal, .close-variable-modal, .close-emoji-modal, .close-dialog, .close-member-modal').forEach(b => {
             b.onclick = () => {
                 els.cmdModal.classList.add('hidden');
                 els.streamModal.classList.add('hidden');
                 els.variableModal.classList.add('hidden');
                 els.emojiModal.classList.add('hidden');
                 els.customDialogModal.classList.add('hidden');
+                els.memberModal.classList.add('hidden');
             };
         });
         els.closeUploadBtns.forEach(b => b.onclick = () => els.uploadModal.classList.add('hidden'));

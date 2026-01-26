@@ -1197,6 +1197,13 @@ class CommandHandler {
 						if (command.replyInPvivate) {
 							processedMessage.chatId = message.author; // ou authorAlt?
 						}
+						// Adiciona menções do comando
+						if (command.mentions && command.mentions.length > 0) {
+							if (!processedMessage.options) processedMessage.options = {};
+							const existing = new Set(processedMessage.options.mentions || []);
+							command.mentions.forEach((m) => existing.add(m));
+							processedMessage.options.mentions = Array.from(existing);
+						}
 						returnMessages.push(processedMessage);
 					}
 				}
@@ -1223,6 +1230,13 @@ class CommandHandler {
 				if (returnMessage) {
 					if (command.replyInPvivate) {
 						returnMessage.chatId = message.author; // ou authorAlt?
+					}
+					// Adiciona menções do comando
+					if (command.mentions && command.mentions.length > 0) {
+						if (!returnMessage.options) returnMessage.options = {};
+						const existing = new Set(returnMessage.options.mentions || []);
+						command.mentions.forEach((m) => existing.add(m));
+						returnMessage.options.mentions = Array.from(existing);
 					}
 					await bot.sendReturnMessages(returnMessage, group);
 				}

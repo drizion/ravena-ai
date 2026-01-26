@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel de Gerenciamento - RavenaBot</title>
-    <link rel="stylesheet" href="/management.css?v=928373">
+    <link rel="stylesheet" href="/management.css?v=928374">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.css">
     <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
@@ -81,6 +81,9 @@
                         <div class="form-group checkbox-group">
                             <input type="checkbox" id="custom-ignores-prefix">
                             <label id="lbl-custom-ignores" for="custom-ignores-prefix">Comandos Personalizados sem Prefixo</label>
+                        </div>
+                        <div class="form-group">
+                            <button type="button" id="btn-view-members" class="btn btn-secondary"><i class="fas fa-users"></i> Ver Membros do Grupo</button>
                         </div>
                         <div class="form-actions">
                             <button type="button" class="btn btn-primary btn-save-section" data-section="geral">Salvar Geral</button>
@@ -402,6 +405,10 @@
                         <input type="checkbox" id="cmd-send-all">
                         <label id="lbl-cmd-send-all" for="cmd-send-all">Enviar todas as respostas</label>
                     </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="cmd-admin-only">
+                        <label id="lbl-cmd-admin-only" for="cmd-admin-only">Apenas Administradores <i class="fas fa-info-circle" title="Se habilitado, apenas administradores do grupo poderão usar o comando"></i></label>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -410,6 +417,14 @@
                         <input type="text" id="cmd-emoji" class="form-control" placeholder="Emoji" maxlength="2">
                         <button type="button" id="btn-emoji-picker" class="btn btn-secondary"><i class="far fa-smile"></i></button>
                     </div>
+                </div>
+
+                <div class="list-manager-section">
+                    <label id="lbl-cmd-tags">Marcar Pessoas <i class="fas fa-info-circle" title="Pessoas que serão marcadas na mensagem. O número é encriptado pelo WhatsApp, por isso parece 'estranho' ( @lids)"></i></label>
+                    <div class="input-group">
+                        <button type="button" id="btn-add-tag" class="btn btn-secondary" style="width: 100%;"><i class="fas fa-user-plus"></i> Adicionar Menção</button>
+                    </div>
+                    <div id="cmd-tags-list" class="tags-container"></div>
                 </div>
 
                 <div class="responses-section">
@@ -619,6 +634,36 @@
         </div>
     </div>
 
+    <!-- Member Picker Modal -->
+    <div id="member-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="member-modal-title">Membros do Grupo</h2>
+                <span class="close-member-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="member-search" class="form-control" placeholder="Buscar membro..." style="margin-bottom: 10px;">
+                <div id="member-list" class="member-list-container" style="max-height: 300px; overflow-y: auto;">
+                    <!-- Populated via JS -->
+                    <table class="table" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>Telefone</th>
+                                <th>LID/ID</th>
+                                <th>Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="member-table-body">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary close-member-modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Custom Tooltip -->
     <div id="custom-tooltip" class="custom-tooltip hidden">
         <div id="tooltip-content"></div>
@@ -626,6 +671,6 @@
     </div>
 
     <script src="/help.js"></script>
-    <script src="/management.js?v=928373"></script>
+    <script src="/management.js?v=928374"></script>
 </body>
 </html>
