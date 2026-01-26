@@ -308,7 +308,7 @@ async function sendCommandList(bot, message, args, group) {
 		// Obtém configurações de silenciamento
 		const mutedCategories =
 			group && Array.isArray(group.mutedCategories) ? group.mutedCategories : [];
-		const mutedStrings = group && Array.isArray(group.mutedStrings) ? group.mutedStrings : [];
+		const mutedCommands = group && Array.isArray(group.mutedCommands) ? group.mutedCommands : [];
 
 		// Obtém todos os comandos fixos e filtra
 		const fixedCommands = bot.eventHandler.commandHandler.fixedCommands
@@ -319,9 +319,8 @@ async function sendCommandList(bot, message, args, group) {
 					return false;
 				}
 
-				// Filtra por string silenciada
-				const fullCmdName = `${prefix}${cmd.name}`.toLowerCase();
-				if (mutedStrings.some((str) => fullCmdName.startsWith(str.toLowerCase()))) {
+				// Filtra por comando silenciado
+				if (mutedCommands.includes(cmd.name)) {
 					return false;
 				}
 
@@ -335,12 +334,6 @@ async function sendCommandList(bot, message, args, group) {
 
 					// Filtra por categoria (se houver)
 					if (cmd.category && mutedCategories.includes(cmd.category.toLowerCase())) {
-						return false;
-					}
-
-					// Filtra por string silenciada
-					const fullCmdName = `${prefix}${cmd.startsWith}`.toLowerCase();
-					if (mutedStrings.some((str) => fullCmdName.startsWith(str.toLowerCase()))) {
 						return false;
 					}
 
@@ -402,13 +395,13 @@ async function sendCommandList(bot, message, args, group) {
 		menuText += `• *Movidos!* Consulte enviando \`!cmd-g\`\n`;
 
 		// 3. Informações sobre itens ignorados
-		if (mutedCategories.length > 0 || mutedStrings.length > 0) {
+		if (mutedCategories.length > 0 || mutedCommands.length > 0) {
 			menuText += "\n🚫 *Ignorados/Silenciados:*\n";
 			if (mutedCategories.length > 0) {
 				menuText += `• *Categorias:* ${mutedCategories.join(", ")}\n`;
 			}
-			if (mutedStrings.length > 0) {
-				menuText += `• *Comandos:* ${mutedStrings.join(", ")}\n`;
+			if (mutedCommands.length > 0) {
+				menuText += `• *Comandos:* ${mutedCommands.join(", ")}\n`;
 			}
 			menuText += `> Use os comandos de gerencia ou o !g-painel para ignorar/designorar comandos e categorias`;
 		}

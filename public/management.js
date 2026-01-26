@@ -417,7 +417,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 'ignoredNumbers': 'Números Ignorados', 'filters': 'Filtros',
                 'autoStt': 'Auto Transcrição', 'interact': 'Interação Automática',
                 'autoTranslateTo': 'Auto Tradução', 'greetings': 'Boas Vindas', 'farewells': 'Despedidas',
-                'mutedStrings': 'Comandos Ignorados', 'additionalAdmins': 'Admins Adicionais',
+                'mutedCommands': 'Comandos Silenciados', 'additionalAdmins': 'Admins Adicionais',
                 'twitch': 'Config Twitch', 'kick': 'Config Kick', 'youtube': 'Config YouTube'
             };
             
@@ -557,7 +557,7 @@ document.addEventListener('DOMContentLoaded', () => {
             groupData.filters.people = list; setDirty(true);
         });
 
-        renderTags('ignored-cmds-list', groupData.mutedStrings || [], (list) => { groupData.mutedStrings = list; setDirty(true); });
+        renderTags('muted-commands-list', groupData.mutedCommands || [], (list) => { groupData.mutedCommands = list; setDirty(true); });
         renderTags('additional-admins-list', groupData.additionalAdmins || [], (list) => { groupData.additionalAdmins = list; setDirty(true); });
 
         const categories = ["geral","grupo","utilidades","saude","midia","ia","downloaders","jogos","cultura","áudio","tts","busca","listas","arquivos","general","diversao","info","imagens","zoeira"];
@@ -712,7 +712,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if(inputId.includes('number')) renderTags('ignored-numbers-list', groupData.ignoredNumbers, (l)=>groupData.ignoredNumbers=l);
                 else if(inputId.includes('word')) renderTags('forbidden-words-list', groupData.filters.words, (l)=>groupData.filters.words=l);
                 else if(inputId.includes('forbidden-user')) renderTags('forbidden-users-list', groupData.filters.people, (l)=>groupData.filters.people=l);
-                else if(inputId.includes('cmd')) renderTags('ignored-cmds-list', groupData.mutedStrings, (l)=>groupData.mutedStrings=l);
+                else if(inputId.includes('muted-command')) renderTags('muted-commands-list', groupData.mutedCommands, (l)=>groupData.mutedCommands=l);
                 else if(inputId.includes('admin')) renderTags('additional-admins-list', groupData.additionalAdmins, (l)=>groupData.additionalAdmins=l);
             }
             input.value = '';
@@ -1485,6 +1485,28 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         });
         els.closeUploadBtns.forEach(b => b.onclick = () => els.uploadModal.classList.add('hidden'));
+
+        // Tag inputs
+        setupListAdder('add-ignored-number', 'new-ignored-number', 'ignoredNumbers');
+        setupListAdder('add-forbidden-word', 'new-forbidden-word', 'filters.words');
+        setupListAdder('add-forbidden-user', 'new-forbidden-user', 'filters.people');
+        setupListAdder('add-muted-command', 'new-muted-command', 'mutedCommands');
+        setupListAdder('add-additional-admin', 'new-additional-admin', 'additionalAdmins');
+
+        // Sliders
+        const chanceSlider = document.getElementById('interaction-chance');
+        if(chanceSlider) {
+            chanceSlider.addEventListener('input', (e) => {
+                document.getElementById('chance-val').textContent = (e.target.value / 100).toFixed(2);
+            });
+        }
+
+        const cooldownSlider = document.getElementById('interaction-cooldown');
+        if(cooldownSlider) {
+            cooldownSlider.addEventListener('input', (e) => {
+                document.getElementById('cooldown-val').textContent = e.target.value;
+            });
+        }
     }
 
     init();

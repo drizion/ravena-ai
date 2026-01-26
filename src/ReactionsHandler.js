@@ -134,17 +134,17 @@ class ReactionsHandler {
 					const groupData = await bot.eventHandler.getOrCreateGroup(formattedMessage.group);
 					group = groupData.group;
 
-					if (group.mutedStrings && Array.isArray(group.mutedStrings)) {
-						//this.logger.debug(`[processReaction] ${reaction.reaction}`, {muted: group.mutedStrings})
-						const isIgnored = group.mutedStrings.some((str) => str.includes(reaction.reaction));
-
-						if (isIgnored) {
+					// Verifica se o comando específico está mutado
+					if (group.mutedCommands && Array.isArray(group.mutedCommands)) {
+						if (group.mutedCommands.includes(commandName)) {
 							this.logger.debug(
-								`Ignorando reação do comando '${commandName}' (${reaction.reaction}), mutada no grupo '${group.name}'`
+								`Ignorando reação do comando '${commandName}' (${reaction.reaction}), comando silenciado no grupo '${group.name}'`
 							);
 							return false;
 						}
-					} else if (group.paused) {
+					}
+
+					if (group.paused) {
 						// Se o grupo estiver pausado, ignora a reação
 						this.logger.info(`Ignorando reação em grupo pausado: ${formattedMessage.group}`);
 						return false;

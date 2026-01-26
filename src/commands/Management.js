@@ -1721,9 +1721,10 @@ class Management {
 				infoMessage += `\n*Categorias Silenciadas:* ${group.mutedCategories.join(", ")}\n`;
 			}
 
-			if (group.mutedStrings && group.mutedStrings.length > 0) {
-				infoMessage += `*Comandos Ignorados:* ${group.mutedStrings.join(", ")}\n`;
+			if (group.mutedCommands && group.mutedCommands.length > 0) {
+				infoMessage += `*Comandos Silenciados:* ${group.mutedCommands.join(", ")}\n`;
 			}
+
 			if (group.ignoredNumbers && group.ignoredNumbers.length > 0) {
 				infoMessage += `\n*Números Ignorados:* ${group.ignoredNumbers.join(", ")}\n`;
 			}
@@ -3876,7 +3877,7 @@ class Management {
 	}
 
 	/**
-	 * Mutes messages starting with a specific string
+	 * Mutes a fixed command
 	 * @param {WhatsAppBot} bot - Bot instance
 	 * @param {Object} message - Message data
 	 * @param {Array} args - Command arguments
@@ -3893,20 +3894,20 @@ class Management {
 			}
 
 			if (args.length === 0) {
-				// Show currently muted strings
+				// Show currently muted commands
 				if (
-					!group.mutedStrings ||
-					!Array.isArray(group.mutedStrings) ||
-					group.mutedStrings.length === 0
+					!group.mutedCommands ||
+					!Array.isArray(group.mutedCommands) ||
+					group.mutedCommands.length === 0
 				) {
 					return new ReturnMessage({
 						chatId: group.id,
-						content: "Nenhuma string está sendo ignorada neste grupo."
+						content: "Nenhum comando está silenciado neste grupo."
 					});
 				} else {
-					let mutedList = "*Strings ignoradas:*\n";
-					group.mutedStrings.forEach((str) => {
-						mutedList += `- "${str}"\n`;
+					let mutedList = "*Comandos silenciados:*\n";
+					group.mutedCommands.sort().forEach((cmd) => {
+						mutedList += `- ${cmd}\n`;
 					});
 
 					return new ReturnMessage({
@@ -3916,43 +3917,84 @@ class Management {
 				}
 			}
 
-			// Get the string to mute (full argument string)
-			const muteString = args.join(" ");
+			// Normalize command name (remove prefix if present)
+			let cmdName = args[0].trim();
+			if (group.prefix && cmdName.startsWith(group.prefix)) {
+				cmdName = cmdName.slice(group.prefix.length);
+			} else if (cmdName.startsWith("!")) {
+				// Also handle standard '!' prefix just in case
+				cmdName = cmdName.slice(1);
+			}
 
-			if (muteString.length < 1) {
-				return new ReturnMessage({
-					chatId: group.id,
-					content: `O *mute* precisa de pelo menos *1* caracteres (informado: '${muteString})'`
-				});
-			} else {
-				// Initialize mutedStringsgs array if it doesn't exist
-				if (!group.mutedStrings) {
-					group.mutedStrings = [];
-				}
+			// Check if command exists in fixed commands
+			const fixedCommandsHandler = bot.eventHandler.commandHandler.fixedCommands;
+			let targetCommand = fixedCommandsHandler.getCommand(cmdName);
 
-				// Check if string is already in the list
-				const index = group.mutedStrings.indexOf(muteString);
-
-				if (index !== -1) {
-					// Remove string from muted list
-					group.mutedStrings.splice(index, 1);
-					await this.database.saveGroup(group);
-
-					return new ReturnMessage({
-						chatId: group.id,
-						content: `Mensagens começando com "${muteString}" não serão mais ignoradas (reactions incluídas).`
-					});
-				} else {
-					// Add string to muted list
-					group.mutedStrings.push(muteString);
-					await this.database.saveGroup(group);
-
-					return new ReturnMessage({
-						chatId: group.id,
-						content: `Mensagens começando com "${muteString}" serão ignoradas (reactions incluídas).`
-					});
+			// If not found by name, try to find by reaction emoji
+			if (!targetCommand && bot.eventHandler.reactionsHandler) {
+				const reactionMap = bot.eventHandler.reactionsHandler.reactionCommands;
+				// reactionMap is { "🎣": "pescar", ... }
+				if (reactionMap && reactionMap[cmdName]) {
+					const mappedName = reactionMap[cmdName];
+					targetCommand = fixedCommandsHandler.getCommand(mappedName);
 				}
 			}
+
+			if (!targetCommand) {
+				return new ReturnMessage({
+					chatId: group.id,
+					content: `❌ Comando '${cmdName}' não encontrado entre os comandos fixos do bot.\nPara ver todos os comandos, use !cmd.`
+				});
+			}
+
+			// Initialize mutedCommands array if it doesn't exist
+			if (!group.mutedCommands) {
+				group.mutedCommands = [];
+			}
+
+			// Find all commands that share the same method (aliases/siblings)
+			const relatedCommands = fixedCommandsHandler.getAllCommands().filter((cmd) => {
+				// Check for same method reference
+				if (targetCommand.method && cmd.method === targetCommand.method) {
+					return true;
+				}
+				// Fallback: check by name if method is null (shouldn't happen for valid commands)
+				return cmd.name === targetCommand.name;
+			});
+
+			const commandNames = relatedCommands.map((c) => c.name);
+			const isMuted = group.mutedCommands.includes(targetCommand.name);
+			const action = isMuted ? "reativado" : "silenciado";
+			const emoji = isMuted ? "✅" : "🔇";
+
+			let changedCount = 0;
+
+			if (isMuted) {
+				// Unmute all related commands
+				commandNames.forEach((name) => {
+					const index = group.mutedCommands.indexOf(name);
+					if (index !== -1) {
+						group.mutedCommands.splice(index, 1);
+						changedCount++;
+					}
+				});
+			} else {
+				// Mute all related commands
+				commandNames.forEach((name) => {
+					if (!group.mutedCommands.includes(name)) {
+						group.mutedCommands.push(name);
+						changedCount++;
+					}
+				});
+			}
+
+			await this.database.saveGroup(group);
+
+			const commandsList = commandNames.join(", ");
+			return new ReturnMessage({
+				chatId: group.id,
+				content: `${emoji} Comando(s) ${action}(s): ${commandsList}`
+			});
 		} catch (error) {
 			this.logger.error("Erro ao configurar mute:", error);
 

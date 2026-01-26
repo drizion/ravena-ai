@@ -308,20 +308,6 @@ class EventHandler extends EventEmitter {
 					}
 				}
 
-				// Verifica se é pra ignorar a mensagem por conteúdo
-				if (group && group.mutedStrings && Array.isArray(group.mutedStrings) && textContent) {
-					const isIgnored = group.mutedStrings.some((str) =>
-						textContent.toLowerCase().startsWith(str.toLowerCase())
-					);
-
-					if (isIgnored) {
-						this.logger.debug(
-							`Ignorando processamento de mensagem por causa do conteudo: ${textContent.substring(0, 20)}...`
-						);
-						return; // Skip processing this message
-					}
-				}
-
 				// Aplica filtros
 				if (await this.applyFilters(bot, message, group)) {
 					return; // Mensagem foi filtrada

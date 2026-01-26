@@ -49,7 +49,7 @@ function getCommandLists(bot, group = null) {
 	const prefix = group && group.prefix !== undefined ? group.prefix : bot.prefix;
 	const mutedCategories =
 		group && Array.isArray(group.mutedCategories) ? group.mutedCategories : [];
-	const mutedStrings = group && Array.isArray(group.mutedStrings) ? group.mutedStrings : [];
+	const mutedCommands = group && Array.isArray(group.mutedCommands) ? group.mutedCommands : [];
 
 	for (const cmd of fixedCommands) {
 		// Filter by category
@@ -57,9 +57,8 @@ function getCommandLists(bot, group = null) {
 			continue;
 		}
 
-		// Filter by muted strings (e.g. if "!sticker" is in mutedStrings, filter out the sticker command)
-		const fullCmdName = `${prefix}${cmd.name}`.toLowerCase();
-		if (mutedStrings.some((str) => fullCmdName.startsWith(str.toLowerCase()))) {
+		// Filter by muted commands
+		if (mutedCommands.includes(cmd.name)) {
 			continue;
 		}
 
@@ -74,11 +73,6 @@ function getCommandLists(bot, group = null) {
 		}
 	}
 	for (const cmd in managementCommands) {
-		const fullCmdName = `${prefix}g-${cmd}`.toLowerCase();
-		if (mutedStrings.some((str) => fullCmdName.startsWith(str.toLowerCase()))) {
-			continue;
-		}
-
 		const desc = managementCommands[cmd].description;
 		cmdGerenciaSimplesList += `- ${prefix}g-${cmd}: ${desc}\n`;
 	}

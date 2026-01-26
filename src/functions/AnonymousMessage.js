@@ -159,6 +159,25 @@ async function anonymousMessage(bot, message, args, group) {
 			});
 		}
 
+		// Verifica se o comando ou categoria está silenciado no grupo alvo
+		if (targetGroup.mutedCategories && Array.isArray(targetGroup.mutedCategories)) {
+			if (targetGroup.mutedCategories.includes("jogos")) {
+				return new ReturnMessage({
+					chatId: senderIds[0],
+					content: `❌ A categoria de jogos (que inclui mensagens anônimas) está desativada no grupo "${targetGroup.name}".`
+				});
+			}
+		}
+
+		if (targetGroup.mutedCommands && Array.isArray(targetGroup.mutedCommands)) {
+			if (targetGroup.mutedCommands.includes("anonimo")) {
+				return new ReturnMessage({
+					chatId: senderIds[0],
+					content: `❌ O comando de mensagens anônimas está desativado no grupo "${targetGroup.name}".`
+				});
+			}
+		}
+
 		// Verifica se o grupo existe e se o bot está no grupo
 		try {
 			const chat = await bot.client.getChatById(targetGroup.id);

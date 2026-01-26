@@ -53,7 +53,7 @@ class Group {
 		this.autoStt = data.autoStt ?? false;
 		this.ignoredNumbers = data.ignoredNumbers ?? [];
 		this.ignoredUsers = data.ignoredUsers ?? [];
-		this.mutedStrings = data.mutedStrings ?? [];
+		this.mutedCommands = data.mutedCommands ?? [];
 		this.mutedCategories = data.mutedCategories ?? [];
 		this.nicks = data.nicks ?? [];
 		this.customAIPrompt = data.customAIPrompt ?? [];
@@ -90,7 +90,7 @@ class Group {
 			autoStt: this.autoStt,
 			ignoredNumbers: this.ignoredNumbers,
 			ignoredUsers: this.ignoredUsers,
-			mutedStrings: this.mutedStrings,
+			mutedCommands: this.mutedCommands,
 			// FIX: Adicionado mutedCategories que estava faltando
 			mutedCategories: this.mutedCategories,
 			nicks: this.nicks,
@@ -167,7 +167,7 @@ class Group {
 		if (typeof data.autoStt === "boolean") this.autoStt = data.autoStt;
 		if (data.ignoredNumbers) this.ignoredNumbers = data.ignoredNumbers;
 		if (data.ignoredUsers) this.ignoredUsers = data.ignoredUsers;
-		if (data.mutedStrings) this.mutedStrings = data.mutedStrings;
+		if (data.mutedCommands) this.mutedCommands = data.mutedCommands;
 		if (data.mutedCategories) this.mutedCategories = data.mutedCategories; // Added support for updating mutedCategories
 		if (data.nicks) this.nicks = data.nicks;
 		if (data.customAIPrompt) this.customAIPrompt = data.customAIPrompt;

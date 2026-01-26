@@ -844,6 +844,14 @@ class CommandHandler {
 				}
 			}
 
+			// Verifica se o comando específico está mutado
+			if (group && group.mutedCommands && Array.isArray(group.mutedCommands)) {
+				if (command && group.mutedCommands.includes(command.name)) {
+					this.logger.debug(`Ignorando comando '${command.name}' pois está silenciado no grupo.`);
+					return;
+				}
+			}
+
 			// Verifica se o comando requer mensagem citada
 			if (command.needsQuotedMsg) {
 				const quotedMsg = await message.origin.getQuotedMessage().catch(() => null);
