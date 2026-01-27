@@ -509,17 +509,30 @@ class StreamSystem {
 		}
 	}
 
-	substituirEmojis(str) {
-		const emojiMap = {
+	substituirEmojis(str, mode) {
+		const mapToGreen = {
 			"🔴": "🟢",
-			"🟢": "🔴",
 			"❤️": "💚",
-			"💚": "❤️",
 			"🌹": "🍏",
-			"🍏": "🌹",
 			"🟥": "🟩",
-			"🟩": "🟥"
+			"🟢": "🟢",
+			"💚": "💚",
+			"🍏": "🍏",
+			"🟩": "🟩"
 		};
+
+		const mapToRed = {
+			"🟢": "🔴",
+			"💚": "❤️",
+			"🍏": "🌹",
+			"🟩": "🟥",
+			"🔴": "🔴",
+			"❤️": "❤️",
+			"🌹": "🌹",
+			"🟥": "🟥"
+		};
+
+		const targetMap = mode === "online" ? mapToGreen : mapToRed;
 
 		let resultado = "";
 		const caracteres = Array.from(str);
@@ -530,8 +543,8 @@ class StreamSystem {
 				emoji = emoji + caracteres[i + 1];
 				i++;
 			}
-			if (emojiMap[emoji]) {
-				resultado += emojiMap[emoji];
+			if (targetMap[emoji]) {
+				resultado += targetMap[emoji];
 			} else {
 				resultado += emoji;
 			}
@@ -560,7 +573,7 @@ class StreamSystem {
 					} else {
 						newTitle = newTitle.replace(/\bON\b/g, "OFF");
 					}
-					newTitle = this.substituirEmojis(newTitle);
+					newTitle = this.substituirEmojis(newTitle, eventType);
 				}
 
 				try {
