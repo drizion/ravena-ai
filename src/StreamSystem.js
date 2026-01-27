@@ -380,7 +380,7 @@ class StreamSystem {
 					for (const mediaItem of config.media) {
 						const returnMessage = await this.createEventNotification(
 							bot,
-							group.id,
+							group,
 							mediaItem,
 							eventData,
 							channelConfig,
@@ -395,7 +395,7 @@ class StreamSystem {
 					if (channelConfig.useAI && eventType === "online") {
 						const aiMessage = await this.createAINotification(
 							bot,
-							group.id,
+							group,
 							eventData,
 							channelConfig
 						);
@@ -604,7 +604,7 @@ class StreamSystem {
 	/**
 	 * Cria notificação de evento
 	 */
-	async createEventNotification(bot, groupId, mediaItem, eventData, channelConfig, mentions = []) {
+	async createEventNotification(bot, group, mediaItem, eventData, channelConfig, mentions = []) {
 		try {
 			// Lógica de substituição de variáveis
 			const replaceVars = (text) => {
@@ -634,7 +634,7 @@ class StreamSystem {
 				) {
 					const media = await bot.createMediaFromURL(eventData.thumbnail);
 					return new ReturnMessage({
-						chatId: groupId,
+						chatId: group.id,
 						content: media,
 						options: {
 							caption: content,
@@ -643,7 +643,7 @@ class StreamSystem {
 					});
 				} else {
 					return new ReturnMessage({
-						chatId: groupId,
+						chatId: group.id,
 						content,
 						options: {
 							mentions: mentions.length > 0 ? mentions : undefined
@@ -660,7 +660,7 @@ class StreamSystem {
 					const caption = replaceVars(mediaItem.caption ?? "");
 
 					return new ReturnMessage({
-						chatId: groupId,
+						chatId: group.id,
 						content: media,
 						options: {
 							caption: caption ?? undefined,
@@ -675,7 +675,7 @@ class StreamSystem {
 			}
 			return null;
 		} catch (error) {
-			this.logger.error(`Erro ao criar notificação de evento para ${groupId}:`, error);
+			this.logger.error(`Erro ao criar notificação de evento para ${group.id}:`, error);
 			return null;
 		}
 	}
@@ -683,26 +683,32 @@ class StreamSystem {
 	/**
 	 * Cria notificação IA
 	 */
-	async createAINotification(bot, groupId, eventData, channelConfig) {
+	async createAINotification(bot, group, eventData, channelConfig) {
 		try {
+			const customPersonalidade =
+				group?.customAIPrompt && group?.customAIPrompt?.length > 0
+				? `\n\n((Sua personalidade: '${group.customAIPrompt}'))\n\n`
+				: "";
+
 			let prompt = "";
+			const streamLink = (eventData.platform === "twitch") ? `https://twitch.tv/${eventData.channelName}` : `https://kick.com/${eventData.channelName}`;
 			if (eventData.platform === "twitch" || eventData.platform === "kick") {
-				prompt = `O canal ${eventData.channelName} ficou online e está jogando ${eventData.game ?? "um jogo"} com o título "${eventData.title ?? ""}". Gere uma mensagem animada para convidar a galera do grupo a participar da stream.`;
+				prompt = `O canal ${eventData.channelName} ficou online e está jogando ${eventData.game ?? "um jogo"} com o título "${eventData.title ?? ""}". Gere uma mensagem animada para convidar a galera do grupo a participar da stream. Você deve incluir o link da stream: ${streamLink}${customPersonalidade}`;
 			} else if (eventData.platform === "youtube") {
-				prompt = `O canal ${eventData.channelName} lançou vídeo novo: "${eventData.title ?? ""}". Gere convite animado.`;
+				prompt = `O canal ${eventData.channelName} lançou vídeo novo: "${eventData.title ?? ""}". Gere convite animado. Você deve incluir o link do canal: https://youtube.com/${eventData.channelName}${customPersonalidade}`;
 			}
 
 			const aiResponse = await this.llmService.getCompletion({ prompt });
 			if (aiResponse) {
 				return new ReturnMessage({
-					chatId: groupId,
+					chatId: group.id,
 					content: aiResponse,
 					delay: 500
 				});
 			}
 			return null;
 		} catch (error) {
-			this.logger.error(`Erro ao criar notificação IA para ${groupId}:`, error);
+			this.logger.error(`Erro ao criar notificação IA para ${group.id}:`, error);
 			return null;
 		}
 	}
