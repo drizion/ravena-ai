@@ -289,10 +289,64 @@ ${listGroups}`;
 			response += `- Duração Áudio Total: ${formatNum(Math.round(stats.speech.stt.total_duration_sec))}s\n`;
 			response += `- Tempo Médio Proc: ${formatNum(Math.round(stats.speech.stt.avg_processing_time_ms))}ms\n`;
 
-			return new ReturnMessage({
-				chatId,
-				content: response
-			});
+			// Calculate duration
+			const getMinTs = async (dbName, table) => {
+				try {
+					const rows = await this.database.dbAll(
+						dbName,
+						`SELECT MIN(timestamp) as ts FROM ${table}`
+					);
+					return rows[0]?.ts ? parseInt(rows[0].ts) : null;
+				} catch (e) {
+					return null;
+				}
+			};
+
+			const minTimestamps = await Promise.all([
+				getMinTs("llm_stats", "usage_stats"),
+				getMinTs("media_stats", "comfy_stats"),
+				getMinTs("media_stats", "speech_generation_stats"),
+				getMinTs("media_stats", "speech_transcription_stats")
+			]);
+
+			const validTs = minTimestamps.filter((ts) => ts !== null && ts > 0);
+			let durationText = "unknown period";
+			if (validTs.length > 0) {
+				const startTs = Math.min(...validTs);
+				const now = Date.now();
+				const days = Math.max(1, Math.ceil((now - startTs) / (1000 * 60 * 60 * 24)));
+				durationText = `${days} days`;
+			}
+
+			const prompt = `Please analyze the following AI usage statistics collected over the last ${durationText}:
+
+**LLM Usage:**
+- Total Input Tokens: ${stats.llm.total_input_tokens}
+- Total Output Tokens: ${stats.llm.total_output_tokens}
+- Total Requests: ${stats.llm.total_requests}
+
+**Image Generation:**
+- Total Images Generated: ${stats.comfyui.total_images}
+
+**Audio Processing:**
+- TTS (Text-to-Speech) Total Duration: ${Math.round(stats.speech.tts.total_duration_sec)} seconds
+- STT (Speech-to-Text) Total Duration: ${Math.round(stats.speech.stt.total_duration_sec)} seconds
+
+**Task:**
+Provide a cost approximation for this usage if it were billed using the 'gemini-2.5-flash-lite' model pricing for LLM.
+For Image and Audio components, please estimate costs based on standard commercial API rates (e.g., typical market rates for image generation and speech processing).
+Break down the cost by category and provide a total estimated cost.`;
+
+			return [
+				new ReturnMessage({
+					chatId,
+					content: response
+				}),
+				new ReturnMessage({
+					chatId,
+					content: prompt
+				})
+			];
 		} catch (error) {
 			this.logger.error("Erro no comando iaStats:", error);
 
