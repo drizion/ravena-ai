@@ -366,6 +366,7 @@ class StreamSystem {
 					const returnMessages = [];
 
 					// Processa alteração de título (se habilitada)
+					this.logger.debug(`[processStreamEvent] ${group.name} -> changeTitleOnEvent '${channelConfig.changeTitleOnEvent}'`);
 					if (channelConfig.changeTitleOnEvent) {
 						await this.changeGroupTitleForStream(bot, group, channelConfig, eventData, eventType);
 					}
@@ -577,6 +578,7 @@ class StreamSystem {
 				}
 
 				try {
+					this.logger.debug(`[changeGroupTitleForStream] Result ${group.name} -> '${newTitle}'`);
 					await chat.setSubject(newTitle);
 				} catch (titleError) {
 					this.logger.error(`Erro ao alterar título do grupo ${group.id}:`, titleError);
