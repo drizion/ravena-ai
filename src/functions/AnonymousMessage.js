@@ -108,7 +108,7 @@ async function anonymousMessage(bot, message, args, group) {
 		if (args.length < 2) {
 			return new ReturnMessage({
 				chatId: senderIds[0],
-				content: `⚠️ Formato incorreto. Use: !anonimo ${group?.name ?? "nomegrupo"} mensagem\n\nExemplo: !anonimo ${group?.name ?? "nomegrupo"} Olá, esta é uma mensagem anônima!\n\nOpcionalmente, você pode colocar a palavra 'original' no início da sua frase para que o bot não anonimize a mensagem.\nExemplo: !anonimo ${group?.name ?? "nomegrupo"} original Minha mensagem anônima na íntegra`
+				content: `⚠️ Formato incorreto. Use: !anonimo ${group?.name ?? "nomegrupo"} mensagem\n\nExemplo: !anonimo ${group?.name ?? "nomegrupo"} Olá, esta é uma mensagem anônima!\n\nO 'nomegrupo' é o que aparece na segunda linha do comando *!cmd*, se não souber, envie !cmd dentro do grupo. O administrador pode trocar este nome usando o comando !g-setNome novonome.`
 			});
 		}
 

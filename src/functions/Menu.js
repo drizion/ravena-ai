@@ -352,7 +352,7 @@ async function sendCommandList(bot, message, args, group) {
 		if (!group) {
 			menuText += `> _PV da *${bot.id}*_\n`;
 		} else {
-			menuText += `> _Grupo *${group.name}*_\n`;
+			menuText += `> _Grupo ${group.name} _\n`;
 		}
 		menuText += header + "\n";
 
