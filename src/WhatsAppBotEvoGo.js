@@ -2217,18 +2217,22 @@ class WhatsAppBotEvoGo {
 		}
 	}
 
-	// NÃO TEM NA EVOGO
-	// Fazer?
 	async inviteInfo(inviteCode) {
 		try {
 			this.logger.debug(`[inviteInfo][${this.instanceName}] '${inviteCode}'`);
-			//const inviteInfo = await this.apiClient.get(`/group/inviteInfo`, { inviteCode });
-			const inviteInfo = { code: inviteCode };
-			this.logger.info(`[inviteInfo] '${inviteCode}': ${JSON.stringify(inviteInfo)}`);
 
-			return inviteInfo;
+			let inviteLink = inviteCode;
+			if (!inviteCode.includes("chat.whatsapp.com")) {
+				inviteLink = `https://chat.whatsapp.com/${inviteCode}`;
+			}
+
+			const response = await this.apiClient.post(`/group/invite-info`, { code: inviteLink });
+
+			// The API returns { data: { ... }, message: "success" }
+			// We return the inner data which contains the group info
+			return response?.data;
 		} catch (e) {
-			this.logger.warn(`[inviteInfo] Erro pegando invite info para '${inviteCode}'`);
+			this.logger.warn(`[inviteInfo] Erro pegando invite info para '${inviteCode}'`, e);
 			throw e;
 		}
 	}
@@ -2462,7 +2466,9 @@ class WhatsAppBotEvoGo {
 	}
 
 	async deleteMessageByKey(key) {
-		this.logger.debug(`[deleteMessageByKey] `, { key });
+		this.logger.debug(
+			`[deleteMessageByKey] ${key.participant} in ${key.remoteJid}, id ${key.id}  `
+		);
 		return await this.apiClient.post("/message/delete", {
 			chat: key.remoteJid,
 			messageId: key.id,

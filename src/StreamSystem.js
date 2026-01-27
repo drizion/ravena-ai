@@ -366,7 +366,9 @@ class StreamSystem {
 					const returnMessages = [];
 
 					// Processa alteração de título (se habilitada)
-					this.logger.debug(`[processStreamEvent] ${group.name} -> changeTitleOnEvent '${channelConfig.changeTitleOnEvent}'`);
+					this.logger.debug(
+						`[processStreamEvent] ${group.name} -> changeTitleOnEvent '${channelConfig.changeTitleOnEvent}'`
+					);
 					if (channelConfig.changeTitleOnEvent) {
 						await this.changeGroupTitleForStream(bot, group, channelConfig, eventData, eventType);
 					}

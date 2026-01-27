@@ -25,10 +25,17 @@ class InviteSystem {
 		this.inviteCooldown = 60; // Padrão 60 minutos (para o cooldown de convite por usuário)
 		this.userCooldowns = new Map(); // Mapa de autor -> timestamp do último convite de usuário
 		this.groupInviteCooldowns = new Map(); // Mapa de inviteCode -> timestamp do último convite do grupo
+		this.blockedUserNotifyCache = new Map(); // Mapa de author -> timestamp da última notificação de bloqueio
+		this.groupCooldownNotifyCache = new Map(); // Mapa de inviteCode -> timestamp da última notificação de cooldown
 	}
 
 	rndString() {
 		return (Math.random() + 1).toString(36).substring(7);
+	}
+
+	isCommunity(data) {
+		// Community has IsParent: true (não sei se só isso resolve...)
+		return data?.IsParent === true;
 	}
 
 	/**
@@ -48,16 +55,36 @@ class InviteSystem {
 			const inviteMatch = text.match(/chat.whatsapp.com\/([a-zA-Z0-9]{10,50})/i);
 			if (!inviteMatch) return false;
 
+			const inviteLink = inviteMatch[0];
+			const inviteCode = inviteMatch[1];
+			const currentTime = Date.now();
+
 			const isBlocked = await this.database.isUserInviteBlocked(message.author.split("@")[0]);
 			if (isBlocked) {
 				this.logger.info(`Ignorando convite de usuário bloqueado: ${message.author}`);
-				message.origin.react("🫷");
+				message.origin.react("🛑");
+
+				const lastNotify = this.blockedUserNotifyCache.get(message.author) || 0;
+				// Notifica max 1x por semana (7 dias * 24h * 60m * 60s * 1000ms)
+				if (currentTime - lastNotify > 7 * 24 * 60 * 60 * 1000) {
+					await this.bot.sendMessage(
+						message.author,
+						"🛑 A ravenabot não está mais recebendo convites de seu número"
+					);
+					if (this.bot.grupoInvites) {
+						await this.bot.sendMessage(
+							this.bot.grupoInvites,
+							`🛑 Usuário bloqueado tentou enviar convite: ${message.author}\nLink: ${inviteLink}`
+						);
+					}
+					this.blockedUserNotifyCache.set(message.author, currentTime);
+				}
+
 				return true;
 			}
 
 			// Verifica o cooldown do usuário
 			const lastUserInviteTime = this.userCooldowns.get(message.author);
-			const currentTime = Date.now();
 			const userCooldownDurationMs = this.inviteCooldown * 60 * 1000; // Cooldown do usuário em milissegundos
 
 			if (lastUserInviteTime && currentTime - lastUserInviteTime < userCooldownDurationMs) {
@@ -72,16 +99,24 @@ class InviteSystem {
 				}
 			}
 
-			const inviteLink = inviteMatch[0];
-			const inviteCode = inviteMatch[1];
-
 			// Verifica o cooldown do grupo (inviteCode)
 			const lastGroupInviteTime = this.groupInviteCooldowns.get(inviteCode);
 			const groupCooldownDurationMs = this.inviteCooldown * 60 * 1000; // Cooldown do grupo em milissegundos
 
 			if (lastGroupInviteTime && currentTime - lastGroupInviteTime < groupCooldownDurationMs) {
 				this.logger.info(`Convite para o grupo ${inviteCode} está em cooldown. Ignorando.`);
-				return false;
+				message.origin.react("⏱️");
+
+				const lastGroupNotify = this.groupCooldownNotifyCache.get(inviteCode) || 0;
+				// Notifica max 1x por hora
+				if (currentTime - lastGroupNotify > 60 * 60 * 1000) {
+					await this.bot.sendMessage(
+						message.author,
+						"⏱️ Você já enviou um convite recentemente, este link foi ignorado"
+					);
+					this.groupCooldownNotifyCache.set(inviteCode, currentTime);
+				}
+				return true; // Retorna true para parar o processamento aqui
 			}
 
 			this.logger.info(`Recebido convite de grupo de ${message.author}: ${inviteLink}`, {
@@ -123,7 +158,8 @@ class InviteSystem {
 				inviteLink,
 				inviteCode,
 				timeout: timeoutId,
-				verificationCode
+				verificationCode,
+				preConviteContent: preConvite // Guarda o conteúdo para verificar preguiça depois
 			});
 
 			// Define o timestamp do último convite para o usuário (inicia o cooldown de usuário)
@@ -154,9 +190,8 @@ class InviteSystem {
 			const text = message.type === "text" ? message.content : message.caption;
 			if (!text) return false;
 
-			const { inviteCode, inviteLink, timeout, verificationCode } = this.pendingRequests.get(
-				message.author
-			);
+			const requestData = this.pendingRequests.get(message.author);
+			const { inviteCode, inviteLink, timeout, verificationCode, preConviteContent } = requestData;
 
 			// Limpa o timeout
 			clearTimeout(timeout);
@@ -169,7 +204,8 @@ class InviteSystem {
 				inviteLink,
 				text,
 				message,
-				verificationCode
+				verificationCode,
+				preConviteContent
 			);
 
 			return true;
@@ -187,12 +223,62 @@ class InviteSystem {
 	 * @param {string} reason - Motivo do convite
 	 * @param {Object} message - Objeto da mensagem original
 	 * @param {string} [verificationCode] - Código de verificação enviado ao usuário
+	 * @param {string} [preConviteContent] - Conteúdo da mensagem pré-convite para verificação de preguiça
 	 */
-	async handleInviteRequest(authorId, inviteCode, inviteLink, reason, message, verificationCode) {
+	async handleInviteRequest(
+		authorId,
+		inviteCode,
+		inviteLink,
+		reason,
+		message,
+		verificationCode,
+		preConviteContent
+	) {
 		try {
 			this.logger.info(
 				`Processando solicitação de convite de ${authorId} para o código ${inviteCode}`
 			);
+
+			if (!reason || reason === "Nenhum motivo fornecido") {
+				await this.bot.sendMessage(
+					authorId,
+					"Seu convite não foi processado, pois não recebi sua mensagem."
+				);
+				return;
+			}
+
+			// Verifica preguiça (copiou parte do preConvite)
+			if (preConviteContent) {
+				// Remove linhas comuns e compara
+				const cleanReason = reason.trim().toLowerCase();
+				// Pega trechos significantes do preConvite
+				const phrases = [
+					"recebi seu convite",
+					"me envie uma mensagem pra me convencer",
+					"se você copiar e colar algo aqui",
+					"só vou encaminhar seu pedido depois",
+					"infraestrutura do servidor e celulares é limitada"
+				];
+
+				if (phrases.some((p) => cleanReason.includes(p))) {
+					await this.bot.sendMessage(
+						authorId,
+						"Você precisa informar um motivo, já vi que está com preguiça. _Convite Ignorado_"
+					);
+					if (this.bot.grupoInvites) {
+						await this.bot.sendMessage(
+							this.bot.grupoInvites,
+							`⚠️ Usuário ${authorId} tentou copiar o texto do bot como motivo. Convite ignorado.`
+						);
+					}
+					// Penalidade
+					const punishDuration = 10 * this.inviteCooldown * 60 * 1000;
+					const normalDuration = this.inviteCooldown * 60 * 1000;
+					const futureTime = Date.now() + punishDuration - normalDuration;
+					this.userCooldowns.set(authorId, futureTime);
+					return;
+				}
+			}
 
 			// Verifica se o usuário enviou o código de verificação como motivo
 			if (
@@ -232,6 +318,73 @@ class InviteSystem {
 				return;
 			}
 
+			let inviteInfoData = null;
+			const otherBotsInGroup = [];
+			let ownerMatch = false;
+
+			try {
+				const infoResponse = await this.bot.client.getInviteInfo(inviteCode);
+				console.log(JSON.stringify(infoResponse, null, 2)); // Print raw data to terminal
+
+				if (infoResponse) {
+					inviteInfoData = infoResponse; // Assuming getInviteInfo returns data object directly as implemented in WhatsAppBotEvoGo
+
+					// 1. Check Community
+					if (this.isCommunity(inviteInfoData)) {
+						await this.bot.sendMessage(
+							authorId,
+							"Isto parece ser link de uma comunidade, se não for, ignore esta imagem. Se for, o bot não consegue entrar. Você precisa enviar o link do GRUPO dentro da comunidade que deseja que ele entre, um por vez"
+						);
+					}
+
+					// 2. Check Owner PN
+					if (inviteInfoData.OwnerPN) {
+						// Normalize PNs
+						const ownerNum = inviteInfoData.OwnerPN.split("@")[0];
+						const authorNum = authorId.split("@")[0];
+						if (ownerNum === authorNum) {
+							ownerMatch = true;
+						}
+					}
+
+					// 3. Check Participants for other bots
+					if (
+						inviteInfoData.Participants &&
+						Array.isArray(inviteInfoData.Participants) &&
+						this.bot.otherBots
+					) {
+						for (const p of inviteInfoData.Participants) {
+							const pNum = p.PhoneNumber ? p.PhoneNumber.split("@")[0] : p.JID.split("@")[0];
+							// this.bot.otherBots should be array of numbers (strings)
+							if (this.bot.otherBots.includes(pNum)) {
+								otherBotsInGroup.push(pNum);
+							}
+						}
+					}
+				}
+			} catch (err) {
+				this.logger.error(`Erro ao buscar invite info para ${inviteCode}:`, err);
+
+				// Check for specific error (Example 3)
+				if (
+					err.message?.includes("not-authorized") ||
+					err.message?.includes("401") ||
+					err.response?.data?.error?.includes("not-authorized")
+				) {
+					await this.bot.sendMessage(
+						authorId,
+						"Este bot já foi removido do grupo e não consegue entrar mais, se tiver dúvidas, chame no !grupao"
+					);
+					return; // Stop processing
+				}
+				// Continue processing if other error (maybe API down), but warn
+			}
+
+			if (otherBotsInGroup.length > 0) {
+				const botsStr = otherBotsInGroup.map((b) => `+${b}`).join(", ");
+				await this.bot.sendMessage(authorId, `⚠️ Bot ${botsStr} já está neste grupo!`);
+			}
+
 			// Obtém informações do usuário
 			const userName =
 				message.name ?? message.pushName ?? message.pushname ?? message.authorName ?? "Pessoa";
@@ -266,16 +419,8 @@ class InviteSystem {
 			// Envia notificações para o grupoInvites se configurado
 			if (this.bot.grupoInvites) {
 				try {
-					const inviteInfo = await this.bot.client.getInviteInfo(inviteCode);
-					this.logger.debug(`[inviteInfo] `, { inviteInfo });
-				} catch (ivInfoError) {
-					this.logger.error("Erro buscando inviteInfo", ivInfoError);
-				}
-
-				try {
 					// Verifica se o autor está na lista de doadores
 					let isDonator = false;
-					let infoMessage = "";
 					let donateValue = 0;
 
 					try {
@@ -310,22 +455,31 @@ class InviteSystem {
 						this.logger.error("Erro ao verificar se o autor é doador:", donationError);
 					}
 
-					// Constrói a mensagem de informações, adicionando emojis de dinheiro se for doador
+					// Monta a mensagem final com as infos novas
+					let infoMessageHeader = `📩 *Nova Solicitação de Convite de Grupo*\n\n`;
 					if (isDonator) {
-						infoMessage =
-							`💸💸 R$${donateValue} 💸💸\n` +
-							`📩 *Nova Solicitação de Convite de Grupo*\n\n` +
-							`🔗 *Link*: chat.whatsapp.com/${inviteCode}\n` +
-							`👤 *De:* ${userName} (${authorId.split("@")[0]}) 💰\n\n` +
-							`💬 *Motivo:*\n${reason}\n` +
-							`💸💸${this.rndString()}💸💸`;
-					} else {
-						infoMessage =
-							`📩 *Nova Solicitação de Convite de Grupo*\n\n` +
-							`🔗 *Link*: chat.whatsapp.com/${inviteCode}\n` +
-							`👤 *De:* ${userName} (${authorId.split("@")[0]})\n\n` +
-							`💬 *Motivo:*\n${reason}\n\n${this.rndString()}`;
+						infoMessageHeader = `💸💸 R$${donateValue} 💸💸\n` + infoMessageHeader;
 					}
+
+					let botWarning = "";
+					if (otherBotsInGroup.length > 0) {
+						const botsStr = otherBotsInGroup.map((b) => `+${b}`).join(", ");
+						botWarning = `\n⚠️ *Bot ${botsStr} Já está neste grupo!*`;
+					}
+
+					const ownerMark = ownerMatch ? " ✅" : "";
+
+					const infoMessage =
+						infoMessageHeader +
+						`🔗 *Link*: chat.whatsapp.com/${inviteCode}\n` +
+						`👤 *De:* ${userName} (${authorId.split("@")[0]})${ownerMark}${isDonator ? " 💰" : ""}\n` +
+						(inviteInfoData?.Name ? `🏷️ *Nome*: ${inviteInfoData.Name}\n` : "") +
+						(inviteInfoData?.ParticipantCount
+							? `👥 *Membros*: ${inviteInfoData.ParticipantCount}\n`
+							: "") +
+						`\n💬 *Motivo:*\n${reason}\n` +
+						botWarning +
+						(isDonator ? `\n💸💸${this.rndString()}💸💸` : `\n${this.rndString()}`);
 
 					await this.bot.sendMessage(this.bot.grupoInvites, infoMessage);
 
