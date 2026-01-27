@@ -2290,11 +2290,26 @@ class WhatsAppBotEvoGo {
 							// TODO evogo
 							false,
 						setPicture: async (picture) => {
-							this.logger.debug(`[chat] setPicture, não implementado`, { picture });
-							return await this.apiClient.post(`/group/photo`, {
-								groupJid: chatId,
-								image: picture.url
-							});
+							this.logger.debug(`[chat] setPicture`, { type: "url", url: picture.url });
+
+							try {
+								// Try with URL first
+								return await this.apiClient.post(`/group/photo`, {
+									groupJid: chatId,
+									image: picture.url
+								});
+							} catch (error) {
+								// Fallback to base64 if URL fails
+								if (picture.data && picture.mimetype) {
+									this.logger.warn(`[chat] setPicture via URL failed, retrying with base64...`);
+									const imageData = `data:${picture.mimetype};base64,${picture.data}`;
+									return await this.apiClient.post(`/group/photo`, {
+										groupJid: chatId,
+										image: imageData
+									});
+								}
+								throw error;
+							}
 						}
 					};
 				}

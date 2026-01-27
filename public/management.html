@@ -530,6 +530,37 @@
 
                 <div class="divider"></div>
 
+                <div class="checkbox-grid-modal" style="margin-top: 10px; display: none;">
+                    <!-- Desabilitado pq ainda não tá 100% na evogo -->
+                    <div class="checkbox-group" style="grid-column: 1 / -1;">
+                        <input type="checkbox" id="stream-change-photo">
+                        <label id="lbl-stream-change-photo" for="stream-change-photo">Mudar Foto do Grupo</label>
+                    </div>
+                </div>
+
+                <div id="stream-photos-group" class="hidden" style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 4px;">
+                    <div class="form-group">
+                        <label>Foto Online</label>
+                        <div class="input-group">
+                            <input type="text" id="stream-photo-on-display" class="form-control" disabled placeholder="Nenhuma foto definida">
+                            <button type="button" id="btn-view-photo-on" class="btn btn-info" title="Ver Foto"><i class="fas fa-eye"></i></button>
+                            <button type="button" id="btn-upload-photo-on" class="btn btn-secondary" title="Upload Foto Online"><i class="fas fa-upload"></i></button>
+                            <button type="button" id="btn-remove-photo-on" class="btn btn-danger" title="Remover Foto"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Foto Offline</label>
+                        <div class="input-group">
+                            <input type="text" id="stream-photo-off-display" class="form-control" disabled placeholder="Nenhuma foto definida">
+                            <button type="button" id="btn-view-photo-off" class="btn btn-info" title="Ver Foto"><i class="fas fa-eye"></i></button>
+                            <button type="button" id="btn-upload-photo-off" class="btn btn-secondary" title="Upload Foto Offline"><i class="fas fa-upload"></i></button>
+                            <button type="button" id="btn-remove-photo-off" class="btn btn-danger" title="Remover Foto"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
                 <!-- Online Media -->
                 <div class="sub-accordion active">
                     <div class="sub-accordion-header">

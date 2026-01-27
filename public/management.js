@@ -177,6 +177,18 @@ document.addEventListener('DOMContentLoaded', () => {
         btnDeleteStream: document.getElementById('btn-delete-stream'),
         streamHint: document.getElementById('stream-hint'),
 
+        // Stream Photos
+        streamChangePhoto: document.getElementById('stream-change-photo'),
+        streamPhotosGroup: document.getElementById('stream-photos-group'),
+        streamPhotoOnDisplay: document.getElementById('stream-photo-on-display'),
+        streamPhotoOffDisplay: document.getElementById('stream-photo-off-display'),
+        btnViewPhotoOn: document.getElementById('btn-view-photo-on'),
+        btnViewPhotoOff: document.getElementById('btn-view-photo-off'),
+        btnUploadPhotoOn: document.getElementById('btn-upload-photo-on'),
+        btnUploadPhotoOff: document.getElementById('btn-upload-photo-off'),
+        btnRemovePhotoOn: document.getElementById('btn-remove-photo-on'),
+        btnRemovePhotoOff: document.getElementById('btn-remove-photo-off'),
+
         // Upload Form
         mediaFileInput: document.getElementById('media-file-input'),
         mediaCaption: document.getElementById('media-caption'),
@@ -780,8 +792,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 channel: '',
                 mentionAllMembers: false,
                 changeTitleOnEvent: false,
+                changePhotoOnEvent: false,
                 onlineTitle: '',
                 offlineTitle: '',
+                groupPhotoOnline: null,
+                groupPhotoOffline: null,
                 useAI: false,
                 onConfig: { media: [{ type: 'text', content: DEFAULT_MSG[platform] }] },
                 offConfig: { media: [] }
@@ -792,11 +807,30 @@ document.addEventListener('DOMContentLoaded', () => {
         els.streamChannel.value = d.channel;
         els.streamMention.checked = d.mentionAllMembers;
         els.streamChangeTitle.checked = d.changeTitleOnEvent;
+        els.streamChangePhoto.checked = d.changePhotoOnEvent || false;
         els.streamAI.checked = d.useAI;
         els.streamTitleOn.value = d.onlineTitle || '';
         els.streamTitleOff.value = d.offlineTitle || '';
         
+        const getPhotoDisplay = (val) => {
+            if (!val) return 'Nenhuma Imagem definida';
+            if (typeof val === 'string') return val;
+            if (typeof val === 'object' && val.data) return '[Imagem Base64]';
+            return 'Imagem configurada';
+        };
+
+        els.streamPhotoOnDisplay.value = getPhotoDisplay(d.groupPhotoOnline);
+        els.streamPhotoOffDisplay.value = getPhotoDisplay(d.groupPhotoOffline);
+        
+        els.btnRemovePhotoOn.classList.toggle('hidden', !d.groupPhotoOnline);
+        els.btnRemovePhotoOff.classList.toggle('hidden', !d.groupPhotoOffline);
+
+        els.btnViewPhotoOn.classList.toggle('hidden', !d.groupPhotoOnline || typeof d.groupPhotoOnline !== 'string');
+        els.btnViewPhotoOff.classList.toggle('hidden', !d.groupPhotoOffline || typeof d.groupPhotoOffline !== 'string');
+        
         toggleStreamTitles(d.changeTitleOnEvent);
+        toggleStreamPhotos(d.changePhotoOnEvent || false);
+        
         renderStreamMediaList('stream-on-media-list', d.onConfig?.media || []);
         renderStreamMediaList('stream-off-media-list', d.offConfig?.media || []);
 
@@ -805,6 +839,83 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function toggleStreamTitles(show) {
         els.streamTitlesGroup.classList.toggle('hidden', !show);
+    }
+
+    function toggleStreamPhotos(show) {
+        els.streamPhotosGroup.classList.toggle('hidden', !show);
+    }
+    
+    if(els.streamChangeTitle) {
+        els.streamChangeTitle.addEventListener('change', (e) => toggleStreamTitles(e.target.checked));
+    }
+    
+    if(els.streamChangePhoto) {
+        els.streamChangePhoto.addEventListener('change', (e) => toggleStreamPhotos(e.target.checked));
+    }
+
+    // Photo View Handlers
+    if(els.btnViewPhotoOn) {
+        els.btnViewPhotoOn.onclick = () => {
+            if (currentStream.data.groupPhotoOnline && typeof currentStream.data.groupPhotoOnline === 'string') {
+                window.open(`/media-direct/${currentStream.data.groupPhotoOnline}?token=${token}`, '_blank');
+            }
+        };
+    }
+
+    if(els.btnViewPhotoOff) {
+        els.btnViewPhotoOff.onclick = () => {
+            if (currentStream.data.groupPhotoOffline && typeof currentStream.data.groupPhotoOffline === 'string') {
+                window.open(`/media-direct/${currentStream.data.groupPhotoOffline}?token=${token}`, '_blank');
+            }
+        };
+    }
+
+    // Photo Upload Handlers
+    if(els.btnUploadPhotoOn) {
+        els.btnUploadPhotoOn.onclick = () => {
+             // Reusing openMediaUpload logic but manually setting context/type
+            els.uploadType.value = 'image';
+            els.uploadContext.value = 'stream-photo-on';
+            els.mediaFileInput.value = '';
+            els.mediaCaption.value = '';
+            
+            els.captionGroup.classList.add('hidden'); // No caption for group photo
+            els.asStickerGroup.classList.add('hidden'); // No sticker conversion
+            
+            els.uploadModal.classList.remove('hidden');
+        };
+    }
+
+    if(els.btnUploadPhotoOff) {
+        els.btnUploadPhotoOff.onclick = () => {
+            els.uploadType.value = 'image';
+            els.uploadContext.value = 'stream-photo-off';
+            els.mediaFileInput.value = '';
+            els.mediaCaption.value = '';
+            
+            els.captionGroup.classList.add('hidden'); 
+            els.asStickerGroup.classList.add('hidden');
+            
+            els.uploadModal.classList.remove('hidden');
+        };
+    }
+
+    if(els.btnRemovePhotoOn) {
+        els.btnRemovePhotoOn.onclick = () => {
+            currentStream.data.groupPhotoOnline = null;
+            els.streamPhotoOnDisplay.value = 'Nenhuma Imagem definida';
+            els.btnRemovePhotoOn.classList.add('hidden');
+            els.btnViewPhotoOn.classList.add('hidden');
+        };
+    }
+
+    if(els.btnRemovePhotoOff) {
+        els.btnRemovePhotoOff.onclick = () => {
+            currentStream.data.groupPhotoOffline = null;
+            els.streamPhotoOffDisplay.value = 'Nenhuma Imagem definida';
+            els.btnRemovePhotoOff.classList.add('hidden');
+            els.btnViewPhotoOff.classList.add('hidden');
+        };
     }
 
     function renderStreamMediaList(containerId, mediaArray) {
@@ -930,9 +1041,12 @@ document.addEventListener('DOMContentLoaded', () => {
         d.channel = channel;
         d.mentionAllMembers = els.streamMention.checked;
         d.changeTitleOnEvent = els.streamChangeTitle.checked;
+        d.changePhotoOnEvent = els.streamChangePhoto.checked;
         d.useAI = els.streamAI.checked;
         d.onlineTitle = els.streamTitleOn.value;
         d.offlineTitle = els.streamTitleOff.value;
+        d.groupPhotoOnline = currentStream.data.groupPhotoOnline;
+        d.groupPhotoOffline = currentStream.data.groupPhotoOffline;
 
         if (!groupData[platform]) groupData[platform] = [];
         
@@ -1236,6 +1350,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         if(existingIdx !== -1) currentStream.data.offConfig.media.splice(existingIdx, 1);
                         currentStream.data.offConfig.media.push({ type: finalType, content: data.fileName, caption });
                         renderStreamMediaList('stream-off-media-list', currentStream.data.offConfig.media);
+                    } else if (context === 'stream-photo-on') {
+                        currentStream.data.groupPhotoOnline = data.fileName;
+                        els.streamPhotoOnDisplay.value = data.fileName;
+                        els.btnRemovePhotoOn.classList.remove('hidden');
+                        els.btnViewPhotoOn.classList.remove('hidden');
+                    } else if (context === 'stream-photo-off') {
+                        currentStream.data.groupPhotoOffline = data.fileName;
+                        els.streamPhotoOffDisplay.value = data.fileName;
+                        els.btnRemovePhotoOff.classList.remove('hidden');
+                        els.btnViewPhotoOff.classList.remove('hidden');
                     }
                     els.uploadModal.classList.add('hidden');
                 } else {

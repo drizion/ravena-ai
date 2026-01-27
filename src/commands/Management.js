@@ -4804,10 +4804,14 @@ class Management {
 			try {
 				const media = await quotedMsg.downloadMedia();
 				if (media.mimetype.startsWith("image/")) {
-					mediaData = {
-						data: media.data,
-						mimetype: media.mimetype
-					};
+					// Salva arquivo no disco em vez de base64 no banco
+					const ext = media.mimetype.split("/")[1].split(";")[0] || "jpg";
+					const fileName = `group-photo-${Date.now()}-${Math.floor(Math.random() * 1000)}.${ext}`;
+					const mediaDir = path.join(this.dataPath, "media");
+					await fs.mkdir(mediaDir, { recursive: true });
+
+					await fs.writeFile(path.join(mediaDir, fileName), Buffer.from(media.data, "base64"));
+					mediaData = fileName;
 				}
 			} catch (error) {
 				this.logger.error("Erro ao baixar mídia da mensagem citada:", error);
@@ -4816,10 +4820,16 @@ class Management {
 
 		// 2. Se não encontrou na mensagem citada, verifica a mensagem atual
 		if (!mediaData && message.type === "image" && message.content && message.content.data) {
-			mediaData = {
-				data: message.content.data,
-				mimetype: message.content.mimetype
-			};
+			const ext = message.content.mimetype.split("/")[1].split(";")[0] || "jpg";
+			const fileName = `group-photo-${Date.now()}-${Math.floor(Math.random() * 1000)}.${ext}`;
+			const mediaDir = path.join(this.dataPath, "media");
+			await fs.mkdir(mediaDir, { recursive: true });
+
+			await fs.writeFile(
+				path.join(mediaDir, fileName),
+				Buffer.from(message.content.data, "base64")
+			);
+			mediaData = fileName;
 		}
 
 		// Se não há argumentos e não há mídia, remove a configuração de foto

@@ -393,12 +393,7 @@ class StreamSystem {
 
 					// Gera mensagem de IA
 					if (channelConfig.useAI && eventType === "online") {
-						const aiMessage = await this.createAINotification(
-							bot,
-							group,
-							eventData,
-							channelConfig
-						);
+						const aiMessage = await this.createAINotification(bot, group, eventData, channelConfig);
 						if (aiMessage) {
 							returnMessages.push(aiMessage);
 						}
@@ -588,7 +583,13 @@ class StreamSystem {
 
 	async changeGroupPhoto(bot, chat, photoData) {
 		try {
-			if (photoData && photoData.data && photoData.mimetype) {
+			if (typeof photoData === "string") {
+				// É um nome de arquivo (URL da pasta data)
+				const mediaPath = path.join(this.mediaPath, photoData);
+				const media = await bot.createMedia(mediaPath);
+				await chat.setPicture(media);
+			} else if (photoData && photoData.data && photoData.mimetype) {
+				// Legacy object, não deveria existir mais, mas aqui amamos fallbacks
 				const media = await bot.createMediaFromBase64(
 					photoData.data,
 					photoData.mimetype,
@@ -687,11 +688,14 @@ class StreamSystem {
 		try {
 			const customPersonalidade =
 				group?.customAIPrompt && group?.customAIPrompt?.length > 0
-				? `\n\n((Sua personalidade: '${group.customAIPrompt}'))\n\n`
-				: "";
+					? `\n\n((Sua personalidade: '${group.customAIPrompt}'))\n\n`
+					: "";
 
 			let prompt = "";
-			const streamLink = (eventData.platform === "twitch") ? `https://twitch.tv/${eventData.channelName}` : `https://kick.com/${eventData.channelName}`;
+			const streamLink =
+				eventData.platform === "twitch"
+					? `https://twitch.tv/${eventData.channelName}`
+					: `https://kick.com/${eventData.channelName}`;
 			if (eventData.platform === "twitch" || eventData.platform === "kick") {
 				prompt = `O canal ${eventData.channelName} ficou online e está jogando ${eventData.game ?? "um jogo"} com o título "${eventData.title ?? ""}". Gere uma mensagem animada para convidar a galera do grupo a participar da stream. Você deve incluir o link da stream: ${streamLink}${customPersonalidade}`;
 			} else if (eventData.platform === "youtube") {
