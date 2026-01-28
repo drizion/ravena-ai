@@ -681,7 +681,7 @@ async function getStreamInformation(bot, chatId, platform, channelName) {
 			}
 
 			const content =
-				`🔴 *LIVE: ${status.displayName || channelName}* (${platform})\n\n` +
+				`🟢 *LIVE: ${status.displayName || channelName}* (${platform})\n\n` +
 				`📝 *Título:* ${status.title || "Sem título"}\n` +
 				`🎮 *Jogo:* ${status.game || status.category || "Não informado"}\n` +
 				`👁️ *Viewers:* ${status.viewerCount || "Não informado"}\n` +

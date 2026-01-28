@@ -571,10 +571,25 @@ class StreamSystem {
 					newTitle = channelConfig.offlineTitle;
 				} else {
 					newTitle = chat.name;
+
+					const matchCase = (text, pattern) => {
+						if (pattern === pattern.toUpperCase()) return text.toUpperCase();
+						if (pattern === pattern.toLowerCase()) return text.toLowerCase();
+						if (pattern[0] === pattern[0].toUpperCase())
+							return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+						return text;
+					};
+
 					if (eventType === "online") {
-						newTitle = newTitle.replace(/\bOFF\b/g, "ON");
+						newTitle = newTitle.replace(/\b(offline|off)\b/gi, (match) => {
+							const replacement = match.toLowerCase() === "offline" ? "online" : "on";
+							return matchCase(replacement, match);
+						});
 					} else {
-						newTitle = newTitle.replace(/\bON\b/g, "OFF");
+						newTitle = newTitle.replace(/\b(online|on)\b/gi, (match) => {
+							const replacement = match.toLowerCase() === "online" ? "offline" : "off";
+							return matchCase(replacement, match);
+						});
 					}
 					newTitle = this.substituirEmojis(newTitle, eventType);
 				}
