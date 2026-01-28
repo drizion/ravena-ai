@@ -48,7 +48,10 @@ async function main() {
 		// Carrega whitelist (Doadores + SuperAdmins)
 		const database = Database.getInstance();
 		const donations = await database.getDonations();
-		const superAdmins = (process.env.SUPER_ADMINS || "").split(",").map((s) => s.trim()).filter(Boolean);
+		const superAdmins = (process.env.SUPER_ADMINS || "")
+			.split(",")
+			.map((s) => s.trim())
+			.filter(Boolean);
 
 		const whitelistSet = new Set();
 

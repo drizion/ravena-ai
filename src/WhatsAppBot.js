@@ -211,6 +211,12 @@ class WhatsAppBot {
 			this.logger.info(`Adicionado bot '${bot.id}' (${botId}) à lista de ignorados`);
 		}
 
+		// Atualiza o banco de dados com os novos contatos bloqueados (bots)
+		this.database.addBlockedContacts(
+			"wwebjs",
+			this.blockedContacts.map((c) => c.id._serialized)
+		);
+
 		this.logger.info(
 			`Lista de ignorados atualizada: ${this.blockedContacts.length} contatos/bots`,
 			this.blockedContacts
@@ -327,6 +333,12 @@ class WhatsAppBot {
 				this.blockedContacts = await this.client.getBlockedContacts();
 				this.logger.info(`Carregados ${this.blockedContacts.length} contatos bloqueados`);
 
+				// Adiciona ao banco de dados compartilhado
+				this.database.addBlockedContacts(
+					"wwebjs",
+					this.blockedContacts.map((c) => c.id._serialized)
+				);
+
 				if (this.isConnected && this.otherBots.length > 0) {
 					this.prepareOtherBotsBlockList();
 				}
@@ -419,15 +431,9 @@ class WhatsAppBot {
 				}
 
 				// Verifica se o autor está na lista de bloqueados
-				if (this.blockedContacts && Array.isArray(this.blockedContacts)) {
-					const isBlocked = this.blockedContacts.some(
-						(contact) => contact.id._serialized === message.author
-					);
-
-					if (isBlocked) {
-						this.logger.debug(`Ignorando mensagem de contato bloqueado: ${message.author}`);
-						return; // Ignora processamento adicional
-					}
+				if (this.database.isBlocked("wwebjs", message.author)) {
+					this.logger.debug(`Ignorando mensagem de contato bloqueado: ${message.author}`);
+					return; // Ignora processamento adicional
 				}
 
 				// Formata mensagem para o manipulador de eventos
@@ -450,15 +456,9 @@ class WhatsAppBot {
 				// Processa apenas reações de outros usuários, não do próprio bot
 				if (reaction.senderId !== this.client.info.wid._serialized) {
 					// Verifica se o autor está na lista de bloqueados
-					if (this.blockedContacts && Array.isArray(this.blockedContacts)) {
-						const isBlocked = this.blockedContacts.some(
-							(contact) => contact.id._serialized === reaction.senderId
-						);
-
-						if (isBlocked) {
-							this.logger.debug(`Ignorando reaction de contato bloqueado: ${reaction.senderId}`);
-							return; // Ignora processamento adicional
-						}
+					if (this.database.isBlocked("wwebjs", reaction.senderId)) {
+						this.logger.debug(`Ignorando reaction de contato bloqueado: ${reaction.senderId}`);
+						return; // Ignora processamento adicional
 					}
 
 					await this.reactionHandler.processReaction(this, reaction);

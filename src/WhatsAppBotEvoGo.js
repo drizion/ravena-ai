@@ -1711,6 +1711,13 @@ class WhatsAppBotEvoGo {
 				//this.logger.info(`[${this.id}] Added other bot '${botId}' to internal ignore list.`);
 			}
 		}
+
+		// Update shared database
+		this.database.addBlockedContacts(
+			"evogo",
+			this.blockedContacts.map((c) => c.id._serialized)
+		);
+
 		// this.logger.info(
 		// 	`[${this.id}] Ignored contacts/bots list size: ${this.blockedContacts.length}`
 		// );

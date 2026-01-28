@@ -21,7 +21,7 @@ class Database {
 		// Bot instances for cleanup on exit
 		this.botInstances = [];
 
-		// Backup Configuration
+		// Scheduled Backup Configuration
 		this.maxBackups = parseInt(process.env.MAX_BACKUPS) || 120;
 		this.scheduledBackupHours = [0, 6, 12, 18];
 		this.backupRetentionDays = parseInt(process.env.BACKUP_RETENTION_DAYS) || 30;
@@ -29,6 +29,13 @@ class Database {
 		// Directories/Files to backup
 		this.backupTargets = [path.join(this.databasePath, "sqlites")];
 		this.backupIgnoreFiles = ["cache.db"];
+
+		// Shared Blocked Contacts (Global by type)
+		this.globalBlockedContacts = {
+			wwebjs: new Set(),
+			evo: new Set(),
+			evogo: new Set()
+		};
 
 		// Setup cleanup handlers
 		this.setupCleanupHandlers();
@@ -263,6 +270,28 @@ class Database {
 		} catch (error) {
 			this.logger.error(`Error deleting directory ${dirPath}:`, error);
 		}
+	}
+
+	// --- Global Blocked Contacts ---
+
+	addBlockedContacts(type, contacts) {
+		if (!this.globalBlockedContacts[type]) {
+			this.logger.warn(`Unknown bot type for blocked contacts: ${type}`);
+			return;
+		}
+		if (!Array.isArray(contacts)) return;
+
+		contacts.forEach((contact) => {
+			if (typeof contact === "string") {
+				this.globalBlockedContacts[type].add(contact);
+			}
+		});
+		// this.logger.info(`[Database] Updated ${type} blocked contacts. Total: ${this.globalBlockedContacts[type].size}`);
+	}
+
+	isBlocked(type, contactId) {
+		if (!this.globalBlockedContacts[type]) return false;
+		return this.globalBlockedContacts[type].has(contactId);
 	}
 
 	// --- Core SQLite Helpers ---
