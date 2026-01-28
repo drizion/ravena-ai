@@ -3,6 +3,7 @@ const Logger = require("../utils/Logger");
 const fs = require("fs");
 const path = require("path");
 const Database = require("../utils/Database");
+const Queue = require("./Queue");
 
 /**
  * Serviço para interagir com APIs de LLM
@@ -29,6 +30,9 @@ class LLMService {
 		// Initialize Database for stats
 		this.database = Database.getInstance();
 		this.DB_NAME = "llm_stats";
+
+		// Queue System
+		this.queue = new Queue({ concurrency: 1 });
 
 		this.database.getSQLiteDb(
 			this.DB_NAME,
@@ -221,7 +225,7 @@ class LLMService {
 	}
 
 	/**
-	 * Envia uma solicitação de completação para API Gemini
+	 * Envia uma solicitação de completion para API Gemini
 	 * @param {Object} options - Opções de solicitação
 	 * @param {string} options.prompt - O texto do prompt
 	 * @param {string} [options.model='gemini-2.5-flash-lite'] - O modelo a usar
@@ -346,7 +350,7 @@ class LLMService {
 	}
 
 	/**
-	 * Envia uma solicitação de completação para API Deepseek
+	 * Envia uma solicitação de completion para API Deepseek
 	 * @param {Object} options - Opções de solicitação
 	 * @param {string} options.prompt - O texto do prompt
 	 * @param {string} [options.model='deepseek-chat'] - O modelo a usar
@@ -404,7 +408,7 @@ class LLMService {
 	}
 
 	/**
-	 * Envia uma solicitação de completação para OpenAI (ou LM Studio local)
+	 * Envia uma solicitação de completion para OpenAI (ou LM Studio local)
 	 * @param {Object} options - Opções de solicitação
 	 * @param {string} options.prompt - O texto do prompt
 	 * @param {string} [options.model='gpt-3.5-turbo'] - O modelo a usar
@@ -481,7 +485,7 @@ class LLMService {
 	}
 
 	/**
-	 * Envia uma solicitação de completação para o LM Studio usando a API /api/v0.
+	 * Envia uma solicitação de completion para o LM Studio usando a API /api/v0.
 	 * Para entradas de imagem, é mais eficiente fornecer a imagem já em formato base64.
 	 * @param {Object} options - Opções de solicitação
 	 * @param {string} options.prompt - O texto do prompt
@@ -699,53 +703,86 @@ class LLMService {
 	}
 
 	/**
-	 * Obtém completação de texto de qualquer LLM configurado
+	 * Obtém completion de texto de qualquer LLM configurado
 	 * @param {Object} options - Opções de solicitação
 	 * @param {string} options.prompt - O texto do prompt
 	 * @param {string} [options.provider='openai'] - O provedor a usar ('openai', 'gemini', 'deepseek', 'lmstudio', ou 'local')
 	 * @param {string} [options.model] - O modelo a usar (específico do provedor)
 	 * @param {number} [options.maxTokens=1000] - Número máximo de tokens a gerar
 	 * @param {number} [options.temperature=0.7] - Temperatura de amostragem
+	 * @param {number} [options.priority=0] - Prioridade da requisição (0-5)
 	 * @returns {Promise<string>} - O texto gerado
 	 */
 	async getCompletion(options) {
-		try {
-			// Se um provedor específico for solicitado, use-o diretamente
-			if (options.provider) {
-				this.logger.debug("[LLMService] Obtendo completação com opções:", {
-					provider: options.provider,
-					promptLength: options.prompt.length,
-					temperature: options.temperature ?? 0.7
-				});
+		const priority = options.priority ?? 0;
 
-				let response = await this.getCompletionFromSpecificProvider(options);
-				response = response
-					.replace(/<think>.*?<\/think>/gs, "")
-					.trim()
-					.replace(/^"|"$/g, ""); // Remove tags de think e frase entre aspas
+		const task = async () => {
+			try {
+				// Se um provedor específico for solicitado, use-o diretamente
+				if (options.provider) {
+					this.logger.debug("[LLMService] Obtendo completion com opções:", {
+						provider: options.provider,
+						promptLength: options.prompt.length,
+						temperature: options.temperature ?? 0.7
+					});
 
-				return response;
+					let response = await this.getCompletionFromSpecificProvider(options);
+					response = response
+						.replace(/<think>.*?<\/think>/gs, "")
+						.trim()
+						.replace(/^"|"$/g, ""); // Remove tags de think e frase entre aspas
+
+					return response;
+				}
+				// Caso contrário, tente múltiplos provedores em sequência
+				else {
+					//this.logger.debug('[LLMService] Nenhum provedor específico solicitado, tentando múltiplos provedores em sequência');
+
+					let response = await this.getCompletionFromProviders(options, priority);
+					response = response
+						.replace(/<think>.*?<\/think>/gs, "")
+						.trim()
+						.replace(/^"|"$/g, ""); // Remove tags de think e frase entre aspas
+
+					return response;
+				}
+			} catch (error) {
+				this.logger.error("Erro ao obter completion:", error.message);
+				throw error; // Re-throw to be caught by the retry logic below or the queue
 			}
-			// Caso contrário, tente múltiplos provedores em sequência
-			else {
-				//this.logger.debug('[LLMService] Nenhum provedor específico solicitado, tentando múltiplos provedores em sequência');
+		};
 
-				let response = await this.getCompletionFromProviders(options);
-				response = response
-					.replace(/<think>.*?<\/think>/gs, "")
-					.trim()
-					.replace(/^"|"$/g, ""); // Remove tags de think e frase entre aspas
+		const maxRetries = priority >= 5 ? 2 : 0;
+		let attempts = 0;
 
-				return response;
+		// We wrap the queue add in a function to handle retries "outside" or "inside" the queue mechanism?
+		// To properly respect the queue priority on retry, we should probably just re-add it to the queue if it fails?
+		// But here, we are inside getCompletion, which returns a Promise.
+		// If we use recursion, we can re-add to queue.
+
+		const executeWithRetry = async () => {
+			try {
+				return await this.queue.add(task, { priority });
+			} catch (err) {
+				attempts++;
+				if (attempts <= maxRetries && priority >= 5) {
+					this.logger.warn(
+						`[LLMService] High priority request failed, retrying... (${attempts}/${maxRetries})`
+					);
+					// Wait a small delay before retrying
+					await new Promise((resolve) => setTimeout(resolve, 2000));
+					return executeWithRetry();
+				}
+				// If no more retries or not high priority, return default error message (soft fail)
+				return "Erro: Não foi possível gerar uma resposta. Por favor, tente novamente mais tarde.";
 			}
-		} catch (error) {
-			this.logger.error("Erro ao obter completação:", error.message);
-			return "Ocorreu um erro ao gerar uma resposta. Por favor, tente novamente mais tarde.";
-		}
+		};
+
+		return executeWithRetry();
 	}
 
 	/**
-	 * Obtém completação de um provedor específico
+	 * Obtém completion de um provedor específico
 	 * @param {Object} options - Opções de solicitação
 	 * @returns {Promise<string>} - O texto gerado
 	 * @private
@@ -857,9 +894,10 @@ class LLMService {
 	/**
 	 * Tenta múltiplos provedores em sequência até que um funcione
 	 * @param {Object} options - Opções de solicitação
+	 * @param {number} priority - Prioridade da requisição
 	 * @returns {Promise<string>} - O texto gerado pelo primeiro provedor disponível
 	 */
-	async getCompletionFromProviders(options) {
+	async getCompletionFromProviders(options, priority = 0) {
 		const now = Date.now();
 		if (
 			this.lastQueueChangeTimestamp > 0 &&
@@ -875,10 +913,14 @@ class LLMService {
 		const totalProviders = this.providerQueue.length;
 		if (totalProviders === 0) {
 			this.logger.error("Nenhum provedor definido.");
-			return "Erro: Nenhum provedor de IA configurado.";
+			throw new Error("Erro: Nenhum provedor de IA configurado.");
 		}
 
-		for (let i = 0; i < totalProviders; i++) {
+		// Priority <= 4: Try only the first available provider (no retry/fallback loop on this call).
+		// Priority 5: Try all providers (fallback loop).
+		const attempts = priority <= 4 ? 1 : totalProviders;
+
+		for (let i = 0; i < attempts; i++) {
 			const provider = this.providerQueue[0]; // Sempre tenta o provedor no início da fila
 			try {
 				this.logger.debug(`[LLMService] Tentando provedor: ${provider.name}`);
@@ -944,7 +986,9 @@ class LLMService {
 
 		// Se o loop terminar, todos os provedores foram tentados e falharam.
 		this.logger.error("Todos os provedores falharam");
-		return "Erro: Não foi possível gerar uma resposta de nenhum provedor disponível. Por favor, tente novamente mais tarde.";
+		throw new Error(
+			"Erro: Não foi possível gerar uma resposta de nenhum provedor disponível. Por favor, tente novamente mais tarde."
+		);
 	}
 }
 

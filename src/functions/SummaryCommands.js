@@ -93,7 +93,8 @@ async function analyzeVideo(message) {
 			images: frames,
 			response_format: mediaAnalysisSchema,
 			debugPrompt: false,
-			timeout: 60000
+			timeout: 60000,
+			priority: 0
 		};
 
 		const response = await llmService.getCompletion(completionOptions);
@@ -169,7 +170,7 @@ ${formattedMessages}
 Resumo:`;
 
 		// Obtém resumo do LLM
-		const summary = await llmService.getCompletion({ prompt });
+		const summary = await llmService.getCompletion({ prompt, priority: 4 });
 
 		if (!summary) {
 			return new ReturnMessage({
@@ -267,7 +268,7 @@ ${formattedMessages}`;
 		);
 
 		// Obtém interação do LLM
-		const interaction = await llmService.getCompletion({ prompt });
+		const interaction = await llmService.getCompletion({ prompt, priority: 5 });
 
 		if (!interaction) {
 			if (retornarErro) {
@@ -354,7 +355,8 @@ async function storeMessage(message, chatId) {
 					systemContext: `You are an expert bot in image processing and analysis`,
 					image: message.content.data,
 					response_format: mediaAnalysisSchema,
-					debugPrompt: false
+					debugPrompt: false,
+					priority: 1
 				};
 
 				//logger.info(`[storeMessage] Prompt: `, completionOptions);

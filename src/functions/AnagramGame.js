@@ -577,7 +577,8 @@ async function hintCommand(bot, message) {
 	try {
 		const respostaIA = await llmService.getCompletion({
 			prompt: `O usuário requisitou uma dica, responda ((apenas)) com: sinônimo ou frase que ajude.\n\nPalavra: ${game.word}`,
-			systemContext: "Você é um robo que está controlando um jogo de Anagrama"
+			systemContext: "Você é um robo que está controlando um jogo de Anagrama",
+			priority: 5
 		});
 		if (respostaIA && !respostaIA.toLowerCase().includes("erro")) {
 			dicaIA = `\nℹ️ *Dica:* _${respostaIA}_\n`;

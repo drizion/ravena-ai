@@ -365,7 +365,8 @@ async function analyzeResponses(game) {
 
 			const llmResponse = await llmService.getCompletion({
 				prompt: promptFormatado,
-				systemContext: ctxFormatado
+				systemContext: ctxFormatado,
+				priority: 5
 			});
 
 			// Analisa a resposta do LLM (espera um JSON)

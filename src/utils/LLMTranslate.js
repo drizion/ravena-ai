@@ -73,7 +73,8 @@ RULES:
 3. DO NOT change any formatting marks (like *bold*, _italics_, ~strikethrough~, or \`code\`).
 4. DO NOT add conversational filler (like "Here is the translation"). Output ONLY the translated string.
 5. If the text is only emojis/symbols, return it unchanged.
-6. DO NOT translate commands (strings starting with '!', '.', '/', or '#'). Return them exactly as is.`
+6. DO NOT translate commands (strings starting with '!', '.', '/', or '#'). Return them exactly as is.`,
+			priority: 4
 		};
 
 		const response = await llmService.getCompletion(completionOptions);

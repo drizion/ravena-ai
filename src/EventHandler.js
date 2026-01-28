@@ -843,7 +843,7 @@ Para fazer a configuração do grupo sem poluir aqui, envie \`!g-painel\`, ou me
 
 							// Obtém conclusão do LLM sem bloquear
 							this.llmService
-								.getCompletion({ prompt: llmPrompt })
+								.getCompletion({ prompt: llmPrompt, priority: 5 })
 								.then((groupWelcomeMessage) => {
 									// Envia a mensagem de boas-vindas gerada
 									if (groupWelcomeMessage) {

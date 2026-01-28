@@ -130,7 +130,8 @@ Return JSON: {"classification": "...", "command": "...", "args": "..."}
 			prompt,
 			response_format: classifyQuestionSchema,
 			temperature: 0.1,
-			systemContext: "You are an intent classifier for a WhatsApp bot."
+			systemContext: "You are an intent classifier for a WhatsApp bot.",
+			priority: 5
 		});
 
 		try {
@@ -390,7 +391,8 @@ async function aiCommand(bot, message, args, group) {
 	// Execute LLM Request
 	const completionOptions = {
 		prompt: question,
-		systemContext
+		systemContext,
+		priority: 5
 	};
 
 	try {
@@ -444,7 +446,8 @@ async function handleMediaRequest(
 ) {
 	const completionOptions = {
 		prompt: question,
-		systemContext: baseCtxContent
+		systemContext: baseCtxContent,
+		priority: 5
 	};
 	const customPersonalidade =
 		group?.customAIPrompt && group?.customAIPrompt?.length > 0

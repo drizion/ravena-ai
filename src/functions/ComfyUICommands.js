@@ -365,7 +365,9 @@ async function generateImage(bot, message, args, group, skipNotify = true) {
         - Provide a very short reason.`;
 
 		const safetyResponse = await llmService.getCompletion({
-			prompt: safetyQuestion
+			prompt: safetyQuestion,
+			systemContext: "You are a content safety filter.",
+			priority: 3
 		});
 
 		let safetyMsg = "";

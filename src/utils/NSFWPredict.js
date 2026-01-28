@@ -71,7 +71,8 @@ Return the result in JSON format.`;
 				response_format: nsfwSchema,
 				temperature: 0.2,
 				systemContext: `You are an expert bot in image processing and analysis`,
-				debugPrompt: false
+				debugPrompt: false,
+				priority: 4
 			};
 
 			let response = null;

@@ -734,7 +734,7 @@ class StreamSystem {
 				prompt = `O canal ${eventData.channelName} lançou vídeo novo: "${eventData.title ?? ""}". Gere convite animado. Você deve incluir o link do canal: https://youtube.com/${eventData.channelName}${customPersonalidade}`;
 			}
 
-			const aiResponse = await this.llmService.getCompletion({ prompt });
+			const aiResponse = await this.llmService.getCompletion({ prompt, priority: 3 });
 			if (aiResponse) {
 				return new ReturnMessage({
 					chatId: group.id,

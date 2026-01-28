@@ -95,7 +95,9 @@ async function generateImage(bot, message, args, group, skipNotify = false) {
     Your answer ((must)) include "SAFE" or "UNSAFE" followed by a brief reason. If it's related to child related content, include warning emojis in your reponse.`;
 
 		const safetyResponse = await llmService.getCompletion({
-			prompt: safetyQuestion
+			prompt: safetyQuestion,
+			systemContext: "You are a content safety filter.",
+			priority: 3
 		});
 
 		let safetyMsg = "";

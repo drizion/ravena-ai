@@ -211,7 +211,8 @@ async function anonymousMessage(bot, message, args, group) {
 		try {
 			if (anonimize) {
 				anonimizedMessage = await llmService.getCompletion({
-					prompt: `Reescreva esta frase em portugues adequado, removendo vícios de linguagens, gírias e idiomas. A mensagem deve ser anonimizada, não sendo possível identificar a pessoa que enviou a mesma. ((Retorne APENAS a frase solicitada. Se não for possível, retorne o texto original, ((nunca)) retorne mensagens de erro e otros detalhes)). Texto para processar:\n"${anonymousText}"`
+					prompt: `Reescreva esta frase em portugues adequado, removendo vícios de linguagens, gírias e idiomas. A mensagem deve ser anonimizada, não sendo possível identificar a pessoa que enviou a mesma. ((Retorne APENAS a frase solicitada. Se não for possível, retorne o texto original, ((nunca)) retorne mensagens de erro e otros detalhes)). Texto para processar:\n"${anonymousText}"`,
+					priority: 0
 				});
 				if (anonimizedMessage.includes("original não pode ser")) {
 					anonimizedMessage = anonymousText;
