@@ -45,6 +45,26 @@ async function main() {
 			logger.info(`Inicializando ${rBots.length} bots...`);
 		}
 
+		// Carrega whitelist (Doadores + SuperAdmins)
+		const database = Database.getInstance();
+		const donations = await database.getDonations();
+		const superAdmins = (process.env.SUPER_ADMINS || "").split(",").map((s) => s.trim()).filter(Boolean);
+
+		const whitelistSet = new Set();
+
+		// Add super admins
+		superAdmins.forEach((admin) => whitelistSet.add(admin.replace(/\D/g, "")));
+
+		// Add donors
+		donations.forEach((donor) => {
+			if (donor.numero) {
+				whitelistSet.add(donor.numero.replace(/\D/g, ""));
+			}
+		});
+
+		const whitelistArray = Array.from(whitelistSet);
+		logger.info(`Whitelist global carregada com ${whitelistArray.length} números.`);
+
 		let redisDbAtual = 0;
 		for (const rBot of rBots) {
 			if (!rBot.enabled) continue;
@@ -127,6 +147,7 @@ async function main() {
 					userAgent:
 						"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:138.0) Gecko/20100101 Firefox/138.0",
 					ignorePV: rBot.ignorePV ?? false,
+					whitelistPV: whitelistArray,
 					pvAI: rBot.pvAI ?? false,
 					ignoreInvites: rBot.ignoreInvites ?? false,
 					managementUser: rBot.managementUser ?? process.env.BOTAPI_USER,
@@ -182,6 +203,7 @@ async function main() {
 					userAgent:
 						"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:138.0) Gecko/20100101 Firefox/138.0",
 					ignorePV: rBot.ignorePV ?? false,
+					whitelistPV: whitelistArray,
 					pvAI: rBot.pvAI ?? false,
 					ignoreInvites: rBot.ignoreInvites ?? false,
 					managementUser: rBot.managementUser ?? process.env.BOTAPI_USER,
@@ -259,6 +281,7 @@ async function main() {
 					userAgent:
 						"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:138.0) Gecko/20100101 Firefox/138.0",
 					ignorePV: rBot.ignorePV ?? false,
+					whitelistPV: whitelistArray,
 					pvAI: rBot.pvAI ?? false,
 					ignoreInvites: rBot.ignoreInvites ?? false,
 					managementUser: rBot.managementUser ?? process.env.BOTAPI_USER,

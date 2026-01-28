@@ -1030,8 +1030,9 @@ class WhatsAppBotEvo {
 			this.logger.error(`Error during webhook setup for instance ${this.instanceName}:`, error);
 		}
 
-		// 3. Donates podem usar o PV do bot livre (whitelist)
-		this._loadDonationsToWhitelist();
+		this.logger.info(
+			`[${this.id}] [whitelist] ${this.whitelist.length} números na whitelist do PV.`
+		);
 
 		// 4. Check instance status and connect if necessary
 		this._checkInstanceStatusAndConnect();
@@ -2687,22 +2688,6 @@ class WhatsAppBotEvo {
 		);
 
 		this.prepareOtherBotsBlockList(); // From original bot
-	}
-
-	async _loadDonationsToWhitelist() {
-		try {
-			const donations = await this.database.getDonations();
-			for (const don of donations) {
-				if (don.numero && don.numero?.length > 5) {
-					this.whitelist.push(don.numero.replace(/\D/g, ""));
-				}
-			}
-			this.logger.info(
-				`[${this.id}] [whitelist] ${this.whitelist.length} números na whitelist do PV.`
-			);
-		} catch (error) {
-			this.logger.error(`[${this.id}] Error loading donations to whitelist:`, error);
-		}
 	}
 
 	async _sendStartupNotifications() {

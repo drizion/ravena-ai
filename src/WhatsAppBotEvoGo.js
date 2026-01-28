@@ -1364,7 +1364,9 @@ class WhatsAppBotEvoGo {
 			this.logger.error(`Error during webhook setup for instance ${this.instanceName}:`, error);
 		}
 
-		this._loadDonationsToWhitelist();
+		this.logger.info(
+			`[${this.id}] [whitelist] ${this.whitelist.length} números na whitelist do PV.`
+		);
 		this._checkInstanceStatusAndConnect();
 
 		return this;
@@ -2527,7 +2529,6 @@ class WhatsAppBotEvoGo {
 		return !!pattern.test(str);
 	}
 
-	_loadDonationsToWhitelist() {}
 	_sendStartupNotifications() {}
 	shouldDiscardMessage() {
 		return false;

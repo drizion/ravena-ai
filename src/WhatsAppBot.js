@@ -165,13 +165,6 @@ class WhatsAppBot {
 			userAgent: this.userAgent
 		});
 
-		// Coloca doadores na whitelist do PV
-		const donations = await this.database.getDonations();
-		for (const don of donations) {
-			if (don.numero && don.numero?.length > 5) {
-				this.whitelist.push(don.numero.replace(/\D/g, ""));
-			}
-		}
 		this.logger.info(
 			`[whitelist][${this.id}] ${this.whitelist.length} números na whitelist do PV.`
 		);
