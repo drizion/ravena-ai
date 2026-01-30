@@ -1984,7 +1984,8 @@ Break down the cost by category and provide a total estimated cost.`;
 					};
 
 					// Processa cada grupo
-					for (const groupId of commonGroups) {
+					for (const group of commonGroups) {
+						const groupId = group.JID || group;
 						try {
 							// Se já processamos este grupo, pula
 							if (processedGroups.has(groupId)) {
@@ -2363,7 +2364,8 @@ Break down the cost by category and provide a total estimated cost.`;
 				let responseMessage = `*Grupos em comum com ${contactName} (${phoneNumber}):*\n\n`;
 
 				// Adiciona cada grupo à resposta
-				for (const groupId of commonGroups) {
+				for (const group of commonGroups) {
+					const groupId = group.JID || group;
 					// Busca informações do banco de dados
 					const groupData = groups.find((g) => g.id === groupId);
 					const groupName = groupData ? groupData.name : "Nome desconhecido";
@@ -2478,7 +2480,8 @@ Break down the cost by category and provide a total estimated cost.`;
 				const allContacts = new Set();
 
 				// Processa cada grupo
-				for (const groupId of commonGroups) {
+				for (const group of commonGroups) {
+					const groupId = group.JID || group;
 					try {
 						// Obtém o chat do grupo
 						const chat = await bot.client.getChatById(groupId);

@@ -163,14 +163,14 @@ class WhatsAppBotEvoGo {
 			getContactById: (arg) => this.getContactDetails(arg),
 			getInviteInfo: (arg) => this.inviteInfo(arg),
 			getMessageById: async (messageId) => await this.recoverMsgFromCache(messageId),
-			setStatus: (arg) => {
-				this.updateProfileStatus(arg);
+			setStatus: async (arg) => {
+				await this.updateProfileStatus(arg);
 			},
 			leaveGroup: (arg) => {
 				this.leaveGroup(arg);
 			},
-			setProfilePicture: (arg) => {
-				this.updateProfilePicture(arg);
+			setProfilePicture: async (arg) => {
+				await this.updateProfilePicture(arg);
 			},
 			setPrivacySettings: (arg) => {
 				this.updatePrivacySettings(arg);
@@ -2413,13 +2413,24 @@ class WhatsAppBotEvoGo {
 		const now = Date.now();
 		const expirationMs = cacheDurationHours * 60 * 60 * 1000;
 
+		const jidCom = `${id.split("@")[0]}@s.whatsapp.net`;
+
 		const returnData = {
 			id: { _serialized: id },
 			number: id.split("@")[0],
 			lid: id,
 			name: prefetchedName ?? id.split("@")[0],
 			block: async () => await this.setCttBlockStatus(id, "block"),
-			unblock: async () => await this.setCttBlockStatus(id, "unblock")
+			unblock: async () => await this.setCttBlockStatus(id, "unblock"),
+			getCommonGroups: async () => {
+				try {
+					const response = await this.apiClient.post(`/chat/commonGroups`, { jid: jidCom });
+					return response.data || [];
+				} catch (e) {
+					this.logger.error(`[getCommonGroups] Error fetching common groups for ${jidCom}`, e);
+					return [];
+				}
+			}
 		};
 
 		let cacheName;
@@ -2556,6 +2567,29 @@ class WhatsAppBotEvoGo {
 				`[updateProfileStatus][${this.instanceName}] Erro definindo status '${status}'`,
 				{ erro: e, token: this.evolutionInstanceApiKey }
 			);
+		}
+	}
+
+	async updateProfilePicture(picture) {
+		this.logger.debug(`[updateProfilePicture][${this.instanceName}]`, {
+			type: "url",
+			url: picture.url
+		});
+		try {
+			// Try with URL first
+			return await this.apiClient.post(`/user/photo`, {
+				image: picture.url
+			});
+		} catch (error) {
+			// Fallback to base64 if URL fails
+			if (picture.data && picture.mimetype) {
+				this.logger.warn(`[updateProfilePicture] via URL failed, retrying with base64...`);
+				const imageData = `data:${picture.mimetype};base64,${picture.data}`;
+				return await this.apiClient.post(`/user/photo`, {
+					image: imageData
+				});
+			}
+			throw error;
 		}
 	}
 
