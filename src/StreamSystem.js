@@ -355,7 +355,6 @@ class StreamSystem {
 
 			// Obtém a configuração apropriada
 			const config = eventType === "online" ? channelConfig.onConfig : channelConfig.offConfig;
-			if (!config || !config.media || config.media.length === 0) return;
 
 			// Tenta enviar com cada bot candidato até conseguir
 			let sentSuccess = false;
@@ -380,17 +379,19 @@ class StreamSystem {
 					}
 
 					// Gera mensagens de mídia
-					for (const mediaItem of config.media) {
-						const returnMessage = await this.createEventNotification(
-							bot,
-							group,
-							mediaItem,
-							eventData,
-							channelConfig,
-							mentions
-						);
-						if (returnMessage) {
-							returnMessages.push(returnMessage);
+					if (config && config.media) {
+						for (const mediaItem of config.media) {
+							const returnMessage = await this.createEventNotification(
+								bot,
+								group,
+								mediaItem,
+								eventData,
+								channelConfig,
+								mentions
+							);
+							if (returnMessage) {
+								returnMessages.push(returnMessage);
+							}
 						}
 					}
 
