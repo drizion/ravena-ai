@@ -1192,20 +1192,39 @@ Break down the cost by category and provide a total estimated cost.`;
 				// Separa administradores e membros normais
 				const admins = [];
 				const members = [];
+				const adminsLid = [];
+				const membersLid = [];
+
+				// Prepara verificação do número do bot (últimos 8 dígitos)
+				const botPhoneClean = bot.phoneNumber ? bot.phoneNumber.replace(/\D/g, "") : "";
+				const botPhoneLast8 = botPhoneClean.length >= 8 ? botPhoneClean.slice(-8) : botPhoneClean;
 
 				for (const participant of participants) {
-					const contactId = participant.id._serialized;
+					const lid = participant.lid ?? participant.id._serialized;
+					const pn = participant.phoneNumber;
+
+					// Verifica se é o próprio bot
+					if (pn && botPhoneLast8) {
+						const pnClean = pn.split("@")[0].replace(/\D/g, "");
+						// Se for o bot, pula para não adicionar nas listas de bloqueio
+						if (pnClean.endsWith(botPhoneLast8)) {
+							this.logger.info(`[leaveGroup] Ignorando bot na lista de bloqueio: ${pn}`);
+							continue;
+						}
+					}
 
 					if (participant.isAdmin || participant.isSuperAdmin) {
-						admins.push(contactId);
+						if (pn) admins.push(pn.split("@")[0]);
+						adminsLid.push(lid);
 					} else {
-						members.push(contactId);
+						if (pn) members.push(pn.split("@")[0]);
+						membersLid.push(lid);
 					}
 				}
 
 				// Constrói os comandos de bloqueio
-				const blockAdminsCmd = `!sa-blockList ${admins.join(", ")}`;
-				const blockMembersCmd = `!sa-blockList ${members.join(", ")}`;
+				const blockAdminsCmd = `!sa-blockList ${admins.join(", ")}\n!sa-blockList ${adminsLid.join(", ")}`;
+				const blockMembersCmd = `!sa-blockList ${members.join(", ")}\n!sa-blockList ${membersLid.join(", ")}`;
 
 				// Envia mensagem de despedida para o grupo
 				//await bot.sendMessage(groupId, '👋 Saindo do grupo por comando administrativo. Até mais!');
@@ -1215,8 +1234,8 @@ Break down the cost by category and provide a total estimated cost.`;
 
 				// Prepara mensagem de retorno com comandos de bloqueio
 				let responseMessage = `✅ Bot saiu do grupo ${chat.name} (${groupId}) com sucesso.\n\n`;
-				responseMessage += `*Para bloquear administradores:*\n\`\`\`${blockAdminsCmd}\`\`\`\n\n`;
-				responseMessage += `*Para bloquear demais membros:*\n\`\`\`${blockMembersCmd}\`\`\``;
+				responseMessage += `*Para bloquear administradores:*\n${blockAdminsCmd}\n\n`;
+				responseMessage += `*Para bloquear demais membros:*\n${blockMembersCmd}`;
 
 				return new ReturnMessage({
 					chatId,
