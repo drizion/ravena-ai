@@ -32,6 +32,7 @@ class Group {
 		this.kick = data.kick ?? [];
 		this.youtube = data.youtube ?? [];
 		this.botNotInGroup = data.botNotInGroup ?? [];
+		this.webhooks = data.webhooks ?? [];
 
 		// Mensagens de boas-vindas e despedida
 		this.greetings = data.greetings ?? {};
@@ -83,6 +84,7 @@ class Group {
 			kick: this.kick,
 			youtube: this.youtube,
 			botNotInGroup: this.botNotInGroup,
+			webhooks: this.webhooks,
 			greetings: this.greetings,
 			farewells: this.farewells,
 			interact: this.interact,
@@ -137,6 +139,8 @@ class Group {
 
 		// Not in group
 		if (data.botNotInGroup) this.botNotInGroup = data.botNotInGroup;
+
+		if (data.webhooks) this.webhooks = data.webhooks;
 
 		// Atualiza boas-vindas
 		if (data.greetings) {

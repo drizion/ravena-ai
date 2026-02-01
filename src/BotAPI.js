@@ -12,6 +12,8 @@ const axios = require("axios");
 const WebManagement = require("./utils/WebManagement");
 const { CATEGORY_EMOJIS, COMMAND_ORDER } = require("./functions/MenuOrder");
 
+const WEBHOOK_RATE_LIMIT = 120000;
+
 /**
  * Servidor API para o bot WhatsApp
  */
@@ -29,6 +31,18 @@ class BotAPI {
 		this.logger = new Logger("bot-api");
 		this.database = Database.getInstance();
 		this.app = express();
+
+		// Inject botApi reference into bots
+		this.bots.forEach((bot) => {
+			bot.botApi = this;
+		});
+
+		// Webhook Server Init
+		this.webhookApp = express();
+		this.webhookLogger = new Logger("group-webhooks");
+		this.webhooksCache = new Map(); // groupId -> [webhooks]
+		this.webhookRateLimits = new Map(); // botId:groupId -> { lastSent, buffer, timeout }
+		this.webhookServer = null;
 
 		// Credenciais de autenticação para endpoints protegidos
 		this.apiUser = process.env.BOTAPI_USER ?? "admin";
@@ -2485,6 +2499,177 @@ class BotAPI {
 	}
 
 	/**
+	 * Reloads webhooks from database to memory
+	 */
+	async reloadWebhooks() {
+		try {
+			const groups = await this.database.getGroups();
+			this.webhooksCache.clear();
+			let count = 0;
+			for (const group of groups) {
+				if (group.webhooks && group.webhooks.length > 0) {
+					this.webhooksCache.set(group.id, group.webhooks);
+					count += group.webhooks.length;
+				}
+			}
+			this.webhookLogger.info(`Loaded ${count} webhooks for ${this.webhooksCache.size} groups.`);
+		} catch (error) {
+			this.webhookLogger.error("Error reloading webhooks:", error);
+		}
+	}
+
+	/**
+	 * Starts the webhook server
+	 */
+	startWebhookServer() {
+		const port = process.env.GROUP_WEBHOOKS;
+		if (!port) {
+			this.webhookLogger.warn("GROUP_WEBHOOKS port not set. Webhook server disabled.");
+			return;
+		}
+
+		this.webhookApp.use(bodyParser.json({ limit: "10mb" }));
+		this.webhookApp.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));
+
+		this.webhookApp.post("/:botId/:groupId", async (req, res) => {
+			const { botId, groupId } = req.params;
+			const body = req.body;
+			const headers = req.headers;
+
+			// Add @g.us if missing (assuming it's a group)
+			const fullGroupId = groupId.includes("@") ? groupId : `${groupId}@g.us`;
+
+			// Find bot
+			const bot = this.bots.find((b) => b.id === botId);
+			if (!bot) {
+				return res.status(404).send("Bot not found");
+			}
+
+			// Get webhooks for this group
+			const webhooks = this.webhooksCache.get(fullGroupId);
+			if (!webhooks || webhooks.length === 0) {
+				return res.status(404).send("No webhooks configured for this group");
+			}
+
+			// Match webhook
+			let matchedWebhook = null;
+			for (const webhook of webhooks) {
+				// Check if bot matches (optional in config, but good practice)
+				if (webhook.botId && webhook.botId !== botId) continue;
+
+				const headerName = webhook.header.name.toLowerCase();
+				const headerValue = webhook.header.value;
+				const receivedValue = headers[headerName];
+
+				if (!receivedValue) continue;
+
+				if (webhook.headerValue === "include") {
+					if (receivedValue.includes(headerValue)) {
+						matchedWebhook = webhook;
+						break;
+					}
+				} else {
+					if (receivedValue === headerValue) {
+						matchedWebhook = webhook;
+						break;
+					}
+				}
+			}
+
+			if (!matchedWebhook) {
+				this.webhookLogger.warn(
+					`Webhook received for ${botId}/${fullGroupId} but no header matched.`
+				);
+				return res.status(401).send("Unauthorized: Header mismatch");
+			}
+
+			// Generate Message
+			let message = matchedWebhook.template;
+
+			// Simple template replacement with dot notation support
+			message = message.replace(/{{([^}]+)}}/g, (match, key) => {
+				const keys = key.trim().split(".");
+				let value = body;
+				for (const k of keys) {
+					value = value ? value[k] : undefined;
+				}
+				return value !== undefined ? value : match;
+			});
+
+			this.webhookLogger.info(
+				`Webhook matched: ${matchedWebhook.name} for ${fullGroupId}. Msg: ${message}`
+			);
+
+			// Rate Limit & Sending
+			this.handleWebhookMessage(bot, fullGroupId, message);
+
+			res.send("ok");
+		});
+
+		try {
+			this.webhookServer = this.webhookApp.listen(port, () => {
+				this.webhookLogger.info(`Group Webhook Server listening on port ${port}`);
+			});
+		} catch (e) {
+			this.webhookLogger.error("Failed to start webhook server:", e);
+		}
+	}
+
+	handleWebhookMessage(bot, groupId, message) {
+		const key = `${bot.id}:${groupId}`;
+		let rateData = this.webhookRateLimits.get(key);
+
+		if (!rateData) {
+			rateData = { lastSent: 0, buffer: [], timeout: null };
+			this.webhookRateLimits.set(key, rateData);
+		}
+
+		const now = Date.now();
+		// If buffer is empty and cooldown passed, send immediately
+		if (rateData.buffer.length === 0 && now - rateData.lastSent > WEBHOOK_RATE_LIMIT) {
+			this.sendWebhookMessage(bot, groupId, message);
+			rateData.lastSent = Date.now();
+		} else {
+			// Buffer it
+			rateData.buffer.push(message);
+
+			// Schedule flush if not already scheduled
+			if (!rateData.timeout) {
+				// Calculate time until next allowed send
+				const timeToWait = Math.max(0, WEBHOOK_RATE_LIMIT - (now - rateData.lastSent));
+
+				rateData.timeout = setTimeout(() => {
+					this.flushWebhookBuffer(bot, groupId, key);
+				}, timeToWait);
+
+				this.webhookLogger.info(`Buffered webhook for ${groupId}. Flush in ${timeToWait}ms`);
+			}
+		}
+	}
+
+	async sendWebhookMessage(bot, groupId, message) {
+		try {
+			await bot.sendMessage(groupId, message);
+		} catch (e) {
+			this.webhookLogger.error(`Error sending webhook message to ${groupId}:`, e);
+		}
+	}
+
+	flushWebhookBuffer(bot, groupId, key) {
+		const rateData = this.webhookRateLimits.get(key);
+		if (!rateData) return;
+
+		if (rateData.buffer.length > 0) {
+			const combinedMessage = rateData.buffer.join("\n\n");
+			this.sendWebhookMessage(bot, groupId, combinedMessage);
+			rateData.lastSent = Date.now();
+			rateData.buffer = [];
+		}
+
+		rateData.timeout = null;
+	}
+
+	/**
 	 * Limpa recursos antes de fechar
 	 */
 	destroy() {
@@ -2502,7 +2687,10 @@ class BotAPI {
 	/**
 	 * Inicia o servidor API
 	 */
-	start() {
+	async start() {
+		await this.reloadWebhooks();
+		this.startWebhookServer();
+
 		return new Promise((resolve, reject) => {
 			try {
 				this.server = this.app.listen(this.port, () => {
@@ -2525,6 +2713,14 @@ class BotAPI {
 	 */
 	stop() {
 		return new Promise((resolve, reject) => {
+			if (this.webhookServer) {
+				try {
+					this.webhookServer.close(() => {
+						this.webhookLogger.info("Webhook Server stopped");
+					});
+				} catch (e) {}
+			}
+
 			if (!this.server) {
 				resolve();
 				return;

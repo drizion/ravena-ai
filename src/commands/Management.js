@@ -314,6 +314,14 @@ class Management {
 			painel: {
 				method: "generatePainelCommand",
 				description: "Gera um link para gerenciar o bot via web"
+			},
+			setWebhook: {
+				method: "setWebhook",
+				description: "Cria ou atualiza um webhook para este grupo"
+			},
+			delWebhook: {
+				method: "delWebhook",
+				description: "Apaga um webhook deste grupo"
 			}
 		};
 
@@ -5923,6 +5931,167 @@ class Management {
 		} catch (error) {
 			this.logger.error("Error saving web management token:", error);
 		}
+	}
+	async delWebhook(bot, message, args, group) {
+		if (!group) {
+			return new ReturnMessage({
+				chatId: message.author,
+				content: "Este comando só pode ser usado em grupos."
+			});
+		}
+
+		if (args.length === 0) {
+			return new ReturnMessage({
+				chatId: group.id,
+				content: "Por favor, forneça o nome do webhook para remover. Ex: !g-delWebhook meuhook"
+			});
+		}
+
+		const name = args[0].trim();
+
+		if (!group.webhooks) group.webhooks = [];
+
+		const index = group.webhooks.findIndex((w) => w.name === name);
+
+		if (index === -1) {
+			return new ReturnMessage({
+				chatId: group.id,
+				content: `Webhook '${name}' não encontrado.`
+			});
+		}
+
+		const removed = group.webhooks.splice(index, 1)[0];
+		await this.database.saveGroup(group);
+
+		// Reload webhooks in API memory
+		if (bot.botApi) {
+			bot.botApi.reloadWebhooks();
+		}
+
+		return new ReturnMessage({
+			chatId: group.id,
+			content: `Webhook '${name}' removido.\n\nBackup da configuração:\n\`\`\`${JSON.stringify(removed, null, 2)}\`\`\``
+		});
+	}
+
+	async setWebhook(bot, message, args, group) {
+		if (!group) {
+			return new ReturnMessage({
+				chatId: message.author,
+				content: "Este comando só pode ser usado em grupos."
+			});
+		}
+
+		const usage =
+			"Você pode configurar até *10* webhooks no grupo.\n" +
+			"Seu webhook deve apontar para:\n" +
+			`> ${process.env.GROUP_WEBHOOKS_DOMAIN || "https://webhooks.example.com"}/${bot.id}/${group.id.split("@")[0]}\n\n` +
+			"Você deve enviar uma mensagem com o JSON de configuração a seguir e responder/marcar a mesma com este comando.\n\n" +
+			"```{\n" +
+			'  "name": "seuWebhook1",\n' +
+			'  "header": {"name": "x-token-secreto", "value": "abc123!@#"},\n' +
+			'  "headerValue": "match|include",\n' +
+			'  "template": "Recebi um webhook, de {{cliente.nome}} com o valor de R${{valor}}",\n' +
+			'  "bot": "' +
+			bot.id +
+			'"\n' +
+			"}\n\n" +
+			"- name: Usado pra identificar o webhook (caso queira editar, envie com o mesmo nome)\n" +
+			"- header: Informe o nome e o valor do header secreto que seu webhook terá. Ambos precisam estar definidos.\n" +
+			"- headerValue: pode ser 'match' ou 'include'. match aceita apenas valores identicos e include apenas verifica se o valor está contido dentro do valor.\n" +
+			"- template: Uma string que representará a mensagem que o bot vai enviar no grupo quando receber o webhook.\n\n" +
+			"O bot envia no máximo 1 mensagem a cada 120 segundos, se ele receber mais de um webhook durante o período de 'cooldown', elas serão concatenadas.\n" +
+			"```";
+
+		const quotedMsg = await message.origin.getQuotedMessage().catch(() => null);
+		let jsonContent = "";
+
+		if (quotedMsg) {
+			jsonContent = quotedMsg.body ?? quotedMsg.content ?? "";
+		} else {
+			// Try to find JSON in args if user pasted it directly (less reliable due to formatting)
+			// Better to just show usage if no quoted message
+			return new ReturnMessage({
+				chatId: group.id,
+				content: usage
+			});
+		}
+
+		// Try to parse JSON
+		// Clean up potential markdown code blocks
+		jsonContent = jsonContent
+			.replace(/```json/g, "")
+			.replace(/```/g, "")
+			.trim();
+
+		let webhookConfig;
+		try {
+			webhookConfig = JSON.parse(jsonContent);
+		} catch (e) {
+			return new ReturnMessage({
+				chatId: group.id,
+				content: "Erro ao ler JSON. Verifique a formatação.\n" + e.message
+			});
+		}
+
+		// Validation
+		if (!webhookConfig.name || typeof webhookConfig.name !== "string") {
+			return new ReturnMessage({
+				chatId: group.id,
+				content: "Erro: 'name' é obrigatório e deve ser texto."
+			});
+		}
+		if (!webhookConfig.header || !webhookConfig.header.name || !webhookConfig.header.value) {
+			return new ReturnMessage({
+				chatId: group.id,
+				content: "Erro: 'header' deve conter 'name' e 'value'."
+			});
+		}
+		if (!webhookConfig.template || typeof webhookConfig.template !== "string") {
+			return new ReturnMessage({
+				chatId: group.id,
+				content: "Erro: 'template' é obrigatório e deve ser texto."
+			});
+		}
+
+		if (!group.webhooks) group.webhooks = [];
+
+		// Check limit (unless updating existing)
+		const existingIndex = group.webhooks.findIndex((w) => w.name === webhookConfig.name);
+		if (existingIndex === -1 && group.webhooks.length >= 10) {
+			return new ReturnMessage({
+				chatId: group.id,
+				content: "Limite de 10 webhooks por grupo atingido."
+			});
+		}
+
+		// Save
+		const newWebhook = {
+			name: webhookConfig.name,
+			header: webhookConfig.header,
+			headerValue: webhookConfig.headerValue === "include" ? "include" : "match",
+			template: webhookConfig.template,
+			botId: webhookConfig.bot || bot.id, // Optional validation against current bot?
+			createdAt: Date.now()
+		};
+
+		if (existingIndex !== -1) {
+			group.webhooks[existingIndex] = newWebhook;
+		} else {
+			group.webhooks.push(newWebhook);
+		}
+
+		await this.database.saveGroup(group);
+
+		// Reload webhooks in API memory
+		if (bot.botApi) {
+			bot.botApi.reloadWebhooks();
+		}
+
+		return new ReturnMessage({
+			chatId: group.id,
+			content: `Webhook '${newWebhook.name}' configurado com sucesso!`
+		});
 	}
 }
 
