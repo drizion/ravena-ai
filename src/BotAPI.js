@@ -572,6 +572,16 @@ class BotAPI {
 			try {
 				const StatsService = require("./services/StatsService");
 				const statsService = new StatsService();
+
+				if (req.query.queue !== undefined) {
+					const queueStatus = statsService.getQueueStatus();
+					return res.json({
+						status: "ok",
+						timestamp: Date.now(),
+						queue: queueStatus
+					});
+				}
+
 				const stats = await statsService.getStatsByRange();
 				res.json({
 					status: "ok",
