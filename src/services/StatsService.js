@@ -13,10 +13,11 @@ class StatsService {
 	async getLLMStats(startDate = 0) {
 		try {
 			// Query filtering by timestamp if startDate is provided
-			const query = startDate > 0
-				? `SELECT * FROM usage_stats WHERE timestamp >= ?`
-				: `SELECT * FROM usage_stats`;
-			
+			const query =
+				startDate > 0
+					? `SELECT * FROM usage_stats WHERE timestamp >= ?`
+					: `SELECT * FROM usage_stats`;
+
 			const params = startDate > 0 ? [startDate] : [];
 
 			const rows = await this.database.dbAll(this.LLM_DB, query, params);
@@ -96,8 +97,6 @@ class StatsService {
 
 		return result;
 	}
-
-	async getComfyStats() {
 
 	async getComfyStats() {
 		try {
