@@ -367,6 +367,84 @@ async function textToSpeech(bot, message, args, group, char = "ravena") {
 }
 
 /**
+ * Helper to transcribe audio via Whisper API with failover
+ * @param {string} audioPath - Path to audio file
+ * @param {function} onEstimation - Callback for estimation (duration, estimatedTime)
+ * @returns {Promise<{text: string, duration: number}>}
+ */
+async function transcribeViaAPI(audioPath, onEstimation) {
+	const urls = (process.env.WHISPER_API_URL || "")
+		.split(",")
+		.map((u) => u.trim())
+		.filter((u) => u.length > 0);
+
+	if (urls.length === 0) {
+		throw new Error("WHISPER_API_URL not configured");
+	}
+
+	let lastError = null;
+
+	for (const url of urls) {
+		try {
+			logger.debug(`[transcribe] Trying URL: ${url}`);
+			const audioBuffer = await fs.readFile(audioPath);
+			const requestBody = {
+				audioData: audioBuffer.toString("base64"),
+				language: "pt"
+			};
+
+			const postResponse = await axios.post(`${url}/transcribe`, requestBody, {
+				timeout: 30000 // 30s timeout for initial request
+			});
+
+			const {
+				executionId,
+				audioDuration: apiDuration,
+				estimatedTranscriptionTime
+			} = postResponse.data;
+
+			if (!executionId) {
+				throw new Error("A API não retornou um executionId.");
+			}
+
+			if (onEstimation) {
+				onEstimation(apiDuration, estimatedTranscriptionTime);
+			}
+
+			let finalResult = null;
+			let firstCheck = true;
+			// Loop waiting for completion
+			while (!finalResult) {
+				const sleepTime = firstCheck ? estimatedTranscriptionTime * 1000 : 2000;
+				await new Promise((resolve) => setTimeout(resolve, sleepTime));
+				firstCheck = false;
+
+				const statusResponse = await axios.get(`${url}/status/${executionId}`, {
+					timeout: 10000
+				});
+				const result = statusResponse.data;
+
+				// logger.debug(`[${new Date().toLocaleTimeString()}] Status atual: ${result.status}`);
+
+				if (result.status === "complete") {
+					finalResult = result;
+					return { text: result.text, duration: apiDuration };
+				} else if (result.status === "error") {
+					throw new Error(`API Error: ${result.error}`);
+				}
+				// If processing or queued, continue loop
+			}
+		} catch (e) {
+			logger.warn(`[transcribe] Failed with URL ${url}: ${e.message}`);
+			lastError = e;
+			// Continue to next URL
+		}
+	}
+
+	throw lastError || new Error("All Whisper API URLs failed.");
+}
+
+/**
  * Cleans up a string by removing time formatting in square brackets and trimming whitespace
  * @param {string} text - The input text to clean
  * @returns {string} - The cleaned text
@@ -443,72 +521,33 @@ async function speechToText(bot, message, args, group, optimizeWithLLM = true) {
 
 		if (process.env.WHISPER_API_URL) {
 			// Use Whisper API
-			const WHISPER_API_URL = process.env.WHISPER_API_URL;
-			logger.debug(`[speechToText] Usando Whisper API: ${WHISPER_API_URL}`);
+			logger.debug(`[speechToText] Usando Whisper API (Multi-URL)`);
 
 			try {
-				const audioBuffer = await fs.readFile(audioPath);
-				const requestBody = {
-					audioData: audioBuffer.toString("base64"),
-					language: "pt" // Assuming Portuguese as per local execution
-				};
+				const result = await transcribeViaAPI(audioPath, (duration, estimatedTime) => {
+					// Update duration
+					if (duration) audioDuration = duration;
+					logger.info(`[stt] ETA ${estimatedTime}s.`);
 
-				const postResponse = await axios.post(`${WHISPER_API_URL}/transcribe`, requestBody);
-				const {
-					executionId,
-					audioDuration: apiDuration,
-					estimatedTranscriptionTime
-				} = postResponse.data;
-
-				// Update duration if API gives it (likely more accurate or just consistent)
-				if (apiDuration) audioDuration = apiDuration;
-
-				if (!executionId) {
-					throw new Error("A API não retornou um executionId.");
-				}
-
-				logger.info(`[stt][${executionId}] ETA ${estimatedTranscriptionTime} segundos.`);
-
-				// Avisa só se for demorar um pouquinho a mais
-				if (estimatedTranscriptionTime > 15) {
-					bot.sendReturnMessages(
-						new ReturnMessage({
-							chatId,
-							content: `🔉 Transcrevendo áudio com _${audioDuration}s_, estimativa de _${estimatedTranscriptionTime}s_ até concluir.`,
-							options: {
-								quotedMessageId: message.origin.id._serialized,
-								evoReply: message.origin
-							}
-						}),
-						group
-					);
-				}
-
-				let finalResult = null;
-				let firstCheck = true;
-				while (!finalResult) {
-					const sleepTime = firstCheck ? estimatedTranscriptionTime * 1000 : 3000; // Aguarda o tempo estimado na primeira vez, depois 3 segundos
-					await new Promise((resolve) => setTimeout(resolve, sleepTime));
-					firstCheck = false;
-
-					try {
-						const statusResponse = await axios.get(`${WHISPER_API_URL}/status/${executionId}`);
-						const result = statusResponse.data;
-
-						logger.debug(`[${new Date().toLocaleTimeString()}] Status atual: ${result.status}`);
-
-						if (result.status === "complete") {
-							finalResult = result;
-							transcribedText = result.text;
-							logger.info("\n✅ Transcrição Concluída!\n");
-						} else if (result.status === "error") {
-							finalResult = result;
-							throw new Error(`Ocorreu um erro durante a transcrição: ${result.error}`);
-						}
-					} catch (error) {
-						throw new Error(`Não foi possível obter o status da transcrição: ${error.message}`);
+					// Avisa só se for demorar um pouquinho a mais
+					if (estimatedTime > 15) {
+						bot.sendReturnMessages(
+							new ReturnMessage({
+								chatId,
+								content: `🔉 Transcrevendo áudio com _${audioDuration}s_, estimativa de _${estimatedTime}s_ até concluir.`,
+								options: {
+									quotedMessageId: message.origin.id._serialized,
+									evoReply: message.origin
+								}
+							}),
+							group
+						);
 					}
-				}
+				});
+
+				transcribedText = result.text;
+				if (result.duration) audioDuration = result.duration;
+				logger.info("\n✅ Transcrição Concluída!\n");
 			} catch (apiError) {
 				logger.error("[speechToText] Erro ao usar Whisper API:", apiError);
 				transcribedText = "Erro ao transcrever áudio via API. Por favor, tente novamente.";
@@ -684,56 +723,18 @@ async function processAutoSTT(bot, message, group, opts) {
 
 		if (process.env.WHISPER_API_URL) {
 			// Use Whisper API
-			const WHISPER_API_URL = process.env.WHISPER_API_URL;
-			logger.debug(`[processAutoSTT] Usando Whisper API: ${WHISPER_API_URL}`);
+			logger.debug(`[processAutoSTT] Usando Whisper API (Multi-URL)`);
 
 			try {
-				const audioBuffer = await fs.readFile(audioPath);
-				const requestBody = {
-					audioData: audioBuffer.toString("base64"),
-					language: "pt" // Assuming Portuguese as per local execution
-				};
+				const result = await transcribeViaAPI(audioPath, (duration, estimatedTime) => {
+					// Log info
+					logger.info(`[stt][auto] ETA ${estimatedTime}s.`);
+					if (duration) audioDuration = duration;
+				});
 
-				const postResponse = await axios.post(`${WHISPER_API_URL}/transcribe`, requestBody);
-				const {
-					executionId,
-					audioDuration: apiDuration,
-					estimatedTranscriptionTime
-				} = postResponse.data;
-
-				if (apiDuration) audioDuration = apiDuration;
-
-				if (!executionId) {
-					throw new Error("A API não retornou um executionId.");
-				}
-
-				logger.info(`[stt][${executionId}] ETA ${estimatedTranscriptionTime} segundos.`);
-
-				let finalResult = null;
-				let firstCheck = true;
-				while (!finalResult) {
-					const sleepTime = firstCheck ? estimatedTranscriptionTime * 1000 : 3000; // Aguarda o tempo estimado na primeira vez, depois 3 segundos
-					await new Promise((resolve) => setTimeout(resolve, sleepTime));
-					firstCheck = false;
-
-					try {
-						const statusResponse = await axios.get(`${WHISPER_API_URL}/status/${executionId}`);
-						const result = statusResponse.data;
-
-						logger.debug(`[${new Date().toLocaleTimeString()}] Status atual: ${result.status}`);
-
-						if (result.status === "complete") {
-							finalResult = result;
-							transcribedText = result.text;
-							logger.info("✅ Transcrição Concluída!");
-						} else if (result.status === "error") {
-							finalResult = result;
-							throw new Error(`Ocorreu um erro durante a transcrição: ${result.error}`);
-						}
-					} catch (error) {
-						throw new Error(`Não foi possível obter o status da transcrição: ${error.message}`);
-					}
-				}
+				transcribedText = result.text;
+				if (result.duration) audioDuration = result.duration;
+				logger.info("✅ Transcrição Concluída!");
 			} catch (apiError) {
 				logger.error("[processAutoSTT] Erro ao usar Whisper API:", apiError);
 				transcribedText = "Erro ao transcrever áudio via API.";

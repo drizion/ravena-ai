@@ -174,8 +174,30 @@ class BotAPI {
 		}
 
 		// 4. Check Whisper
-		if (await checkUrl(process.env.WHISPER_API_URL)) {
-			services.whisper = "up";
+		const whisperUrls = (process.env.WHISPER_API_URL || "")
+			.split(",")
+			.map((u) => u.trim())
+			.filter((u) => u.length > 0);
+		if (whisperUrls.length > 0) {
+			const mainUp = await checkUrl(whisperUrls[0]);
+			if (mainUp) {
+				services.whisper = "up";
+			} else {
+				let anyBackupUp = false;
+				for (let i = 1; i < whisperUrls.length; i++) {
+					if (await checkUrl(whisperUrls[i])) {
+						anyBackupUp = true;
+						break;
+					}
+				}
+				if (anyBackupUp) {
+					services.whisper = "backup";
+				} else {
+					services.whisper = "down";
+				}
+			}
+		} else {
+			services.whisper = "down";
 		}
 
 		// 5. Check AllTalk

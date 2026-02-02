@@ -67,10 +67,30 @@ class LLMService {
 				name: "ollama-gemma3:27b",
 				method: async (options) => {
 					//options.model = "ministral-3:14b";
-					options.model = "gemma3:27b";
+					options.model = "gemma3:27b-it-qat";
 					options.timeout = options.timeout ?? 15000;
 					const response = await this.ollamaCompletion({
 						customEndpoint: "http://192.168.195.211:11434",
+						...options
+					});
+					if (response && response.message && response.message.content) {
+						return response.message.content;
+					}
+					if (response && response.choices && response.choices[0] && response.choices[0].message) {
+						return response.choices[0].message.content;
+					}
+					throw new Error("Resposta inválida ou vazia do Ollama");
+				}
+			},
+
+			{
+				name: "ollama-gemma3:12b-it-qat",
+				method: async (options) => {
+					options.model = "gemma3:12b-it-qat";
+					options.timeout = options.timeout ?? 60000;
+					options.ignoreVideo = true;
+					const response = await this.ollamaCompletion({
+						customEndpoint: "http://192.168.3.200:12345",
 						...options
 					});
 					if (response && response.message && response.message.content) {
@@ -90,26 +110,6 @@ class LLMService {
 					return response.candidates[0].content.parts[0].text;
 				}
 			}
-
-			// {
-			// 	name: "ollama-gemma3:12b-it-qat",
-			// 	method: async (options) => {
-			// 		options.model = "gemma3:12b-it-qat";
-			// 		options.timeout = options.timeout ?? 60000;
-			// 		options.ignoreVideo = true;
-			// 		const response = await this.ollamaCompletion({
-			// 			customEndpoint: "http://192.168.3.200:12345",
-			// 			...options
-			// 		});
-			// 		if (response && response.message && response.message.content) {
-			// 			return response.message.content;
-			// 		}
-			// 		if (response && response.choices && response.choices[0] && response.choices[0].message) {
-			// 			return response.choices[0].message.content;
-			// 		}
-			// 		throw new Error("Resposta inválida ou vazia do Ollama");
-			// 	}
-			// }
 
 			// {
 			// 	name: 'lmstudio',
