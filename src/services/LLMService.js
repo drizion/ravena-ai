@@ -715,6 +715,7 @@ class LLMService {
 	 */
 	async getCompletion(options) {
 		const priority = options.priority ?? 0;
+		const maxQueueRetries = 2; // Limit times we can send back to queue
 
 		const task = async () => {
 			try {
@@ -752,33 +753,72 @@ class LLMService {
 			}
 		};
 
-		const maxRetries = priority >= 5 ? 2 : 0;
-		let attempts = 0;
+		const runWithInstantRetries = async () => {
+			let maxInstant = 0;
+			if (priority === 5) maxInstant = 2;
+			else if (priority === 4) maxInstant = 1;
 
-		// We wrap the queue add in a function to handle retries "outside" or "inside" the queue mechanism?
-		// To properly respect the queue priority on retry, we should probably just re-add it to the queue if it fails?
-		// But here, we are inside getCompletion, which returns a Promise.
-		// If we use recursion, we can re-add to queue.
-
-		const executeWithRetry = async () => {
-			try {
-				return await this.queue.add(task, { priority });
-			} catch (err) {
-				attempts++;
-				if (attempts <= maxRetries && priority >= 5) {
-					this.logger.warn(
-						`[LLMService] High priority request failed, retrying... (${attempts}/${maxRetries})`
-					);
-					// Wait a small delay before retrying
-					await new Promise((resolve) => setTimeout(resolve, 2000));
-					return executeWithRetry();
+			let lastErr;
+			for (let i = 0; i <= maxInstant; i++) {
+				try {
+					return await task();
+				} catch (e) {
+					lastErr = e;
+					if (i < maxInstant) {
+						this.logger.warn(`[LLMService] Instant retry ${i + 1}/${maxInstant} for P${priority}`);
+						// Small delay for instant retry stability
+						await new Promise((r) => setTimeout(r, 1000));
+					}
 				}
-				// If no more retries or not high priority, return default error message (soft fail)
+			}
+			throw lastErr;
+		};
+
+		const scheduleRequest = async (attempt, position) => {
+			try {
+				if (position === undefined) {
+					return await this.queue.add(runWithInstantRetries, { priority });
+				} else {
+					return await this.queue.addAt(runWithInstantRetries, position, { priority });
+				}
+			} catch (err) {
+				if (attempt < maxQueueRetries) {
+					let nextPos = -1;
+					let shouldRetry = false;
+
+					// 5 -> Instant retry (handled above), then send to back of the queue
+					// 4 -> Instant retry (handled above), then send to back of the queue
+					if (priority >= 4) {
+						shouldRetry = true;
+						nextPos = this.queue.size; // Back of queue
+					}
+					// 3 -> Send 3 positions back in the queue
+					else if (priority === 3) {
+						shouldRetry = true;
+						nextPos = 3;
+					}
+					// 2 -> Send 5 positions back in the queue
+					else if (priority === 2) {
+						shouldRetry = true;
+						nextPos = 5;
+					}
+
+					if (shouldRetry) {
+						this.logger.warn(
+							`[LLMService] Request failed, re-queueing at pos ${nextPos}. (Queue Attempt ${attempt + 1}/${maxQueueRetries})`
+						);
+						// Small delay before re-queueing to avoid tight loops on empty queue
+						await new Promise((r) => setTimeout(r, 2000));
+						return scheduleRequest(attempt + 1, nextPos);
+					}
+				}
+
+				// If no retry or max retries reached
 				return "Erro: Não foi possível gerar uma resposta. Por favor, tente novamente mais tarde.";
 			}
 		};
 
-		return executeWithRetry();
+		return scheduleRequest(0);
 	}
 
 	/**

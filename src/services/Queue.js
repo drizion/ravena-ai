@@ -11,11 +11,53 @@ class Queue {
 				fn,
 				priority: options.priority || 0,
 				resolve,
-				reject
+				reject,
+				timestamp: Date.now()
 			};
-			this.queue.push(element);
+			this._insertSorted(element);
 			this._process();
 		});
+	}
+
+	addAt(fn, index, options = {}) {
+		return new Promise((resolve, reject) => {
+			const element = {
+				fn,
+				priority: options.priority || 0,
+				resolve,
+				reject,
+				timestamp: Date.now()
+			};
+			if (index < 0) index = 0;
+			if (index >= this.queue.length) {
+				this.queue.push(element);
+			} else {
+				this.queue.splice(index, 0, element);
+			}
+			this._process();
+		});
+	}
+
+	_insertSorted(element) {
+		let added = false;
+		for (let i = 0; i < this.queue.length; i++) {
+			const item = this.queue[i];
+			// Higher priority first
+			if (element.priority > item.priority) {
+				this.queue.splice(i, 0, element);
+				added = true;
+				break;
+			}
+			// Same priority, older timestamp first (FIFO)
+			else if (element.priority === item.priority && element.timestamp < item.timestamp) {
+				this.queue.splice(i, 0, element);
+				added = true;
+				break;
+			}
+		}
+		if (!added) {
+			this.queue.push(element);
+		}
 	}
 
 	_process() {
@@ -24,8 +66,8 @@ class Queue {
 		}
 
 		this.pending++;
-		// Sort by priority (descending)
-		this.queue.sort((a, b) => b.priority - a.priority);
+		// Sort is removed from here to allow position-based insertions (addAt)
+		// and efficient stable sorting via _insertSorted
 		const item = this.queue.shift();
 
 		// Execute
