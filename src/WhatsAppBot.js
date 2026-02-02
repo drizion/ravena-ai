@@ -100,7 +100,7 @@ class WhatsAppBot {
 		// Monitora estabilidade dos bots entre eles
 		this.stabilityMonitor = options.stabilityMonitor ?? false;
 
-		this.llmService = new LLMService({});
+		this.llmService = LLMService.getInstance();
 		this.adminUtils = AdminUtils.getInstance();
 
 		this.sessionDir = path.join(__dirname, "..", ".wwebjs_auth", this.id);

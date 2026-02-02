@@ -85,6 +85,15 @@ class Queue {
 			});
 	}
 
+	getStats() {
+		const stats = {};
+		for (const item of this.queue) {
+			const p = item.priority.toString();
+			stats[p] = (stats[p] || 0) + 1;
+		}
+		return stats;
+	}
+
 	get size() {
 		return this.queue.length;
 	}

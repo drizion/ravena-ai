@@ -8,7 +8,7 @@ const LLMService = require("../services/LLMService");
 
 const logger = new Logger("stop-game");
 //const database = Database.getInstance();
-const llmService = new LLMService();
+const llmService = LLMService.getInstance();
 
 // Constantes do jogo
 const GAME_DURATION = 1.5 * 60 * 1000; // 2 minutos em milissegundos

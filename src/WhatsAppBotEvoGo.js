@@ -144,7 +144,7 @@ class WhatsAppBotEvoGo {
 		this.streamMonitor = null;
 		this.stabilityMonitor = options.stabilityMonitor ?? false;
 
-		this.llmService = new LLMService({});
+		this.llmService = LLMService.getInstance();
 		this.adminUtils = AdminUtils.getInstance();
 
 		this.webhookApp = null;

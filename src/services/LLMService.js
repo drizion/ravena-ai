@@ -10,7 +10,19 @@ const Queue = require("./Queue");
  */
 class LLMService {
 	/**
-	 * Cria um novo serviço LLM
+	 * Get Singleton Instance
+	 * @param {Object} config - Configuration options (only used on first creation)
+	 * @returns {LLMService}
+	 */
+	static getInstance(config = {}) {
+		if (!LLMService.instance) {
+			LLMService.instance = new LLMService(config);
+		}
+		return LLMService.instance;
+	}
+
+	/**
+	 * Cria um novo serviço LLM (Private - use getInstance)
 	 * @param {Object} config - Opções de configuração
 	 */
 	constructor(config = {}) {
@@ -164,6 +176,14 @@ class LLMService {
 				this.logger.error("Error saving LLM stats:", e);
 			}
 		}
+	}
+
+	/**
+	 * Retorna o status atual da fila de requisições.
+	 * @returns {Object} - Objeto com a quantidade de requisições por prioridade.
+	 */
+	getQueueStatus() {
+		return this.queue.getStats();
 	}
 
 	/**

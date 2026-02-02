@@ -14,7 +14,7 @@ const Database = require("../utils/Database");
 const Canvas = require("canvas");
 const LLMService = require("../services/LLMService");
 
-const llmService = new LLMService({ apiTimeout: 30000 });
+const llmService = LLMService.getInstance();
 const logger = new Logger("anagrama-game");
 const database = Database.getInstance();
 const dbName = "anagrama";
@@ -578,7 +578,8 @@ async function hintCommand(bot, message) {
 		const respostaIA = await llmService.getCompletion({
 			prompt: `O usuário requisitou uma dica, responda ((apenas)) com: sinônimo ou frase que ajude.\n\nPalavra: ${game.word}`,
 			systemContext: "Você é um robo que está controlando um jogo de Anagrama",
-			priority: 5
+			priority: 5,
+			timeout: 30000
 		});
 		if (respostaIA && !respostaIA.toLowerCase().includes("erro")) {
 			dicaIA = `\nℹ️ *Dica:* _${respostaIA}_\n`;

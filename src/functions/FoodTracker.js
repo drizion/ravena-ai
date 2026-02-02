@@ -8,7 +8,7 @@ const { MessageMedia } = require("whatsapp-web.js");
 
 const logger = new Logger("food-tracker");
 const database = Database.getInstance();
-const llmService = new LLMService({});
+const llmService = LLMService.getInstance();
 const dbName = "food_tracker";
 
 // --- Database Setup ---

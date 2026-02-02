@@ -19,7 +19,7 @@ const execPromise = util.promisify(exec);
 const logger = new Logger("speech-commands");
 const database = Database.getInstance();
 const cmdUsage = CmdUsage.getInstance();
-const llmService = new LLMService({});
+const llmService = LLMService.getInstance();
 
 // Initialize Media Stats Database
 database.getSQLiteDb(

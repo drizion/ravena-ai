@@ -11,7 +11,7 @@ const { extractFrames } = require("./Conversions");
 class NSFWPredict {
 	constructor() {
 		this.logger = new Logger("nsfw-predict");
-		this.llmService = new LLMService({});
+		this.llmService = LLMService.getInstance();
 		this.threshold = parseFloat(process.env.NSFW_THRESHOLD || "0.7");
 	}
 

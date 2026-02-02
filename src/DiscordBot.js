@@ -86,7 +86,7 @@ class WhatsAppBotDiscord {
 
 		this.loadReport = new LoadReport(this);
 		this.reactionHandler = new ReactionsHandler();
-		this.llmService = new LLMService({});
+		this.llmService = LLMService.getInstance();
 		this.adminUtils = AdminUtils.getInstance();
 
 		// --- Placeholders para sistemas não aplicáveis ---

@@ -12,7 +12,7 @@ const logger = new Logger("stable-diffusion-commands");
 const nsfwPredict = NSFWPredict.getInstance();
 
 const LLMService = require("../services/LLMService");
-const llmService = new LLMService({});
+const llmService = LLMService.getInstance();
 const sdWebUIToken = `Basic ${process.env.SDWEBUI_TOKEN ?? ""}`;
 
 //logger.info('Módulo StableDiffusionCommands carregado');

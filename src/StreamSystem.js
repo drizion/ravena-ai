@@ -29,7 +29,7 @@ class StreamSystem {
 
 		this.bots = [];
 		this.logger = new Logger("stream-system");
-		this.llmService = new LLMService({});
+		this.llmService = LLMService.getInstance();
 		this.streamMonitor = null;
 		this.database = Database.getInstance();
 		// Assume que o path do banco é o mesmo pra todos (global)

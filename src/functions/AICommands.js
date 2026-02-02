@@ -10,7 +10,7 @@ const { extractFrames } = require("../utils/Conversions");
 
 const logger = new Logger("ai-commands");
 
-const llmService = new LLMService({});
+const llmService = LLMService.getInstance();
 const database = Database.getInstance();
 
 const classifyQuestionSchema = {

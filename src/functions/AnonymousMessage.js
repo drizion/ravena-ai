@@ -24,7 +24,7 @@ database.getSQLiteDb(
 );
 
 const LLMService = require("../services/LLMService");
-const llmService = new LLMService({});
+const llmService = LLMService.getInstance();
 
 // Constantes
 const COOLDOWN_HOURS = 2;

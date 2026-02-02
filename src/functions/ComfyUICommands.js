@@ -15,7 +15,7 @@ const database = Database.getInstance();
 const logger = new Logger("comfyui-commands");
 const nsfwPredict = NSFWPredict.getInstance();
 const LLMService = require("../services/LLMService");
-const llmService = new LLMService({});
+const llmService = LLMService.getInstance();
 
 // Initialize Media Stats Database
 database.getSQLiteDb(

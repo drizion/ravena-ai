@@ -26,7 +26,7 @@ class EventHandler extends EventEmitter {
 		this.logger = new Logger("event-handler");
 		this.database = Database.getInstance();
 		this.commandHandler = new CommandHandler();
-		this.llmService = new LLMService({});
+		this.llmService = LLMService.getInstance();
 		this.variableProcessor = new CustomVariableProcessor();
 		this.nsfwPredict = NSFWPredict.getInstance();
 		this.adminUtils = AdminUtils.getInstance();

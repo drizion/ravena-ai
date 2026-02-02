@@ -10,7 +10,7 @@ const { extractFrames } = require("../utils/Conversions");
 
 const logger = new Logger("summary-commands");
 const database = Database.getInstance();
-const llmService = new LLMService({});
+const llmService = LLMService.getInstance();
 const DB_NAME = "summaries";
 
 // Initialize Database
