@@ -1,5 +1,6 @@
 const Database = require("../utils/Database");
 const Logger = require("../utils/Logger");
+const LLMService = require("./LLMService");
 
 class StatsService {
 	constructor() {
@@ -9,12 +10,16 @@ class StatsService {
 		this.MEDIA_DB = "media_stats";
 	}
 
-	async getLLMStats() {
+	async getLLMStats(startDate = 0) {
 		try {
-			// Ensure DB is loaded (it might be loaded by LLMService, but safe to call getSQLiteDb again)
-			// We don't strictly need the schema if it exists, but good practice or just trust it exists.
-			// Query directly.
-			const rows = await this.database.dbAll(this.LLM_DB, "SELECT * FROM usage_stats");
+			// Query filtering by timestamp if startDate is provided
+			const query = startDate > 0
+				? `SELECT * FROM usage_stats WHERE timestamp >= ?`
+				: `SELECT * FROM usage_stats`;
+			
+			const params = startDate > 0 ? [startDate] : [];
+
+			const rows = await this.database.dbAll(this.LLM_DB, query, params);
 
 			const stats = {
 				total_requests: 0,
@@ -65,6 +70,34 @@ class StatsService {
 			return {};
 		}
 	}
+
+	getQueueStatus() {
+		return LLMService.getInstance().getQueueStatus();
+	}
+
+	async getStatsByRange() {
+		const now = Date.now();
+		const day = 24 * 60 * 60 * 1000;
+		const ranges = {
+			"1d": now - day,
+			"7d": now - 7 * day,
+			"15d": now - 15 * day,
+			"30d": now - 30 * day
+		};
+
+		const result = {
+			queue: this.getQueueStatus(),
+			ranges: {}
+		};
+
+		for (const [key, startDate] of Object.entries(ranges)) {
+			result.ranges[key] = await this.getLLMStats(startDate);
+		}
+
+		return result;
+	}
+
+	async getComfyStats() {
 
 	async getComfyStats() {
 		try {

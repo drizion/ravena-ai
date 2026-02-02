@@ -567,6 +567,26 @@ class BotAPI {
 			}
 		});
 
+		// Endpoint para estatísticas de LLM
+		this.app.get("/llm-stats", authenticateBasic, async (req, res) => {
+			try {
+				const StatsService = require("./services/StatsService");
+				const statsService = new StatsService();
+				const stats = await statsService.getStatsByRange();
+				res.json({
+					status: "ok",
+					timestamp: Date.now(),
+					data: stats
+				});
+			} catch (error) {
+				this.logger.error("Erro ao obter estatísticas de LLM:", error);
+				res.status(500).json({
+					status: "error",
+					message: "Erro interno ao buscar estatísticas"
+				});
+			}
+		});
+
 		// Endpoint para obter relatórios de carga
 		this.app.post("/getLoad", async (req, res) => {
 			try {
