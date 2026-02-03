@@ -750,6 +750,7 @@ class LLMService {
 					let response = await this.getCompletionFromSpecificProvider(options);
 					response = response
 						.replace(/<think>.*?<\/think>/gs, "")
+						.replace(/<\/end_of_turn>/g, "")
 						.trim()
 						.replace(/^"|"$/g, ""); // Remove tags de think e frase entre aspas
 
@@ -762,6 +763,7 @@ class LLMService {
 					let response = await this.getCompletionFromProviders(options, priority);
 					response = response
 						.replace(/<think>.*?<\/think>/gs, "")
+						.replace(/<\/end_of_turn>/g, "")
 						.trim()
 						.replace(/^"|"$/g, ""); // Remove tags de think e frase entre aspas
 
