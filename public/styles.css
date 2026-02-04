@@ -333,10 +333,53 @@ h1 {
     transform: scale(1.1);
 }
 
+/* Old status-indicator was text based */
 .status-indicator {
+    /* Kept for backward compat or if needed */
     font-size: 1.8rem;
     display: flex;
     align-items: center;
+}
+
+/* New Round Status Indicator */
+.status-dot {
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 0 5px rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.1);
+    flex-shrink: 0;
+}
+
+.status-dot.active { background: radial-gradient(circle at 30% 30%, #85e413, #4ca602); box-shadow: 0 0 8px #85e413; } /* Green */
+.status-dot.alert { background: radial-gradient(circle at 30% 30%, #dfd86b, #a6a002); box-shadow: 0 0 8px #dfd86b; } /* Yellow */
+.status-dot.attention { background: radial-gradient(circle at 30% 30%, #ffa500, #cc8400); box-shadow: 0 0 8px #ffa500; } /* Orange */
+.status-dot.inactive { background: radial-gradient(circle at 30% 30%, #df5151, #a60202); box-shadow: 0 0 8px #df5151; } /* Red */
+.status-dot.disconnected { background: radial-gradient(circle at 30% 30%, #555, #222); box-shadow: 0 0 2px #555; } /* Black/Grey */
+.status-dot.banned { background: radial-gradient(circle at 30% 30%, #b51616, #5c0000); box-shadow: 0 0 8px #b51616; } /* Dark Red */
+
+/* Flash Animation */
+@keyframes reflection-flash {
+    0% { transform: translate(-100%, -100%); }
+    100% { transform: translate(100%, 100%); }
+}
+
+.status-dot::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(45deg, transparent 45%, rgba(255,255,255,0.9) 50%, transparent 55%);
+    pointer-events: none;
+    transform: translate(-100%, -100%);
+}
+
+.status-dot.flash::after {
+    animation: reflection-flash 0.3s ease-out; /* Fast flash */
 }
 
 .bot-details {

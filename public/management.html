@@ -62,11 +62,11 @@
                         </div>
                         <div class="form-group">
                             <label id="lbl-group-name" for="group-name-input">Nome do Grupo</label>
-                            <input type="text" id="group-name-input" class="form-control" maxlength="50">
+                            <input type="text" id="group-name-input" class="form-control" maxlength="15" pattern="[a-zA-Z0-9]+" title="Apenas caracteres alfanuméricos, sem espaços.">
                         </div>
                         <div class="form-group">
                             <label id="lbl-group-prefix" for="group-prefix">Prefixo</label>
-                            <input type="text" id="group-prefix" class="form-control" maxlength="5" placeholder="!">
+                            <input type="text" id="group-prefix" class="form-control" maxlength="1" placeholder="!">
                             <small class="form-text text-muted" id="prefix-warning"></small>
                         </div>
                         <div class="form-group checkbox-group">

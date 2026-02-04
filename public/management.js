@@ -480,6 +480,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
+            // Prefix warning logic
+            if (changes.hasOwnProperty('prefix')) {
+                const newPrefix = changes.prefix || '';
+                const prefixMsg = newPrefix 
+                    ? `ATENÇÃO: você está alterando o prefixo dos comandos do grupo. Preste atenção, pois os comandos agora serão com ${newPrefix} (ex.: ${newPrefix}ping)`
+                    : `ATENÇÃO: você está alterando o prefixo dos comandos do grupo. Preste atenção, pois os comandos agora serão sem prefixo, não recomendado!`;
+                
+                const confirmedPrefix = await showCustomConfirm(prefixMsg, 'Aviso de Prefixo');
+                if (!confirmedPrefix) return;
+            }
+
             const confirmed = await showCustomConfirm(
                 `As seguintes alterações serão salvas:<br><br>${formatChanges(changes)}`,
                 'Confirmar Alterações'
@@ -518,8 +529,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateGroupDataFromForm() {
-        groupData.name = document.getElementById('group-name-input').value;
-        groupData.prefix = document.getElementById('group-prefix').value;
+        const nameInput = document.getElementById('group-name-input');
+        const nameValue = nameInput.value;
+        
+        // Validation for group name: alphanumeric, no whitespace, 1-15 chars
+        if (!/^[a-zA-Z0-9]{1,15}$/.test(nameValue)) {
+            throw new Error('O nome do grupo deve ser alfanumérico, sem espaços e ter entre 1 e 15 caracteres.');
+        }
+
+        const prefixInput = document.getElementById('group-prefix');
+        const prefixValue = prefixInput.value;
+        if (prefixValue && prefixValue.length > 1) {
+            throw new Error('O prefixo deve ter no máximo 1 caractere.');
+        }
+
+        groupData.name = nameValue;
+        groupData.prefix = prefixValue;
         groupData.paused = !document.getElementById('bot-enabled').checked;
         groupData.customAIPrompt = document.getElementById('bot-personality').value;
         groupData.customIgnoresPrefix = document.getElementById('custom-ignores-prefix').checked;

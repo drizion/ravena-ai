@@ -1016,6 +1016,25 @@ class BotAPI {
 					return res.status(404).json({ success: false, message: "Group not found" });
 				}
 
+				// Validate group name: alphanumeric, no whitespace, 1-15 chars
+				if (changes.name) {
+					if (!/^[a-zA-Z0-9]{1,15}$/.test(changes.name)) {
+						return res.status(400).json({
+							success: false,
+							message:
+								"O nome do grupo deve ser alfanumérico, sem espaços e ter entre 1 e 15 caracteres."
+						});
+					}
+				}
+
+				// Validate prefix: max 1 char
+				if (changes.prefix && changes.prefix.length > 1) {
+					return res.status(400).json({
+						success: false,
+						message: "O prefixo deve ter no máximo 1 caractere."
+					});
+				}
+
 				// Check limits before applying changes
 				await checkGroupLimits(groupId, "streams", { groupData: changes });
 

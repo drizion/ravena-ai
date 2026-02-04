@@ -1,4 +1,4 @@
-﻿// Variáveis globais
+// Variáveis globais
 let lastHealthData = null;
 let isAdminMode = false;
 let selectedBots = [];
@@ -93,15 +93,15 @@ function getTimeSinceLastMessage(timestamp) {
     return Math.floor(diff / 1000 / 60); // Minutos
 }
 
-// Função para determinar status baseado no tempo
-function getStatusEmoji(minutes, connected, banned) {
-    if (banned) return '🚨'; // banida
-    if (!connected) return '⚫'; // Desconectado
+// Função para determinar status baseado no tempo (Retorna Classe CSS)
+function getStatusClass(minutes, connected, banned) {
+    if (banned) return 'banned'; // banida
+    if (!connected) return 'disconnected'; // Desconectado
     
-    if (minutes < 2) return '🟢';
-    if (minutes < 5) return '🟡';
-    if (minutes < 15) return '🟠';
-    return '🔴';
+    if (minutes < 2) return 'active';
+    if (minutes < 5) return 'alert';
+    if (minutes < 15) return 'attention';
+    return 'inactive';
 }
 
 // Função para obter descrição do status
@@ -327,7 +327,7 @@ function renderBots(data) {
     const botsVips = data.bots.filter(b =>  b.vip);
 
 
-    console.log({botsNormais, botsComunitarios, botsVips});
+    // console.log({botsNormais, botsComunitarios, botsVips});
 
     // Renderiza os cards de bot
     const tituloNormais = document.createElement('h2');
@@ -383,7 +383,7 @@ function renderBots(data) {
 
 function renderBotCard(botContainer, data, bot){
     const minutesSinceLastMessage = getTimeSinceLastMessage(bot.lastMessageReceived);
-    const statusEmoji = getStatusEmoji(minutesSinceLastMessage, bot.connected, bot.banido);
+    const statusClass = getStatusClass(minutesSinceLastMessage, bot.connected, bot.banido);
     const statusDesc = getStatusDescription(minutesSinceLastMessage, bot.connected);
     const phoneNumber = formatPhoneNumber(extractPhoneFromBotId(bot.id, data.bots)).replace("+55","").trim();
     const whatsappUrl = formatWhatsAppUrl(phoneNumber);
@@ -486,7 +486,7 @@ function renderBotCard(botContainer, data, bot){
                     </a>
                     <div class="bot-name">${bot.id}</div>
                 </div>
-                <div class="status-indicator" title="${statusDesc}">${statusEmoji}</div>
+                <div class="status-dot ${statusClass}" id="status-${bot.id}" title="${statusDesc}"></div>
             </div>
             <div class="bot-details">
                 <div class="detail-item">
@@ -765,19 +765,19 @@ function renderBotWeeklyChartFromStats(botStats) {
         return;
     }
 
-    // Filter TOTAL row and use only selected bots if applicable (or all)
-    // We reuse selectedBots global filter
-    let filtered = botStats.filter(b => b.id !== 'TOTAL');
+    // Filter TOTAL row and ravenavip/ravenaviip from chart
+    let filtered = botStats.filter(b => b.id !== 'TOTAL' && b.id !== 'ravenavip' && b.id !== 'ravenaviip');
+
     if (selectedBots && selectedBots.length > 0) {
-        // If selectedBots is populated, we might want to filter? 
-        // Or show all since this chart is specific to comparing bots?
-        // User asked for "Display each bot as a bar graph", implying all or filtered.
-        // Let's filter to respect the global filter if active
+        // Apply manual selection if present, but still enforce no vip
         filtered = filtered.filter(b => selectedBots.includes(b.id));
     }
     
-    // Fallback if filter removed everything (e.g. initial load logic)
-    if (filtered.length === 0) filtered = botStats.filter(b => b.id !== 'TOTAL');
+    // Fallback if filter removed everything
+    if (filtered.length === 0) {
+        // Just show non-vips, non-total
+        filtered = botStats.filter(b => b.id !== 'TOTAL' && b.id !== 'ravenavip' && b.id !== 'ravenaviip');
+    }
 
     const botColors = {
         'ravenaviip': '#FFD700',
@@ -835,33 +835,6 @@ function renderBotWeeklyChartFromStats(botStats) {
             colorByPoint: true
         }]
     });
-    
-    // Ensure title is present (Highcharts replaces innerHTML)
-    // We can just rely on the chart rendering, or add title via Highcharts 'title' config (but we set it to null to match style)
-    // The design has <h3 class="chart-title"> outside chart? No, it's inside .chart-container. 
-    // Highcharts replaces content of container. We should re-add title or use Highcharts title.
-    // Looking at renderDailyChart, it overwrites innerHTML on error, but on success uses Highcharts.
-    // The HTML structure has <h3> then <div id="chart">? No.
-    // <div class="chart-container" id="dailyMessageChart"><h3 class="chart-title">Title</h3></div>
-    // Highcharts renders INTO the container, usually appending or replacing.
-    // Highcharts.chart(container, ...) replaces the container's content? No, it appends SVG.
-    // But usually it clears the container if we pass the container ID.
-    // Wait, existing functions: `container.innerHTML = ...title...` implies it wipes it.
-    // Then `Highcharts.chart(container` might wipe the title if `container` is the wrapper.
-    // Let's fix this by using Highcharts title or ensuring title is preserved.
-    // The previous code: `container.innerHTML = ...title...loading...` then `Highcharts.chart(container, ...)`
-    // Highcharts by default puts the chart inside the element. If the element has children (the H3), they might be removed or pushed down?
-    // Highcharts wipes the container content.
-    // So we should use Highcharts title option, OR put the chart in a sub-div.
-    // For now, I'll stick to Highcharts title but styled to match.
-    // Actually, let's look at `renderDailyChart`. It calls `Highcharts.chart(container...`. 
-    // If the H3 is lost, we should add it back or use Highcharts title.
-    // Let's enable Highcharts title with proper style.
-    
-    // Actually, looking at previous code `const titleEl = container.querySelector('.chart-title');` after chart render...
-    // Highcharts *destroys* the content of the container. 
-    // So we should pass the title to Highcharts configuration.
-    // I'll update the config to include the title.
 }
 
 function renderYearlyChart(data, commonOptions) {
@@ -953,13 +926,28 @@ function renderBotStatsTable(data) {
 
     // Separar o total
     let totalRow = data.find(row => row.id === 'TOTAL');
-    let botRows = data.filter(row => row.id !== 'TOTAL');
+    
+    // Separar VIPs e Outros
+    let vips = [];
+    let others = [];
+    
+    data.forEach(row => {
+        if (row.id === 'TOTAL') return;
+        if (row.id === 'ravenavip' || row.id === 'ravenaviip') {
+            vips.push(row);
+        } else {
+            others.push(row);
+        }
+    });
 
-    // Ordenar bots por mensagens de hoje (day) decrescente
-    botRows.sort((a, b) => (b.day || 0) - (a.day || 0));
+    // Ordenar bots normais por mensagens de hoje (day) decrescente
+    others.sort((a, b) => (b.day || 0) - (a.day || 0));
 
-    // Reintegrar total no final (ou inicio se preferir, mas geralmente total fica embaixo)
-    const rowsToRender = [...botRows];
+    // Reintegrar: Outros, VIPs no final, Total (no final de tudo ou inicio? geralmente Total é o último)
+    // O pedido foi: "always leave ravenavip and ravenaviip botids last on the table"
+    // Então: Others sorted, then VIPs, then Total
+    
+    const rowsToRender = [...others, ...vips];
     if (totalRow) rowsToRender.push(totalRow);
 
     rowsToRender.forEach(row => {
@@ -1091,6 +1079,22 @@ document.addEventListener('DOMContentLoaded', () => {
                      if (!botMessageTimestamps[data.botId]) botMessageTimestamps[data.botId] = [];
                      botMessageTimestamps[data.botId].push(Date.now());
                      updateBotRealtimeCounters();
+                     
+                     // FLASH EFFECT FOR BOT CARD
+                     const botStatusDot = document.getElementById(`status-${data.botId}`);
+                     if (botStatusDot) {
+                         botStatusDot.classList.remove('flash');
+                         void botStatusDot.offsetWidth; // Force reflow to allow re-triggering animation
+                         botStatusDot.classList.add('flash');
+                         
+                         // Clear previous timeout if any
+                         if (botStatusDot._flashTimeout) clearTimeout(botStatusDot._flashTimeout);
+                         
+                         botStatusDot._flashTimeout = setTimeout(() => {
+                             botStatusDot.classList.remove('flash');
+                             delete botStatusDot._flashTimeout;
+                         }, 400); // Slightly longer than animation
+                     }
                 }
 
                 updateRealtimeCounter();
@@ -1243,4 +1247,3 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
-
