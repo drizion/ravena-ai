@@ -1922,28 +1922,57 @@ async function fishingDataCommand(bot, message, args, group) {
 		if (userData.buffs) allBuffs.push(...userData.buffs.map((b) => ({ ...b, isDebuff: false })));
 		if (userData.debuffs) allBuffs.push(...userData.debuffs.map((b) => ({ ...b, isDebuff: true })));
 
-		// Sort by uses (ascending)
-		allBuffs.sort((a, b) => a.remainingUses - b.remainingUses);
-
 		if (allBuffs.length > 0) {
-			msg += `✨ *Efeitos Ativos:*\n`;
 			const combinedItems = [...UPGRADES, ...DOWNGRADES];
+			const activeEffects = {};
+			const equipmentItems = {};
+
 			for (const buff of allBuffs) {
-				let icon = buff.isDebuff ? "🕯️" : "✨";
 				const refItem = combinedItems.find((i) => i.name === buff.originalName);
-				if (refItem) icon = refItem.emoji;
+				const icon = refItem ? refItem.emoji : buff.isDebuff ? "🕯️" : "✨";
+				const key = buff.originalName;
 
 				if (buff.remainingUses > 100) {
+					if (!equipmentItems[key]) {
+						equipmentItems[key] = { ...buff, icon, value: 0, count: 0 };
+					}
+					equipmentItems[key].value += buff.value;
+					equipmentItems[key].count += 1;
+				} else {
+					if (!activeEffects[key]) {
+						activeEffects[key] = { ...buff, icon, remainingUses: 0 };
+					}
+					activeEffects[key].remainingUses += buff.remainingUses;
+				}
+			}
+
+			const activeList = Object.values(activeEffects).sort(
+				(a, b) => a.remainingUses - b.remainingUses
+			);
+			const equipList = Object.values(equipmentItems).sort((a, b) =>
+				a.originalName.localeCompare(b.originalName)
+			);
+
+			if (activeList.length > 0) {
+				msg += `✨ *Efeitos Ativos:*\n`;
+				for (const buff of activeList) {
+					msg += `${buff.icon} ${buff.originalName} (${buff.remainingUses}x)\n`;
+				}
+				msg += `\n`;
+			}
+
+			if (equipList.length > 0) {
+				msg += `🧳 *Equipamentos:*\n`;
+				for (const buff of equipList) {
 					let bonusText = "";
 					if (buff.type === "inventory_slot") bonusText = `(+${buff.value} inv.)`;
 					else if (buff.type === "max_baits") bonusText = `(+${buff.value} iscas)`;
 					else bonusText = `(Perm.)`;
-					msg += `${icon} ${buff.originalName} ${bonusText}\n`;
-				} else {
-					msg += `${icon} ${buff.originalName} (${buff.remainingUses}x)\n`;
+					const countPrefix = buff.count > 1 ? `${buff.count}x ` : "";
+					msg += `${buff.icon} ${countPrefix}${buff.originalName} ${bonusText}\n`;
 				}
+				msg += `\n`;
 			}
-			msg += `\n`;
 		}
 
 		// Inventory
