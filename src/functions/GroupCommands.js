@@ -43,7 +43,7 @@ async function mentionAllMembers(bot, message, args, group) {
 		const ignoredUsers = group.ignoredUsers || [];
 
 		// Filtra usuários ignorados (mds, é mto fallback)
-		const participants = chat.participants.filter((participant) => {
+		const participants = chat?.participants?.filter((participant) => {
 			// Cria um array temporário com os IDs desse participante
 			const userIdentifiers = [
 				participant.id?._serialized,
@@ -58,7 +58,7 @@ async function mentionAllMembers(bot, message, args, group) {
 
 			// Retorna true apenas se NÃO for ignorado
 			return !isIgnored;
-		});
+		}) ?? [];
 
 		//logger.debug(`[mentionAllMembers] `, { todos: chat.participants, ignorados: group.ignoredUsers, filtrados: participants});
 
