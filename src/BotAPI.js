@@ -158,8 +158,8 @@ class BotAPI {
 		}
 
 		// 3. Check LLM (Main + Backup)
-		const llmMain = "http://192.168.195.211:11434";
-		const llmBackup = "http://192.168.3.200:12345";
+		const llmMain = "http://192.168.3.200:12345";
+		const llmBackup = "http://192.168.195.211:11434";
 
 		const mainUp = await checkUrl(llmMain);
 		if (mainUp) {

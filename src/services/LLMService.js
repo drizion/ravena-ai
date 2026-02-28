@@ -64,30 +64,10 @@ class LLMService {
 
 		this.providerDefinitions = [
 			{
-				name: "ollama-gemma3:27b",
-				method: async (options) => {
-					//options.model = "ministral-3:14b";
-					options.model = "gemma3:27b-it-qat";
-					options.timeout = options.timeout ?? 15000;
-					const response = await this.ollamaCompletion({
-						customEndpoint: "http://192.168.195.211:11434",
-						...options
-					});
-					if (response && response.message && response.message.content) {
-						return response.message.content;
-					}
-					if (response && response.choices && response.choices[0] && response.choices[0].message) {
-						return response.choices[0].message.content;
-					}
-					throw new Error("Resposta inválida ou vazia do Ollama");
-				}
-			},
-
-			{
 				name: "ollama-gemma3:12b-it-qat",
 				method: async (options) => {
 					options.model = "gemma3:12b-it-qat";
-					options.timeout = options.timeout ?? 60000;
+					options.timeout = options.timeout ? options.timeout*2 : 120000;
 					options.ignoreVideo = true;
 					const response = await this.ollamaCompletion({
 						customEndpoint: "http://192.168.3.200:12345",
@@ -102,6 +82,26 @@ class LLMService {
 					throw new Error("Resposta inválida ou vazia do Ollama");
 				}
 			},
+			// {
+			// 	name: "ollama-gemma3:27b",
+			// 	method: async (options) => {
+			// 		options.model = "gemma3:27b";
+
+			// 		options.timeout = options.timeout ?? 15000;
+			// 		const response = await this.ollamaCompletion({
+			// 			customEndpoint: "http://192.168.195.211:11434",
+			// 			...options
+			// 		});
+			// 		if (response && response.message && response.message.content) {
+			// 			return response.message.content;
+			// 		}
+			// 		if (response && response.choices && response.choices[0] && response.choices[0].message) {
+			// 			return response.choices[0].message.content;
+			// 		}
+			// 		throw new Error("Resposta inválida ou vazia do Ollama");
+			// 	}
+			// },
+
 
 			{
 				name: "gemini",
@@ -750,6 +750,7 @@ class LLMService {
 					let response = await this.getCompletionFromSpecificProvider(options);
 					response = response
 						.replace(/<think>.*?<\/think>/gs, "")
+						.replace(/<\/start_of_turn>/g, "")
 						.replace(/<\/end_of_turn>/g, "")
 						.trim()
 						.replace(/^"|"$/g, ""); // Remove tags de think e frase entre aspas
@@ -763,6 +764,7 @@ class LLMService {
 					let response = await this.getCompletionFromProviders(options, priority);
 					response = response
 						.replace(/<think>.*?<\/think>/gs, "")
+						.replace(/<\/start_of_turn>/g, "")
 						.replace(/<\/end_of_turn>/g, "")
 						.trim()
 						.replace(/^"|"$/g, ""); // Remove tags de think e frase entre aspas
