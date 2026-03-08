@@ -145,7 +145,10 @@ class BotAPI {
 		const checkUrl = async (url) => {
 			if (!url) return false;
 			try {
-				await axios.get(url, { timeout: 2000 });
+				await axios.get(url, {
+					timeout: 2000,
+					validateStatus: (status) => status >= 200 && status < 500
+				});
 				return true;
 			} catch (e) {
 				return false;
@@ -178,6 +181,7 @@ class BotAPI {
 			.split(",")
 			.map((u) => u.trim())
 			.filter((u) => u.length > 0);
+
 		if (whisperUrls.length > 0) {
 			const mainUp = await checkUrl(whisperUrls[0]);
 			if (mainUp) {
