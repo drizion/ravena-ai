@@ -30,17 +30,31 @@ class CustomVariableProcessor {
 		this.logger.debug(`[CustomVariableProcessor][process] ${text} <=> ${Object.keys(context)}`);
 
 		try {
-			// Verifica se é uma variável de comando
-			const cmdMatch = text.match(/^\{cmd-(.*?)\}$/);
-			if (cmdMatch && context && context.message && context.bot) {
-				// Este é um comando embutido, retorna objeto especial para ser executado
-				const commandText = cmdMatch[1].trim();
-				this.logger.debug(`Detectada variável de comando: ${commandText}`);
+			// Verifica se são variáveis de comando (pode haver múltiplas)
+			const cmdRegex = /\{cmd-(.*?)\}/g;
+			const cmdMatches = text.match(cmdRegex);
 
-				return {
-					type: "embedded-command",
-					command: commandText
-				};
+			if (cmdMatches && context && context.message && context.bot) {
+				// Verifica se o texto consiste apenas de comandos e espaços/quebras de linha
+				const pureCommandsText = text.replace(cmdRegex, "").trim();
+
+				if (pureCommandsText === "") {
+					// Extrai os comandos, limitando a 10
+					const commands = cmdMatches
+						.slice(0, 10)
+						.map((m) => {
+							const match = m.match(/\{cmd-(.*?)\}/);
+							return match ? match[1].trim() : null;
+						})
+						.filter((cmd) => cmd !== null);
+
+					this.logger.debug(`Detectadas ${commands.length} variáveis de comando`);
+
+					return {
+						type: "embedded-commands",
+						commands
+					};
+				}
 			}
 
 			// Verifica se é uma variável de arquivo

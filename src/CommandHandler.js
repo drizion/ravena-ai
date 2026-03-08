@@ -374,6 +374,53 @@ class CommandHandler {
 		return result ?? "qualquer horário e dia";
 	}
 
+	/**
+	 * Agrega mensagens de retorno consecutivas que são apenas texto
+	 * @param {Array|ReturnMessage} messages - Mensagens a serem agregadas
+	 * @returns {Array} - Array de mensagens agregadas
+	 */
+	aggregateReturnMessages(messages) {
+		if (!messages) return [];
+		const flatMessages = Array.isArray(messages) ? messages.flat() : [messages];
+		const result = [];
+		let currentTextOnly = null;
+
+		for (const msg of flatMessages) {
+			if (!msg) continue;
+
+			// Verifica se é uma ReturnMessage e se é apenas texto (sem mídia/opções especiais)
+			const isTextOnly =
+				msg instanceof ReturnMessage &&
+				typeof msg.content === "string" &&
+				(!msg.options ||
+					(!msg.options.caption &&
+						!msg.options.sticker &&
+						!msg.options.sendMediaAsSticker &&
+						!msg.options.mediaUrl));
+
+			if (isTextOnly) {
+				if (currentTextOnly) {
+					currentTextOnly.content += "\n-----------\n" + msg.content;
+				} else {
+					currentTextOnly = msg;
+					result.push(currentTextOnly);
+				}
+			} else {
+				currentTextOnly = null;
+				result.push(msg);
+			}
+		}
+
+		// Aplica delay incremental de 500ms para cada ReturnMessage no array final
+		result.forEach((msg, index) => {
+			if (msg instanceof ReturnMessage) {
+				msg.delay = (msg.delay || 0) + index * 500;
+			}
+		});
+
+		return result;
+	}
+
 	delayedReaction(msg, emoji, delay) {
 		setTimeout(
 			(m, e) => {
@@ -477,8 +524,12 @@ class CommandHandler {
 	 * @param {string} command - O nome do comando
 	 * @param {Array} args - Argumentos do comando
 	 * @param {Object} group - O objeto do grupo (se em grupo)
+	 * @param {Object} options - Opções de processamento (silent, skipCustom)
 	 */
-	async processCommand(bot, message, command, args, group, skipCustom = false) {
+	async processCommand(bot, message, command, args, group, options = {}) {
+		const skipCustom = options.skipCustom ?? false;
+		const silent = options.silent ?? false;
+
 		//this.logger.debug(`Processando comando: ${command}, determinação de tipo`);
 
 		// Definir o chatId de resposta - por padrão é o chatId original
@@ -520,16 +571,17 @@ class CommandHandler {
 									content: `Você agora está gerenciando o grupo: ${targetGroup.name}`,
 									reaction: this.defaultReactions.after
 								});
-								await bot.sendReturnMessages(returnMessage, group);
+								if (!silent) await bot.sendReturnMessages(returnMessage, group);
 
-								return;
+								return returnMessage;
 							} else {
 								const returnMessage = new ReturnMessage({
 									chatId: message.author,
 									content: `Você *NÃO É* administrador do grupo '${targetGroup.name}'.`,
 									reaction: "🙅‍♂️"
 								});
-								await bot.sendReturnMessages(returnMessage, group);
+								if (!silent) await bot.sendReturnMessages(returnMessage, group);
+								return returnMessage;
 							}
 						} else {
 							this.logger.warn(`Grupo não encontrado: ${groupName}`);
@@ -539,9 +591,9 @@ class CommandHandler {
 								content: `Grupo não encontrado: ${groupName}`,
 								reaction: this.defaultReactions.after
 							});
-							await bot.sendReturnMessages(returnMessage, group);
+							if (!silent) await bot.sendReturnMessages(returnMessage, group);
 
-							return;
+							return returnMessage;
 						}
 					} else {
 						// No PV e sem argumentos = quer voltar ao normal
@@ -551,8 +603,8 @@ class CommandHandler {
 							content: `Você agora não está mais gerenciando o grupo pelo pv.`,
 							reaction: this.defaultReactions.after
 						});
-						await bot.sendReturnMessages(returnMessage, group);
-						return;
+						if (!silent) await bot.sendReturnMessages(returnMessage, group);
+						return returnMessage;
 					}
 				} else {
 					// Não é g-manage, então verifica se o cara já está gerenciando um pelo PV
@@ -591,7 +643,7 @@ class CommandHandler {
 			// No privado não existe !pausar
 			if (group && group.paused && (command !== "g-pausar") & !isManagingFromPrivate) {
 				this.logger.info(`Ignorando comando de gerenciamento em grupo pausado: ${command}`);
-				return;
+				return null;
 			}
 
 			// Modifica a mensagem para forçar o envio da resposta para o chatId correto
@@ -601,7 +653,14 @@ class CommandHandler {
 				message.managementResponseChatId = replyToChat;
 			}
 
-			const result = await this.processManagementCommand(bot, message, command, args, group);
+			const result = await this.processManagementCommand(
+				bot,
+				message,
+				command,
+				args,
+				group,
+				silent
+			);
 
 			// Restaura a mensagem original se necessário
 			if (isManagingFromPrivate) {
@@ -616,7 +675,7 @@ class CommandHandler {
 			this.logger.info(
 				`[${gidDebug}][${message.author}/${message.authorName}] Ignorando comando em grupo pausado (${command})`
 			);
-			return;
+			return null;
 		}
 
 		// Verifica se é um comando fixo
@@ -625,8 +684,7 @@ class CommandHandler {
 			this.logger.debug(
 				`[${gidDebug}][${message.author}/${message.authorName}] Comando fixo '${command}' '${args.join(" ")}'`
 			);
-			this.executeFixedCommand(bot, message, fixedCommand, args, group);
-			return;
+			return await this.executeFixedCommand(bot, message, fixedCommand, args, group, silent);
 		}
 
 		// Verifica se é um comando personalizado (apenas para mensagens de grupo)
@@ -638,10 +696,9 @@ class CommandHandler {
 				this.logger.debug(
 					`[${gidDebug}][${message.author}/${message.authorName}] Comando custom (${customCommand.startsWith}) '${command}' '${newArgs.join(" ")}'`
 				);
-				this.executeCustomCommand(bot, message, customCommand, newArgs, group);
-				return;
+				return await this.executeCustomCommand(bot, message, customCommand, newArgs, group, silent);
 			} else {
-				if (group.prefix && group.prefix !== "") {
+				if (group.prefix && group.prefix !== "" && !silent) {
 					message.origin.react("🆖");
 				}
 			}
@@ -653,13 +710,16 @@ class CommandHandler {
 		);
 
 		// Se em um grupo, podemos querer notificar sobre comando desconhecido (opcional)
-		if (group && process.env.NOTIFY_UNKNOWN_COMMANDS === "true") {
+		if (group && process.env.NOTIFY_UNKNOWN_COMMANDS === "true" && !silent) {
 			const returnMessage = new ReturnMessage({
 				chatId: replyToChat, // Usa o chatId de resposta correto
 				content: `Comando desconhecido: ${command}`
 			});
 			await bot.sendReturnMessages(returnMessage, group);
+			return returnMessage;
 		}
+
+		return null;
 	}
 
 	/**
@@ -669,8 +729,9 @@ class CommandHandler {
 	 * @param {string} command - O nome do comando
 	 * @param {Array} args - Argumentos do comando
 	 * @param {Object} group - O objeto do grupo (se em grupo)
+	 * @param {boolean} silent - Se true, não envia mensagens nem reage
 	 */
-	async processManagementCommand(bot, message, command, args, group) {
+	async processManagementCommand(bot, message, command, args, group, silent = false) {
 		try {
 			const gidDebug = group?.name ?? "pv";
 
@@ -681,7 +742,7 @@ class CommandHandler {
 			// Reage com o emoji "antes"
 			try {
 				// Usa emoji de reação padrão
-				await message.origin.react(this.defaultReactions.before);
+				if (!silent) await message.origin.react(this.defaultReactions.before);
 			} catch (reactError) {
 				this.logger.error('Erro ao aplicar reação "antes":', reactError.message ?? "xxx");
 			}
@@ -695,9 +756,9 @@ class CommandHandler {
 					content:
 						"Comandos de gerenciamento só podem ser usados em grupos. Use !g-manage [nomeDoGrupo] para gerenciar um grupo a partir do chat privado."
 				});
-				await bot.sendReturnMessages(returnMessage, group);
+				if (!silent) await bot.sendReturnMessages(returnMessage, group);
 
-				return;
+				return returnMessage;
 			}
 
 			const chat = message.groupChat ?? (await message.origin.getChat()); // groupChat é o objeto do grupo quando vem do pv
@@ -719,9 +780,9 @@ class CommandHandler {
 					content: "⛔ Apenas administradores podem usar comandos de gerenciamento.",
 					reaction: this.defaultReactions.error
 				});
-				await bot.sendReturnMessages(returnMessage, group);
+				if (!silent) await bot.sendReturnMessages(returnMessage, group);
 
-				return;
+				return returnMessage;
 			}
 
 			// Remove o prefixo 'g-'
@@ -784,7 +845,16 @@ class CommandHandler {
 					}
 				}
 
-				await bot.sendReturnMessages(managementResponse, group);
+				if (!silent) await bot.sendReturnMessages(managementResponse, group);
+
+				// Reage com o emoji "depois"
+				try {
+					if (!silent) await message.origin.react(this.defaultReactions.after);
+				} catch (reactError) {
+					this.logger.error('Erro ao aplicar reação "depois":', reactError.message ?? "xxx");
+				}
+
+				return managementResponse;
 			} else {
 				this.logger.warn(`Comando de gerenciamento desconhecido: ${managementCommand}`);
 
@@ -793,14 +863,9 @@ class CommandHandler {
 					content: `Comando de gerenciamento desconhecido: ${managementCommand}`,
 					reaction: this.defaultReactions.after
 				});
-				await bot.sendReturnMessages(returnMessage, group);
-			}
+				if (!silent) await bot.sendReturnMessages(returnMessage, group);
 
-			// Reage com o emoji "depois"
-			try {
-				await message.origin.react(this.defaultReactions.after);
-			} catch (reactError) {
-				this.logger.error('Erro ao aplicar reação "depois":', reactError.message ?? "xxx");
+				return returnMessage;
 			}
 		} catch (error) {
 			this.logger.error("Erro ao processar comando de gerenciamento:", error.message ?? "xxx");
@@ -811,7 +876,8 @@ class CommandHandler {
 				content: "Erro ao processar comando de gerenciamento",
 				reaction: this.defaultReactions.after
 			});
-			await bot.sendReturnMessages(returnMessage, group);
+			if (!silent) await bot.sendReturnMessages(returnMessage, group);
+			return returnMessage;
 		}
 	}
 
@@ -822,8 +888,9 @@ class CommandHandler {
 	 * @param {Object} command - O objeto de comando
 	 * @param {Array} args - Argumentos do comando
 	 * @param {Group} group - O objeto do grupo (se em grupo)
+	 * @param {boolean} silent - Se true, não envia mensagens nem reage
 	 */
-	async executeFixedCommand(bot, message, command, args, group) {
+	async executeFixedCommand(bot, message, command, args, group, silent = false) {
 		try {
 			// this.logger.info(
 			// 	`[${bot.id}][${message.author ?? message.authorAlt}@${group?.name ?? "PV"}] Executando comando fixo '${command.name}'`,
@@ -840,7 +907,7 @@ class CommandHandler {
 					this.logger.debug(
 						`Ignorando comando '${command.name}' da categoria silenciada '${command.category}'`
 					);
-					return;
+					return null;
 				}
 			}
 
@@ -848,7 +915,7 @@ class CommandHandler {
 			if (group && group.mutedCommands && Array.isArray(group.mutedCommands)) {
 				if (command && group.mutedCommands.includes(command.name)) {
 					this.logger.debug(`Ignorando comando '${command.name}' pois está silenciado no grupo.`);
-					return;
+					return null;
 				}
 			}
 
@@ -859,7 +926,7 @@ class CommandHandler {
 					this.logger.debug(
 						`Comando ${command.name} requer mensagem citada, mas nenhuma foi fornecida`
 					);
-					return; // Ignora o comando silenciosamente
+					return null; // Ignora o comando silenciosamente
 				}
 			}
 
@@ -869,7 +936,7 @@ class CommandHandler {
 				const isUserAdmin = await this.adminUtils.isAdmin(message.author, group, chat, bot.client);
 				if (!isUserAdmin) {
 					this.logger.debug(`Comando ${command.name} requer administrador, mas o usuário não é`);
-					return;
+					return null;
 				}
 			}
 
@@ -886,7 +953,7 @@ class CommandHandler {
 
 				if (!hasDirectMedia && !hasQuotedMedia) {
 					this.logger.debug(`Comando ${command.name} requer mídia, mas nenhuma foi fornecida`);
-					return; // Ignora o comando silenciosamente
+					return null; // Ignora o comando silenciosamente
 				}
 			}
 
@@ -896,7 +963,7 @@ class CommandHandler {
 					this.logger.debug(
 						`Comando ${command.name} não está habilitado para este grupo ('${group?.name ?? "PV"}').`
 					);
-					return;
+					return null;
 				}
 			}
 
@@ -905,10 +972,15 @@ class CommandHandler {
 				this.logger.debug(`Comando ${command.name} não está disponível neste horário/dia`);
 
 				// Reage com emoji de relógio
-				try {
-					message.origin.react("🕒");
-				} catch (reactError) {
-					this.logger.error('Erro ao aplicar reação "indisponível":', reactError.message ?? "xxx");
+				if (!silent) {
+					try {
+						message.origin.react("🕒");
+					} catch (reactError) {
+						this.logger.error(
+							'Erro ao aplicar reação "indisponível":',
+							reactError.message ?? "xxx"
+						);
+					}
 				}
 
 				const chatId = message.group ?? message.author;
@@ -917,8 +989,8 @@ class CommandHandler {
 					content: `O comando ${command.name} só está disponível ${this.formatAllowedTimes(command)}.`
 				});
 
-				bot.sendReturnMessages(returnMessage, group);
-				return;
+				if (!silent) await bot.sendReturnMessages(returnMessage, group);
+				return returnMessage;
 			}
 
 			// Verifica cooldown
@@ -927,12 +999,12 @@ class CommandHandler {
 
 			if (cooldownInfo.inCooldown) {
 				this.logger.debug(`Comando ${command.name} em cooldown por mais ${cooldownInfo.timeLeft}s`);
-				this.handleCooldownMessage(bot, message, command, groupId, cooldownInfo);
-				return;
+				if (!silent) await this.handleCooldownMessage(bot, message, command, groupId, cooldownInfo);
+				return null;
 			}
 
 			// Reage com emoji "antes" (específico do comando ou padrão)
-			if (command.reactions?.before) {
+			if (!silent && command.reactions?.before) {
 				try {
 					message.origin.react(command.reactions?.before);
 				} catch (reactError) {
@@ -977,26 +1049,31 @@ class CommandHandler {
 						});
 
 						// Envia as ReturnMessages
-						bot.sendReturnMessages(result, group);
+						if (!silent) await bot.sendReturnMessages(result, group);
 					}
 				}
 
 				//this.logger.debug(`Comando ${command.name} executado com sucesso, enviando after reaction`);
 
 				// Reage com emoji "depois" (específico do comando ou padrão)
-				if (command.reactions?.after) {
+				if (!silent && command.reactions?.after) {
 					this.delayedReaction(message.origin, command.reactions.after, 1000);
 				}
+
+				return result;
 			} else {
 				this.logger.error(`Método de comando inválido para ${command.name}`);
 
 				// Reage com emoji "depois" mesmo para erro
 				const afterEmoji = command.reactions?.after ?? this.defaultReactions.after;
-				try {
-					message.origin.react(afterEmoji);
-				} catch (reactError) {
-					this.logger.error('Erro ao aplicar reação "depois":', reactError.message ?? "xxx");
+				if (!silent) {
+					try {
+						message.origin.react(afterEmoji);
+					} catch (reactError) {
+						this.logger.error('Erro ao aplicar reação "depois":', reactError.message ?? "xxx");
+					}
 				}
+				return null;
 			}
 		} catch (error) {
 			this.logger.error(`Erro ao executar comando fixo ${command.name}:`, error.message ?? "xxx");
@@ -1009,7 +1086,8 @@ class CommandHandler {
 				content: `Erro ao executar comando: ${command.name}`,
 				reaction: errorEmoji
 			});
-			bot.sendReturnMessages(returnMessage, group);
+			if (!silent) await bot.sendReturnMessages(returnMessage, group);
+			return returnMessage;
 		}
 	}
 
@@ -1078,8 +1156,9 @@ class CommandHandler {
 	 * @param {Object} command - O objeto de comando personalizado
 	 * @param {Array} args - Argumentos do comando
 	 * @param {Group} group - O objeto do grupo
+	 * @param {boolean} silent - Se true, não envia mensagens nem reage
 	 */
-	async executeCustomCommand(bot, message, command, args, group) {
+	async executeCustomCommand(bot, message, command, args, group, silent = false) {
 		try {
 			//this.logger.info(`Executando comando personalizado: ${command.startsWith}`);
 
@@ -1087,7 +1166,7 @@ class CommandHandler {
 			const responses = command.responses ?? [];
 			if (responses.length === 0) {
 				this.logger.warn(`Comando ${command.startsWith} não tem respostas`);
-				return;
+				return null;
 			}
 
 			// Apenas para adminsitradores
@@ -1097,13 +1176,15 @@ class CommandHandler {
 				if (!isUserAdmin) {
 					this.logger.debug(`Comando ${command.name} requer administrador, mas o usuário não é`);
 
-					try {
-						message.origin.react("⛔️");
-					} catch (reactError) {
-						this.logger.error(
-							'Erro ao aplicar reação "indisponível":',
-							reactError.message ?? "xxx"
-						);
+					if (!silent) {
+						try {
+							message.origin.react("⛔️");
+						} catch (reactError) {
+							this.logger.error(
+								'Erro ao aplicar reação "indisponível":',
+								reactError.message ?? "xxx"
+							);
+						}
 					}
 
 					const returnMessage = new ReturnMessage({
@@ -1111,7 +1192,7 @@ class CommandHandler {
 						content: `o comando *${command.startsWith}* só pode ser usado por _administradores_.`
 					});
 
-					return;
+					return returnMessage;
 				}
 			}
 
@@ -1119,10 +1200,15 @@ class CommandHandler {
 				this.logger.debug(`Comando ${command.startsWith} não está disponível neste horário/dia`);
 
 				// Reage com emoji de relógio
-				try {
-					message.origin.react("🕒");
-				} catch (reactError) {
-					this.logger.error('Erro ao aplicar reação "indisponível":', reactError.message ?? "xxx");
+				if (!silent) {
+					try {
+						message.origin.react("🕒");
+					} catch (reactError) {
+						this.logger.error(
+							'Erro ao aplicar reação "indisponível":',
+							reactError.message ?? "xxx"
+						);
+					}
 				}
 
 				const returnMessage = new ReturnMessage({
@@ -1130,8 +1216,8 @@ class CommandHandler {
 					content: `o comando *${command.startsWith}* só está disponível ${this.formatAllowedTimes(command)}.`
 				});
 
-				bot.sendReturnMessages(returnMessage, group);
-				return;
+				if (!silent) await bot.sendReturnMessages(returnMessage, group);
+				return returnMessage;
 			}
 
 			// Verifica cooldown
@@ -1141,12 +1227,19 @@ class CommandHandler {
 				this.logger.debug(
 					`Comando ${command.startsWith} em cooldown por mais ${cooldownInfo.timeLeft}s`
 				);
-				this.handleCooldownMessage(bot, message, command.startsWith, message.group, cooldownInfo);
-				return;
+				if (!silent)
+					await this.handleCooldownMessage(
+						bot,
+						message,
+						command.startsWith,
+						message.group,
+						cooldownInfo
+					);
+				return null;
 			}
 
 			// Reage com emoji antes (do comando ou padrão)
-			if (command.reactions?.before) {
+			if (!silent && command.reactions?.before) {
 				try {
 					await message.origin.react(command.reactions?.before);
 				} catch (reactError) {
@@ -1174,7 +1267,7 @@ class CommandHandler {
 			});
 
 			// Reage à mensagem se especificado (esta é a reação específica do comando)
-			if (command.react) {
+			if (!silent && command.react) {
 				try {
 					this.logger.debug(`Reagindo à mensagem com: ${command.react}`);
 					await message.origin.react(command.react);
@@ -1184,6 +1277,8 @@ class CommandHandler {
 			}
 
 			this.updateCooldown(command.startsWith, message.group, bot.id);
+
+			let finalResult = null;
 
 			// Envia todas as respostas ou seleciona uma aleatória
 			if (command.sendAllResponses) {
@@ -1219,8 +1314,9 @@ class CommandHandler {
 				// Envia todas as mensagens de retorno
 				if (returnMessages.length > 0) {
 					// Enviar mensagem no grupo ou pv?
-					await bot.sendReturnMessages(returnMessages, group);
+					if (!silent) await bot.sendReturnMessages(returnMessages, group);
 				}
+				finalResult = returnMessages;
 			} else {
 				const randomIndex = Math.floor(Math.random() * responses.length);
 				this.logger.debug(
@@ -1246,19 +1342,24 @@ class CommandHandler {
 						command.mentions.forEach((m) => existing.add(m));
 						returnMessage.options.mentions = Array.from(existing);
 					}
-					await bot.sendReturnMessages(returnMessage, group);
+					if (!silent) await bot.sendReturnMessages(returnMessage, group);
 				}
+				finalResult = returnMessage;
 			}
 
 			// Reage com emoji depois (do comando ou padrão)
 			const afterEmoji = command.reactions?.after ?? null;
-			try {
-				if (afterEmoji && command.react !== false) {
-					message.origin.react(afterEmoji);
+			if (!silent) {
+				try {
+					if (afterEmoji && command.react !== false) {
+						message.origin.react(afterEmoji);
+					}
+				} catch (reactError) {
+					this.logger.error('Erro ao aplicar reação "depois":', reactError.message ?? "xxx");
 				}
-			} catch (reactError) {
-				this.logger.error('Erro ao aplicar reação "depois":', reactError.message ?? "xxx");
 			}
+
+			return finalResult;
 		} catch (error) {
 			this.logger.error(
 				`Erro ao executar comando personalizado ${command.startsWith}:`,
@@ -1271,7 +1372,8 @@ class CommandHandler {
 				content: `Erro ao executar comando personalizado: ${command.startsWith}`,
 				reaction: command.react !== false ? errorEmoji : null
 			});
-			bot.sendReturnMessages(returnMessage, group);
+			if (!silent) await bot.sendReturnMessages(returnMessage, group);
+			return returnMessage;
 		}
 	}
 
@@ -1320,6 +1422,48 @@ class CommandHandler {
 			if (
 				processedResponse &&
 				typeof processedResponse === "object" &&
+				processedResponse.type === "embedded-commands"
+			) {
+				this.logger.info(`Executando comandos embutidos (múltiplos)`);
+
+				try {
+					const allResults = [];
+					for (let cmdText of processedResponse.commands) {
+						const prefix = group.prefix ?? "!";
+
+						// Se o comando já tem um prefixo, usamos ele; senão, usamos o prefixo do grupo
+						if (cmdText.startsWith(prefix)) {
+							cmdText = cmdText.substring(prefix.length);
+						} else if (cmdText.startsWith("!")) {
+							// Trata caso especial onde o comando está com prefixo padrão
+							cmdText = cmdText.substring(1);
+						}
+
+						// Divide o comando em nome e argumentos
+						const [embeddedCmd, ...embeddedArgs] = cmdText.trim().split(/\s+/);
+
+						// Executamos o comando silenciosamente
+						const result = await this.processCommand(
+							bot,
+							message,
+							embeddedCmd,
+							embeddedArgs.concat(args),
+							group,
+							{ skipCustom: true, silent: true }
+						);
+						if (result) allResults.push(result);
+					}
+
+					return this.aggregateReturnMessages(allResults);
+				} catch (embeddedError) {
+					this.logger.error(`Erro ao executar comandos embutidos`, embeddedError);
+					return null;
+				}
+			}
+
+			if (
+				processedResponse &&
+				typeof processedResponse === "object" &&
 				processedResponse.type === "embedded-command"
 			) {
 				this.logger.info(`Executando comando embutido: ${processedResponse.command}`);
@@ -1341,16 +1485,14 @@ class CommandHandler {
 					const [embeddedCmd, ...embeddedArgs] = cmdText.trim().split(/\s+/);
 
 					// Executamos o comando
-					await this.processCommand(
+					return await this.processCommand(
 						bot,
 						message,
 						embeddedCmd,
 						embeddedArgs.concat(args),
 						group,
-						true
+						{ skipCustom: true }
 					);
-
-					return null; // Não continua o processamento normal
 				} catch (embeddedError) {
 					this.logger.error(
 						`Erro ao executar comando embutido: ${processedResponse.command}`,

@@ -67,7 +67,7 @@ class LLMService {
 				name: "ollama-gemma3:12b-it-qat",
 				method: async (options) => {
 					options.model = "gemma3:12b-it-qat";
-					options.timeout = options.timeout ? options.timeout*2 : 120000;
+					options.timeout = options.timeout ? options.timeout * 2 : 120000;
 					options.ignoreVideo = true;
 					const response = await this.ollamaCompletion({
 						customEndpoint: "http://192.168.3.200:12345",
@@ -101,7 +101,6 @@ class LLMService {
 			// 		throw new Error("Resposta inválida ou vazia do Ollama");
 			// 	}
 			// },
-
 
 			{
 				name: "gemini",
