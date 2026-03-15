@@ -17,7 +17,8 @@ database.getSQLiteDb(
     data TEXT PRIMARY KEY,
     news TEXT
   );
-`
+`,
+	true
 );
 
 /**

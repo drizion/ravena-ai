@@ -92,7 +92,8 @@ class CacheManager {
         expires_at INTEGER
       );
       CREATE INDEX IF NOT EXISTS idx_cooldowns_expires ON cooldowns(expires_at);
-    `
+    `,
+			true
 		);
 
 		// Redis setup (optional)

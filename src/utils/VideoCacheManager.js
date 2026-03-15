@@ -13,7 +13,8 @@ database.getSQLiteDb(
     id TEXT PRIMARY KEY,
     json_data TEXT
   );
-`
+`,
+	true
 );
 
 // Helper function to check if a file exists

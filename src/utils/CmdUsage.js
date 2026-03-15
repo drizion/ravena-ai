@@ -31,7 +31,8 @@ class CmdUsage {
         args TEXT,
         info TEXT
       );
-    `
+    `,
+			true
 		);
 	}
 

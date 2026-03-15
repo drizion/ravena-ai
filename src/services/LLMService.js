@@ -59,7 +59,8 @@ class LLMService {
 				output_tokens INTEGER
 			);
 			CREATE INDEX IF NOT EXISTS idx_timestamp ON usage_stats(timestamp);
-			`
+			`,
+			true
 		);
 
 		this.providerDefinitions = [

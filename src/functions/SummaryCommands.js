@@ -21,7 +21,8 @@ database.getSQLiteDb(
     group_id TEXT PRIMARY KEY,
     json_data TEXT
   );
-`
+`,
+	true
 );
 
 const mediaAnalysisSchema = {

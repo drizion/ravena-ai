@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const Logger = require("./Logger");
 const sqlite3 = require("sqlite3").verbose();
+const DatabaseBackup = require("./DatabaseBackup");
 
 /**
  * Singleton Database class using SQLite backend with JSON storage (Hybrid approach)
@@ -13,6 +14,8 @@ class Database {
 		this.backupPath = path.join(__dirname, "../../data/backups");
 
 		this.sqlites = {}; // Cache for other sqlite connections (like 'pinto')
+		this.noBackupDatabases = new Set(); // Track databases that should not be backed up
+		this.schemas = {}; // Store schemas for restoration
 		this.coreDb = null; // Main database connection
 
 		this.ensureDirectories();
@@ -21,14 +24,13 @@ class Database {
 		// Bot instances for cleanup on exit
 		this.botInstances = [];
 
-		// Scheduled Backup Configuration
-		this.maxBackups = parseInt(process.env.MAX_BACKUPS) || 120;
-		this.scheduledBackupHours = [0, 6, 12, 18];
-		this.backupRetentionDays = parseInt(process.env.BACKUP_RETENTION_DAYS) || 30;
-
-		// Directories/Files to backup
-		this.backupTargets = [path.join(this.databasePath, "sqlites")];
-		this.backupIgnoreFiles = ["cache.db"];
+		// Backup System Initialization
+		this.backupSystem = new DatabaseBackup(this);
+		this.scheduledBackupHours = process.env.SCHEDULED_BACKUP_HOURS
+			? process.env.SCHEDULED_BACKUP_HOURS.split(",")
+					.map((h) => parseInt(h.trim()))
+					.filter((h) => !isNaN(h))
+			: [0, 6, 12, 18];
 
 		// Shared Blocked Contacts (Global by type)
 		this.globalBlockedContacts = {
@@ -92,6 +94,7 @@ class Database {
 				`CREATE TABLE IF NOT EXISTS soft_blocks (number TEXT PRIMARY KEY, json_data TEXT)`,
 				`CREATE TABLE IF NOT EXISTS load_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, bot_id TEXT, timestamp_end INTEGER, json_data TEXT)`
 			];
+			this.schemas["core"] = tables.join("; ");
 			tables.forEach((sql) => this.coreDb.run(sql));
 		});
 	}
@@ -140,7 +143,7 @@ class Database {
 					this.lastScheduledBackup = now.getTime();
 				}
 			}
-		}, 60000); // Check every minute
+		}, 10000); // Check every minute
 	}
 
 	getLastScheduledBackupTime() {
@@ -170,105 +173,10 @@ class Database {
 		}
 	}
 
-	createScheduledBackup() {
-		try {
-			const now = new Date();
-			const timestamp = now.toISOString().replace(/[:.]/g, "-");
-			const backupDir = path.join(this.backupPath, timestamp);
-
-			if (!fs.existsSync(backupDir)) {
-				fs.mkdirSync(backupDir, { recursive: true });
-			}
-
-			// Backup targeted files/directories
-			for (const target of this.backupTargets) {
-				if (fs.existsSync(target)) {
-					const dest = path.join(backupDir, path.basename(target));
-					this.backupDirectory(target, dest);
-				}
-			}
-
-			this.logger.info(`Scheduled backup created: ${backupDir}`);
-			this.saveLastScheduledBackupTime(now.getTime());
-			this.cleanupOldScheduledBackups();
-		} catch (error) {
-			this.logger.error("Error creating scheduled backup:", error);
-		}
-	}
-
-	backupDirectory(source, target) {
-		try {
-			if (this.backupIgnoreFiles.includes(path.basename(source))) return;
-
-			const stats = fs.statSync(source);
-			if (stats.isDirectory()) {
-				if (!fs.existsSync(target)) {
-					fs.mkdirSync(target, { recursive: true });
-				}
-				const items = fs.readdirSync(source);
-				for (const item of items) {
-					this.backupDirectory(path.join(source, item), path.join(target, item));
-				}
-			} else if (stats.isFile()) {
-				fs.copyFileSync(source, target);
-			}
-		} catch (error) {
-			this.logger.error(`Error backing up ${source}:`, error);
-		}
-	}
-
-	cleanupOldScheduledBackups() {
-		try {
-			const now = Date.now();
-			const retentionPeriod = this.backupRetentionDays * 24 * 60 * 60 * 1000;
-
-			const backupDirs = fs
-				.readdirSync(this.backupPath)
-				.filter((item) => {
-					const fullPath = path.join(this.backupPath, item);
-					return (
-						fs.statSync(fullPath).isDirectory() && /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}/.test(item)
-					);
-				})
-				.map((dir) => ({
-					name: dir,
-					path: path.join(this.backupPath, dir),
-					date: new Date(
-						dir.replace(/-/g, (m, i) => (i <= 10 ? m : i === 11 ? ":" : i === 14 ? ":" : "."))
-					).getTime()
-				}))
-				.sort((a, b) => b.date - a.date);
-
-			if (backupDirs.length > this.maxBackups) {
-				const dirsToDelete = backupDirs.slice(this.maxBackups);
-				for (const dir of dirsToDelete) {
-					if (now - dir.date > retentionPeriod) {
-						this.deleteDirectory(dir.path);
-						this.logger.info(`Old backup removed: ${dir.name}`);
-					}
-				}
-			}
-		} catch (error) {
-			this.logger.error("Error cleaning up old backups:", error);
-		}
-	}
-
-	deleteDirectory(dirPath) {
-		try {
-			if (fs.existsSync(dirPath)) {
-				const items = fs.readdirSync(dirPath);
-				for (const item of items) {
-					const itemPath = path.join(dirPath, item);
-					if (fs.statSync(itemPath).isDirectory()) {
-						this.deleteDirectory(itemPath);
-					} else {
-						fs.unlinkSync(itemPath);
-					}
-				}
-				fs.rmdirSync(dirPath);
-			}
-		} catch (error) {
-			this.logger.error(`Error deleting directory ${dirPath}:`, error);
+	async createScheduledBackup() {
+		const success = await this.backupSystem.createScheduledBackup();
+		if (success) {
+			this.saveLastScheduledBackupTime(Date.now());
 		}
 	}
 
@@ -301,9 +209,13 @@ class Database {
 	 */
 	run(sql, params = []) {
 		return new Promise((resolve, reject) => {
-			this.coreDb.run(sql, params, function (err) {
-				if (err) reject(err);
-				else resolve(this);
+			this.coreDb.run(sql, params, async (err) => {
+				if (err) {
+					if (err.message && err.message.includes("SQLITE_CORRUPT")) {
+						await this.backupSystem.handleCorruption("core", err);
+					}
+					reject(err);
+				} else resolve(this);
 			});
 		});
 	}
@@ -313,9 +225,13 @@ class Database {
 	 */
 	all(sql, params = []) {
 		return new Promise((resolve, reject) => {
-			this.coreDb.all(sql, params, (err, rows) => {
-				if (err) reject(err);
-				else resolve(rows);
+			this.coreDb.all(sql, params, async (err, rows) => {
+				if (err) {
+					if (err.message && err.message.includes("SQLITE_CORRUPT")) {
+						await this.backupSystem.handleCorruption("core", err);
+					}
+					reject(err);
+				} else resolve(rows);
 			});
 		});
 	}
@@ -325,9 +241,13 @@ class Database {
 	 */
 	get(sql, params = []) {
 		return new Promise((resolve, reject) => {
-			this.coreDb.get(sql, params, (err, row) => {
-				if (err) reject(err);
-				else resolve(row);
+			this.coreDb.get(sql, params, async (err, row) => {
+				if (err) {
+					if (err.message && err.message.includes("SQLITE_CORRUPT")) {
+						await this.backupSystem.handleCorruption("core", err);
+					}
+					reject(err);
+				} else resolve(row);
 			});
 		});
 	}
@@ -868,9 +788,17 @@ class Database {
 
 	// --- Other SQLite Databases (Legacy/Specific) ---
 
-	getSQLiteDb(name, schema) {
+	getSQLiteDb(name, schema, noBackup = false) {
+		if (noBackup) {
+			this.noBackupDatabases.add(name);
+		}
+
+		this.schemas[name] = schema;
+
 		if (!this.sqlites[name]) {
-			this.logger.info(`[database][getSQLiteDb] Loading SQLite DB '${name}'`);
+			this.logger.info(
+				`[database][getSQLiteDb] Loading SQLite DB '${name}' (Backup: ${!noBackup})`
+			);
 
 			const databasesFolder = path.join(this.databasePath, "sqlites");
 			if (!fs.existsSync(databasesFolder)) {
@@ -896,9 +824,13 @@ class Database {
 	dbRun(dbName, sql, params = []) {
 		const db = this.sqlites[dbName];
 		return new Promise((resolve, reject) => {
-			db.run(sql, params, function (err) {
-				if (err) reject(err);
-				else resolve(this);
+			db.run(sql, params, async (err) => {
+				if (err) {
+					if (err.message && err.message.includes("SQLITE_CORRUPT")) {
+						await this.backupSystem.handleCorruption(dbName, err);
+					}
+					reject(err);
+				} else resolve(this);
 			});
 		});
 	}
@@ -906,9 +838,13 @@ class Database {
 	dbAll(dbName, sql, params = []) {
 		const db = this.sqlites[dbName];
 		return new Promise((resolve, reject) => {
-			db.all(sql, params, (err, rows) => {
-				if (err) reject(err);
-				else resolve(rows);
+			db.all(sql, params, async (err, rows) => {
+				if (err) {
+					if (err.message && err.message.includes("SQLITE_CORRUPT")) {
+						await this.backupSystem.handleCorruption(dbName, err);
+					}
+					reject(err);
+				} else resolve(rows);
 			});
 		});
 	}
@@ -916,9 +852,13 @@ class Database {
 	dbGet(dbName, sql, params = []) {
 		const db = this.sqlites[dbName];
 		return new Promise((resolve, reject) => {
-			db.get(sql, params, (err, row) => {
-				if (err) reject(err);
-				else resolve(row);
+			db.get(sql, params, async (err, row) => {
+				if (err) {
+					if (err.message && err.message.includes("SQLITE_CORRUPT")) {
+						await this.backupSystem.handleCorruption(dbName, err);
+					}
+					reject(err);
+				} else resolve(row);
 			});
 		});
 	}
