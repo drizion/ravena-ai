@@ -250,7 +250,7 @@ async function baixarVideoYoutube(idVideo, dadosSolicitante, videoHD = false, ca
 							recodeVideo: "mp4",
 							audioFormat: "aac",
 							ffmpegLocation: process.env.FFMPEG_PATH,
-							cookies: path.join(database.databasePath, "www.youtube.com_cookies.txt"),
+							//cookies: path.join(database.databasePath, "www.youtube.com_cookies.txt"),
 							jsRuntimes: "node:/root/.nvm/versions/node/v22.16.0/bin/node"
 						})
 						.then((output) => {
@@ -321,7 +321,7 @@ async function baixarMusicaYoutube(idVideo, dadosSolicitante, callback) {
 					recodeVideo: "mp4",
 					audioFormat: "aac",
 					ffmpegLocation: process.env.FFMPEG_PATH,
-					cookies: path.join(database.databasePath, "www.youtube.com_cookies.txt"),
+					//cookies: path.join(database.databasePath, "www.youtube.com_cookies.txt"),
 					jsRuntimes: "node:/root/.nvm/versions/node/v22.16.0/bin/node"
 				};
 
