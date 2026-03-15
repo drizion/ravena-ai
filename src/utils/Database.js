@@ -84,6 +84,11 @@ class Database {
 		const dbPath = path.join(this.databasePath, "sqlites/core.db");
 		this.coreDb = new sqlite3.Database(dbPath);
 
+		// Enable WAL mode for better concurrency and to prevent corruption
+		this.coreDb.run("PRAGMA journal_mode = WAL");
+		this.coreDb.run("PRAGMA synchronous = NORMAL");
+		this.coreDb.run("PRAGMA busy_timeout = 5000");
+
 		// Ensure tables exist (redundant if migration ran, but good for safety)
 		this.coreDb.serialize(() => {
 			const tables = [
@@ -143,7 +148,7 @@ class Database {
 					this.lastScheduledBackup = now.getTime();
 				}
 			}
-		}, 10000); // Check every minute
+		}, 60000); // Check every minute
 	}
 
 	getLastScheduledBackupTime() {
@@ -209,13 +214,19 @@ class Database {
 	 */
 	run(sql, params = []) {
 		return new Promise((resolve, reject) => {
-			this.coreDb.run(sql, params, async (err) => {
+			const self = this;
+			this.coreDb.run(sql, params, function (err) {
 				if (err) {
 					if (err.message && err.message.includes("SQLITE_CORRUPT")) {
-						await this.backupSystem.handleCorruption("core", err);
+						// Async handle corruption
+						self.backupSystem.handleCorruption("core", err).catch((e) => {
+							self.logger.error("Failed to handle corruption:", e);
+						});
 					}
 					reject(err);
-				} else resolve(this);
+				} else {
+					resolve({ lastID: this.lastID, changes: this.changes });
+				}
 			});
 		});
 	}
@@ -225,10 +236,13 @@ class Database {
 	 */
 	all(sql, params = []) {
 		return new Promise((resolve, reject) => {
-			this.coreDb.all(sql, params, async (err, rows) => {
+			const self = this;
+			this.coreDb.all(sql, params, function (err, rows) {
 				if (err) {
 					if (err.message && err.message.includes("SQLITE_CORRUPT")) {
-						await this.backupSystem.handleCorruption("core", err);
+						self.backupSystem.handleCorruption("core", err).catch((e) => {
+							self.logger.error("Failed to handle corruption:", e);
+						});
 					}
 					reject(err);
 				} else resolve(rows);
@@ -241,10 +255,13 @@ class Database {
 	 */
 	get(sql, params = []) {
 		return new Promise((resolve, reject) => {
-			this.coreDb.get(sql, params, async (err, row) => {
+			const self = this;
+			this.coreDb.get(sql, params, function (err, row) {
 				if (err) {
 					if (err.message && err.message.includes("SQLITE_CORRUPT")) {
-						await this.backupSystem.handleCorruption("core", err);
+						self.backupSystem.handleCorruption("core", err).catch((e) => {
+							self.logger.error("Failed to handle corruption:", e);
+						});
 					}
 					reject(err);
 				} else resolve(row);
@@ -808,6 +825,11 @@ class Database {
 			const dbPath = path.join(databasesFolder, `${name}.db`);
 			this.sqlites[name] = new sqlite3.Database(dbPath);
 
+			// Enable WAL mode for better concurrency and to prevent corruption
+			this.sqlites[name].run("PRAGMA journal_mode = WAL");
+			this.sqlites[name].run("PRAGMA synchronous = NORMAL");
+			this.sqlites[name].run("PRAGMA busy_timeout = 5000");
+
 			// Initialize database structure
 			this.sqlites[name].serialize(() => {
 				this.sqlites[name].exec(schema, (err) => {
@@ -824,13 +846,19 @@ class Database {
 	dbRun(dbName, sql, params = []) {
 		const db = this.sqlites[dbName];
 		return new Promise((resolve, reject) => {
-			db.run(sql, params, async (err) => {
+			const self = this;
+			db.run(sql, params, function (err) {
 				if (err) {
 					if (err.message && err.message.includes("SQLITE_CORRUPT")) {
-						await this.backupSystem.handleCorruption(dbName, err);
+						// Async handle corruption
+						self.backupSystem.handleCorruption(dbName, err).catch((e) => {
+							self.logger.error(`Failed to handle corruption for ${dbName}:`, e);
+						});
 					}
 					reject(err);
-				} else resolve(this);
+				} else {
+					resolve({ lastID: this.lastID, changes: this.changes });
+				}
 			});
 		});
 	}
@@ -838,10 +866,13 @@ class Database {
 	dbAll(dbName, sql, params = []) {
 		const db = this.sqlites[dbName];
 		return new Promise((resolve, reject) => {
-			db.all(sql, params, async (err, rows) => {
+			const self = this;
+			db.all(sql, params, function (err, rows) {
 				if (err) {
 					if (err.message && err.message.includes("SQLITE_CORRUPT")) {
-						await this.backupSystem.handleCorruption(dbName, err);
+						self.backupSystem.handleCorruption(dbName, err).catch((e) => {
+							self.logger.error(`Failed to handle corruption for ${dbName}:`, e);
+						});
 					}
 					reject(err);
 				} else resolve(rows);
@@ -852,15 +883,39 @@ class Database {
 	dbGet(dbName, sql, params = []) {
 		const db = this.sqlites[dbName];
 		return new Promise((resolve, reject) => {
-			db.get(sql, params, async (err, row) => {
+			const self = this;
+			db.get(sql, params, function (err, row) {
 				if (err) {
 					if (err.message && err.message.includes("SQLITE_CORRUPT")) {
-						await this.backupSystem.handleCorruption(dbName, err);
+						self.backupSystem.handleCorruption(dbName, err).catch((e) => {
+							self.logger.error(`Failed to handle corruption for ${dbName}:`, e);
+						});
 					}
 					reject(err);
 				} else resolve(row);
 			});
 		});
+	}
+
+	/**
+	 * Run operations inside a transaction on a specific database
+	 * @param {string} dbName Database name
+	 * @param {Function} callback Async function containing database operations
+	 */
+	async dbTransaction(dbName, callback) {
+		try {
+			await this.dbRun(dbName, "BEGIN TRANSACTION");
+			const result = await callback();
+			await this.dbRun(dbName, "COMMIT");
+			return result;
+		} catch (error) {
+			try {
+				await this.dbRun(dbName, "ROLLBACK");
+			} catch (rollbackError) {
+				this.logger.error(`Failed to rollback ${dbName}:`, rollbackError);
+			}
+			throw error;
+		}
 	}
 }
 

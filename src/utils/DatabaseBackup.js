@@ -363,6 +363,12 @@ Error: \`${error.message}\``);
 				this.logger.info(`Corrupt database saved to: ${corruptPath}`);
 			}
 
+			// Delete WAL and SHM files to ensure a clean restore
+			const walPath = `${dbPath}-wal`;
+			const shmPath = `${dbPath}-shm`;
+			if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
+			if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
+
 			// 3. Attempt Restore from Cloud
 			let restored = false;
 			if (this.remoteEnabled && this.remoteServers.length > 0) {
@@ -500,9 +506,15 @@ ${err.message}`);
 		if (dbName === "core") {
 			if (this.db.coreDb) this.db.coreDb.close();
 			this.db.coreDb = new sqlite3.Database(dbPath);
+			this.db.coreDb.run("PRAGMA journal_mode = WAL");
+			this.db.coreDb.run("PRAGMA synchronous = NORMAL");
+			this.db.coreDb.run("PRAGMA busy_timeout = 5000");
 		} else {
 			if (this.db.sqlites[dbName]) this.db.sqlites[dbName].close();
 			this.db.sqlites[dbName] = new sqlite3.Database(dbPath);
+			this.db.sqlites[dbName].run("PRAGMA journal_mode = WAL");
+			this.db.sqlites[dbName].run("PRAGMA synchronous = NORMAL");
+			this.db.sqlites[dbName].run("PRAGMA busy_timeout = 5000");
 		}
 		this.logger.info(`Reinitialized connection for ${dbName}`);
 	}

@@ -743,7 +743,7 @@ async function updateBuffUses(buffId, remainingUses) {
 }
 
 async function addFishToInventory(userId, fish) {
-	await database.dbRun(
+	const result = await database.dbRun(
 		dbName,
 		`INSERT INTO fishing_inventory 
         (user_id, name, weight, is_rare, timestamp, emoji, data_json)
@@ -758,6 +758,7 @@ async function addFishToInventory(userId, fish) {
 			JSON.stringify(fish)
 		]
 	);
+	return result.lastID;
 }
 
 async function removeFishFromInventory(userId, fishDbId) {
@@ -1604,7 +1605,8 @@ async function fishCommand(bot, message, args, group) {
 					effectMessage += `\n${buffResult.buffMessages.join("\n")}`;
 
 				// Add to inventory
-				await addFishToInventory(userId, modifiedFish);
+				const fishDbId = await addFishToInventory(userId, modifiedFish);
+				modifiedFish.dbId = fishDbId;
 				userData.fishes.push(modifiedFish);
 
 				// Only add to stats if NOT a meme fish
@@ -1632,12 +1634,7 @@ async function fishCommand(bot, message, args, group) {
 
 				// Handle "lose_recent_fish" AFTER adding (so we have something to lose)
 				if (randomItem?.effect === "lose_recent_fish" && i === 0) {
-					const fishRow = await database.dbGet(
-						dbName,
-						"SELECT id FROM fishing_inventory WHERE user_id = ? ORDER BY id DESC LIMIT 1",
-						[userId]
-					);
-					if (fishRow) await removeFishFromInventory(userId, fishRow.id);
+					if (modifiedFish.dbId) await removeFishFromInventory(userId, modifiedFish.dbId);
 
 					// Remove from local data
 					userData.fishes.pop();
@@ -1702,15 +1699,6 @@ async function fishCommand(bot, message, args, group) {
 
 			const removed = chosenCandidate.fish;
 			const smallestIndex = chosenCandidate.index;
-
-			if (!removed.dbId) {
-				const fishRow = await database.dbGet(
-					dbName,
-					"SELECT id FROM fishing_inventory WHERE user_id = ? AND weight = ? AND name = ? LIMIT 1",
-					[userId, removed.weight, removed.name]
-				);
-				if (fishRow) removed.dbId = fishRow.id;
-			}
 
 			if (removed.dbId) {
 				await removeFishFromInventory(userId, removed.dbId);
