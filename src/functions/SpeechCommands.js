@@ -205,8 +205,21 @@ function removeWhatsAppMarkup(text) {
  */
 async function textToSpeech(bot, message, args, group, char = "ravena") {
 	try {
-		const startProcess = Date.now();
 		const chatId = message.group ?? message.author;
+
+		if (process.env.DISABLE_TTS_COMMAND === "true") {
+			return new ReturnMessage({
+				chatId,
+				content:
+					"🚫 *Os comandos de áudio (TTS) estão desabilitados temporariamente devido a problemas no servidor.* 🛠️\n\nAcesse o grupo de avisos/comunidade para saber mais! 📢✨",
+				options: {
+					quotedMessageId: message.origin.id._serialized,
+					evoReply: message.origin
+				}
+			});
+		}
+
+		const startProcess = Date.now();
 
 		const quotedMsg = await message.origin.getQuotedMessage().catch(() => null);
 		let text = args.join(" ");

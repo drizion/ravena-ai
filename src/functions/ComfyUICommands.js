@@ -567,8 +567,17 @@ const commands = [
 			after: "✨"
 		},
 		cooldown: 60,
-		method: generateImage
+		method: async (bot, message, args, group, skipNotify = true) => {
+			if (process.env.DISABLE_IMAGINE_COMMAND === "true") {
+				return new ReturnMessage({
+					chatId: message.group ?? message.author,
+					content:
+						"🚫 *O comando está desabilitado temporariamente devido a problemas no servidor de IA.* 🛠️\n\nAcesse o grupo de avisos/comunidade para saber mais! 📢✨"
+				});
+			}
+			return generateImage(bot, message, args, group, skipNotify);
+		}
 	})
 ];
 
-module.exports = { commands };
+module.exports = { commands, generateImage };
