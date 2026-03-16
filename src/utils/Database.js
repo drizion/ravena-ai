@@ -216,6 +216,9 @@ class Database {
 	 * Run a SQL query on the core database
 	 */
 	run(sql, params = []) {
+		if (!this.coreDb) {
+			return Promise.reject(new Error("Core Database not initialized or currently restoring."));
+		}
 		return new Promise((resolve, reject) => {
 			const self = this;
 			this.coreDb.run(sql, params, function (err) {
@@ -238,6 +241,9 @@ class Database {
 	 * Get all rows from the core database
 	 */
 	all(sql, params = []) {
+		if (!this.coreDb) {
+			return Promise.reject(new Error("Core Database not initialized or currently restoring."));
+		}
 		return new Promise((resolve, reject) => {
 			const self = this;
 			this.coreDb.all(sql, params, function (err, rows) {
@@ -257,6 +263,9 @@ class Database {
 	 * Get a single row from the core database
 	 */
 	get(sql, params = []) {
+		if (!this.coreDb) {
+			return Promise.reject(new Error("Core Database not initialized or currently restoring."));
+		}
 		return new Promise((resolve, reject) => {
 			const self = this;
 			this.coreDb.get(sql, params, function (err, row) {
@@ -848,6 +857,11 @@ class Database {
 
 	dbRun(dbName, sql, params = []) {
 		const db = this.sqlites[dbName];
+		if (!db) {
+			return Promise.reject(
+				new Error(`Database '${dbName}' not initialized or currently restoring.`)
+			);
+		}
 		return new Promise((resolve, reject) => {
 			const self = this;
 			db.run(sql, params, function (err) {
@@ -868,6 +882,11 @@ class Database {
 
 	dbAll(dbName, sql, params = []) {
 		const db = this.sqlites[dbName];
+		if (!db) {
+			return Promise.reject(
+				new Error(`Database '${dbName}' not initialized or currently restoring.`)
+			);
+		}
 		return new Promise((resolve, reject) => {
 			const self = this;
 			db.all(sql, params, function (err, rows) {
@@ -885,6 +904,11 @@ class Database {
 
 	dbGet(dbName, sql, params = []) {
 		const db = this.sqlites[dbName];
+		if (!db) {
+			return Promise.reject(
+				new Error(`Database '${dbName}' not initialized or currently restoring.`)
+			);
+		}
 		return new Promise((resolve, reject) => {
 			const self = this;
 			db.get(sql, params, function (err, row) {
