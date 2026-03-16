@@ -818,6 +818,16 @@ class Database {
 	// --- Other SQLite Databases (Legacy/Specific) ---
 
 	getSQLiteDb(name, schema, noBackup = false) {
+		if (this.backupSystem && this.backupSystem.recoveringDbs.has(name)) {
+			this.logger.warn(`Database '${name}' is currently being restored. Waiting...`);
+			// We could return a Proxy or wait, but simpler for now is to allow it to fail
+			// or we could throw an error that the caller handles.
+			// Actually, if we return null, most callers will fail.
+			// Let's return the connection anyway if it exists, otherwise throw.
+			if (this.sqlites[name]) return this.sqlites[name];
+			throw new Error(`Database '${name}' is currently under restoration.`);
+		}
+
 		if (noBackup) {
 			this.noBackupDatabases.add(name);
 		}

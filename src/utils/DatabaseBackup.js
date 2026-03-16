@@ -325,10 +325,11 @@ class DatabaseBackup {
 
 			if (col.name === "json_data" || col.type === "TEXT" || type === "TEXT") {
 				// MySQL Primary Key columns cannot be BLOB/TEXT without length.
-				// We use VARCHAR(768) for PKs and LONGTEXT for others.
-				// 768 is the max safe length for utf8mb4 indexes (3072 bytes).
+				// We use VARCHAR(1024) for PKs and LONGTEXT for others.
+				// 1024 is the max safe length for utf8mb4 indexes if InnoDB allows it (3072 bytes total for index).
+				// We'll use 1024 as it should cover most long triggers.
 				if (pks.includes(col.name)) {
-					type = "VARCHAR(768)";
+					type = "VARCHAR(1024)";
 				} else {
 					type = "LONGTEXT";
 				}
@@ -378,19 +379,21 @@ Error: \`${error.message}\``);
 
 		let backupUsed = "none";
 		try {
-			// 2. CLOSE current connection FIRST to avoid I/O errors and locks
+			// 2. CLOSE current connection FIRST and AWAIT it
 			if (dbName === "core") {
 				if (this.db.coreDb) {
-					try {
-						this.db.coreDb.close();
-					} catch (e) {}
-					this.db.coreDb = null;
+					const core = this.db.coreDb;
+					this.db.coreDb = null; // Prevent use while closing
+					await new Promise((resolve) => {
+						core.close((err) => resolve());
+					});
 				}
 			} else if (this.db.sqlites[dbName]) {
-				try {
-					this.db.sqlites[dbName].close();
-				} catch (e) {}
-				delete this.db.sqlites[dbName];
+				const db = this.db.sqlites[dbName];
+				delete this.db.sqlites[dbName]; // Prevent use while closing
+				await new Promise((resolve) => {
+					db.close((err) => resolve());
+				});
 			}
 
 			const dbFile = dbName === "core" ? "core.db" : `${dbName}.db`;
@@ -399,15 +402,30 @@ Error: \`${error.message}\``);
 
 			// 3. Backup the corrupt file
 			if (fs.existsSync(dbPath)) {
-				fs.copyFileSync(dbPath, corruptPath);
-				this.logger.info(`Corrupt database saved to: ${corruptPath}`);
+				try {
+					fs.copyFileSync(dbPath, corruptPath);
+					this.logger.info(`Corrupt database saved to: ${corruptPath}`);
+				} catch (e) {
+					this.logger.error(`Failed to copy corrupt DB: ${e.message}`);
+				}
 			}
 
 			// Delete WAL and SHM files to ensure a clean restore
 			const walPath = `${dbPath}-wal`;
 			const shmPath = `${dbPath}-shm`;
-			if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
-			if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
+			const journalPath = `${dbPath}-journal`;
+			if (fs.existsSync(walPath))
+				try {
+					fs.unlinkSync(walPath);
+				} catch (e) {}
+			if (fs.existsSync(shmPath))
+				try {
+					fs.unlinkSync(shmPath);
+				} catch (e) {}
+			if (fs.existsSync(journalPath))
+				try {
+					fs.unlinkSync(journalPath);
+				} catch (e) {}
 
 			// 4. Attempt Restore from Cloud
 			let restored = false;
@@ -422,10 +440,14 @@ Error: \`${error.message}\``);
 				for (const backup of localBackups) {
 					const backupFilePath = path.join(backup.path, "sqlites", dbFile);
 					if (fs.existsSync(backupFilePath)) {
-						fs.copyFileSync(backupFilePath, dbPath);
-						restored = true;
-						backupUsed = `file from ${backup.name}`;
-						break;
+						try {
+							fs.copyFileSync(backupFilePath, dbPath);
+							restored = true;
+							backupUsed = `file from ${backup.name}`;
+							break;
+						} catch (e) {
+							this.logger.error(`Failed to restore from local backup ${backup.name}: ${e.message}`);
+						}
 					}
 				}
 			}
@@ -478,8 +500,10 @@ ${err.message}`);
 		}
 
 		for (const serverUri of this.remoteServers) {
+			let connection;
+			let newDb;
 			try {
-				const connection = await mysql.createConnection(serverUri);
+				connection = await mysql.createConnection(serverUri);
 				const remoteTables = await this.getRemoteTables(connection);
 
 				const dbFile = dbName === "core" ? "core.db" : `${dbName}.db`;
@@ -487,36 +511,73 @@ ${err.message}`);
 
 				// Create a new empty SQLite to populate
 				if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
-				const newDb = new sqlite3.Database(dbPath);
+				newDb = new sqlite3.Database(dbPath);
 
 				// 1. Initialize schema
 				if (schema) {
+					const schemaStatements = schema.split(";").filter((s) => s.trim() !== "");
 					await new Promise((resolve, reject) => {
-						newDb.exec(schema, (err) => {
-							if (err) reject(err);
-							else resolve();
+						newDb.serialize(() => {
+							for (const stmt of schemaStatements) {
+								newDb.run(stmt, (err) => {
+									if (err) {
+										this.logger.error(`Error initializing schema statement: ${stmt}`, err);
+									}
+								});
+							}
+							resolve();
 						});
 					});
 				}
 
 				// 2. Identify tables relevant to this DB
-				// If it's a generic DB, we use sqlite_master to see what tables the schema created
 				const localTables = await this.getTables(newDb);
+				this.logger.info(`DB '${dbName}': Tables to restore: ${localTables.join(", ")}`);
 
 				for (const table of localTables) {
 					if (remoteTables.includes(table)) {
-						const [rows] = await connection.execute(`SELECT * FROM \`${table}\``);
-						if (rows.length > 0) {
-							await this.populateSQLiteTable(newDb, table, rows);
+						this.logger.info(`Restoring table '${table}' from cloud...`);
+
+						// Use streaming or chunking to avoid OOM
+						const [rowCountResult] = await connection.execute(
+							`SELECT COUNT(*) as c FROM \`${table}\``
+						);
+						const totalRows = rowCountResult[0].c;
+
+						if (totalRows === 0) {
+							this.logger.debug(`Table '${table}' is empty on cloud.`);
+							continue;
+						}
+
+						const chunkSize = 5000;
+						for (let offset = 0; offset < totalRows; offset += chunkSize) {
+							const [rows] = await connection.execute(
+								`SELECT * FROM \`${table}\` LIMIT ${chunkSize} OFFSET ${offset}`
+							);
+							if (rows.length > 0) {
+								await this.populateSQLiteTable(newDb, table, rows);
+								this.logger.debug(
+									`Restored ${offset + rows.length}/${totalRows} rows to table '${table}'.`
+								);
+							}
 						}
 					}
 				}
 
-				newDb.close();
+				await new Promise((resolve) => newDb.close(() => resolve()));
 				await connection.end();
+				this.logger.info(`Cloud restoration successful for ${dbName} from ${serverUri}`);
 				return true;
 			} catch (e) {
 				this.logger.error(`Cloud restore failed from ${serverUri}:`, e);
+				if (newDb) {
+					await new Promise((resolve) => newDb.close(() => resolve()));
+				}
+				if (connection) {
+					try {
+						await connection.end();
+					} catch (err) {}
+				}
 			}
 		}
 		return false;
@@ -536,13 +597,19 @@ ${err.message}`);
 
 		return new Promise((resolve, reject) => {
 			sqliteDb.serialize(() => {
+				sqliteDb.run("BEGIN TRANSACTION");
 				const stmt = sqliteDb.prepare(sql);
 				for (const row of rows) {
 					stmt.run(keys.map((k) => row[k]));
 				}
-				stmt.finalize((err) => {
-					if (err) reject(err);
-					else resolve();
+				stmt.finalize();
+				sqliteDb.run("COMMIT", (err) => {
+					if (err) {
+						sqliteDb.run("ROLLBACK");
+						reject(err);
+					} else {
+						resolve();
+					}
 				});
 			});
 		});
