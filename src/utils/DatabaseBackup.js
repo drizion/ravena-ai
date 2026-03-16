@@ -26,6 +26,8 @@ class DatabaseBackup {
 
 		this.remoteBackupInterval =
 			(parseInt(process.env.REMOTE_BACKUP_INTERVAL_MINUTES) || 30) * 60 * 1000;
+
+		this.recoveringDbs = new Set();
 	}
 
 	async createScheduledBackup() {
@@ -361,6 +363,12 @@ class DatabaseBackup {
 	// --- Corruption Handling & Recovery ---
 
 	async handleCorruption(dbName, error) {
+		if (this.recoveringDbs.has(dbName)) {
+			this.logger.debug(`Recovery already in progress for ${dbName}. Skipping duplicate call.`);
+			return;
+		}
+
+		this.recoveringDbs.add(dbName);
 		this.logger.error(`CORRUPTION DETECTED in database: ${dbName}`, error);
 
 		// 1. Report to Telegram (Verbose)
@@ -433,12 +441,20 @@ Source: \`${backupUsed}\``);
 File restored and data re-read into memory.`);
 			} else {
 				await this.reportToTelegram(`❌ *RESTORE FAILED*
-No valid backup found (cloud or local).`);
+No valid backup found (cloud or local). Tentando abrir banco original...`);
+				// Re-init anyway to avoid "undefined" errors, even if it might trigger corruption loop
+				await this.reinitConnection(dbName);
 			}
 		} catch (err) {
 			this.logger.error("Error during corruption recovery:", err);
 			await this.reportToTelegram(`❌ *CRITICAL RECOVERY ERROR*
 ${err.message}`);
+			// Fallback re-init
+			try {
+				await this.reinitConnection(dbName);
+			} catch (e) {}
+		} finally {
+			this.recoveringDbs.delete(dbName);
 		}
 	}
 
