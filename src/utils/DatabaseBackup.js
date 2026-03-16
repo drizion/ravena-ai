@@ -23,6 +23,9 @@ class DatabaseBackup {
 
 		this.backupIgnoreFiles = ["cache.db"];
 		this.backupTargets = [path.join(this.databasePath, "sqlites")];
+
+		this.remoteBackupInterval =
+			(parseInt(process.env.REMOTE_BACKUP_INTERVAL_MINUTES) || 30) * 60 * 1000;
 	}
 
 	async createScheduledBackup() {
@@ -46,16 +49,30 @@ class DatabaseBackup {
 			this.logger.info(`File backup created: ${backupDir}`);
 			this.cleanupOldScheduledBackups();
 
-			// 2. Remote SQL Backup (Delta-like Upsert)
-			if (this.remoteEnabled) {
-				await this.runRemoteBackup();
-			}
-
 			return true;
 		} catch (error) {
 			this.logger.error("Error creating scheduled backup:", error);
 			return false;
 		}
+	}
+
+	startRemoteBackupInterval() {
+		if (!this.remoteEnabled) return;
+
+		this.logger.info(
+			`Starting remote backup interval: every ${this.remoteBackupInterval / 60000} minutes.`
+		);
+
+		// Run once on start
+		this.runRemoteBackup().catch((err) => {
+			this.logger.error("Initial remote backup failed:", err);
+		});
+
+		setInterval(async () => {
+			await this.runRemoteBackup().catch((err) => {
+				this.logger.error("Periodic remote backup failed:", err);
+			});
+		}, this.remoteBackupInterval);
 	}
 
 	backupDirectory(source, target) {
@@ -353,11 +370,26 @@ Error: \`${error.message}\``);
 
 		let backupUsed = "none";
 		try {
-			// 2. Backup the corrupt file
+			// 2. CLOSE current connection FIRST to avoid I/O errors and locks
+			if (dbName === "core") {
+				if (this.db.coreDb) {
+					try {
+						this.db.coreDb.close();
+					} catch (e) {}
+					this.db.coreDb = null;
+				}
+			} else if (this.db.sqlites[dbName]) {
+				try {
+					this.db.sqlites[dbName].close();
+				} catch (e) {}
+				delete this.db.sqlites[dbName];
+			}
+
 			const dbFile = dbName === "core" ? "core.db" : `${dbName}.db`;
 			const dbPath = path.join(this.databasePath, "sqlites", dbFile);
 			const corruptPath = `${dbPath}.corrupt-${Date.now()}`;
 
+			// 3. Backup the corrupt file
 			if (fs.existsSync(dbPath)) {
 				fs.copyFileSync(dbPath, corruptPath);
 				this.logger.info(`Corrupt database saved to: ${corruptPath}`);
@@ -369,22 +401,23 @@ Error: \`${error.message}\``);
 			if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
 			if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
 
-			// 3. Attempt Restore from Cloud
+			// 4. Attempt Restore from Cloud
 			let restored = false;
 			if (this.remoteEnabled && this.remoteServers.length > 0) {
 				restored = await this.restoreFromCloud(dbName);
 				if (restored) backupUsed = "cloud";
 			}
 
-			// 4. Fallback to latest Local Backup
+			// 5. Fallback to Local Backups (Search from newest to oldest)
 			if (!restored) {
-				const latestLocal = this.getSortedLocalBackups()[0];
-				if (latestLocal) {
-					const backupFilePath = path.join(latestLocal.path, "sqlites", dbFile);
+				const localBackups = this.getSortedLocalBackups();
+				for (const backup of localBackups) {
+					const backupFilePath = path.join(backup.path, "sqlites", dbFile);
 					if (fs.existsSync(backupFilePath)) {
 						fs.copyFileSync(backupFilePath, dbPath);
 						restored = true;
-						backupUsed = `file from ${latestLocal.name}`;
+						backupUsed = `file from ${backup.name}`;
+						break;
 					}
 				}
 			}
@@ -393,7 +426,7 @@ Error: \`${error.message}\``);
 				await this.reportToTelegram(`✅ *Backup Restored*
 Source: \`${backupUsed}\``);
 
-				// 5. Re-init connection
+				// 6. Re-init connection
 				await this.reinitConnection(dbName);
 
 				await this.reportToTelegram(`🔄 *System Recovered*

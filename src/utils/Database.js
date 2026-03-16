@@ -45,6 +45,9 @@ class Database {
 		// Setup scheduled backups
 		this.setupScheduledBackups();
 		this.lastScheduledBackup = this.getLastScheduledBackupTime();
+
+		// Start independent remote backup interval
+		this.backupSystem.startRemoteBackupInterval();
 	}
 
 	/**
