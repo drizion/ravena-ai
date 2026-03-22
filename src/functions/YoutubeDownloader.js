@@ -228,7 +228,13 @@ async function baixarVideoYoutube(idVideo, dadosSolicitante, videoHD = false, ca
 
 		// Pega dados primeiro
 		videoCacheManager
-			.getVideoInfoWithCache(urlSafe, { dumpSingleJson: true })
+			.getVideoInfoWithCache(urlSafe, {
+				dumpSingleJson: true,
+				...(process.env.YT_USE_COOKIES === "true"
+					? { cookies: path.join(database.databasePath, "www.youtube.com_cookies.txt") }
+					: {}),
+				"js-runtimes": "node"
+			})
 			.then((videoInfo) => {
 				const autorVideo = videoInfo.uploader;
 				const tituloVideo = videoInfo.title;
@@ -250,8 +256,10 @@ async function baixarVideoYoutube(idVideo, dadosSolicitante, videoHD = false, ca
 							recodeVideo: "mp4",
 							audioFormat: "aac",
 							ffmpegLocation: process.env.FFMPEG_PATH,
-							//cookies: path.join(database.databasePath, "www.youtube.com_cookies.txt"),
-							jsRuntimes: "node:/root/.nvm/versions/node/v22.16.0/bin/node"
+							...(process.env.YT_USE_COOKIES === "true"
+								? { cookies: path.join(database.databasePath, "www.youtube.com_cookies.txt") }
+								: {}),
+							"js-runtimes": "node"
 						})
 						.then((output) => {
 							if (output.fromCache) {
@@ -296,7 +304,13 @@ async function baixarMusicaYoutube(idVideo, dadosSolicitante, callback) {
 		logger.info(`[baixarMusicaYoutube][${nomeVideoTemp}] Buscando info do video '${urlSafe}'`);
 
 		videoCacheManager
-			.getVideoInfoWithCache(urlSafe, { dumpSingleJson: true })
+			.getVideoInfoWithCache(urlSafe, {
+				dumpSingleJson: true,
+				...(process.env.YT_USE_COOKIES === "true"
+					? { cookies: path.join(database.databasePath, "www.youtube.com_cookies.txt") }
+					: {}),
+				"js-runtimes": "node"
+			})
 			.then((videoInfo) => {
 				const autorVideo = videoInfo.uploader;
 				const tituloVideo = videoInfo.title;
@@ -321,8 +335,10 @@ async function baixarMusicaYoutube(idVideo, dadosSolicitante, callback) {
 					recodeVideo: "mp4",
 					audioFormat: "aac",
 					ffmpegLocation: process.env.FFMPEG_PATH,
-					//cookies: path.join(database.databasePath, "www.youtube.com_cookies.txt"),
-					jsRuntimes: "node:/root/.nvm/versions/node/v22.16.0/bin/node"
+					...(process.env.YT_USE_COOKIES === "true"
+						? { cookies: path.join(database.databasePath, "www.youtube.com_cookies.txt") }
+						: {}),
+					"js-runtimes": "node"
 				};
 
 				videoCacheManager

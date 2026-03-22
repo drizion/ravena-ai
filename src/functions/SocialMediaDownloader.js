@@ -223,8 +223,11 @@ async function downloadWithYoutubeDL(url, platform) {
 		const options = {
 			o: outputPath,
 			f: "best",
-			cookies: path.join(database.databasePath, "smd_cookies.txt"),
-			ffmpegLocation: process.env.FFMPEG_PATH
+			...(process.env.YT_USE_COOKIES === "true"
+				? { cookies: path.join(database.databasePath, "www.youtube.com_cookies.txt") }
+				: {}),
+			ffmpegLocation: process.env.FFMPEG_PATH,
+			"js-runtimes": "node"
 		};
 
 		// Para outros sites, ajusta as opções conforme necessário

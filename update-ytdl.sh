@@ -21,32 +21,34 @@ if [ -f "$YTDL_BIN" ]; then
     echo "[*] Current version:"
     "$YTDL_BIN" --version
 
-    echo "[*] Updating yt-dlp..."
-    "$YTDL_BIN" -U
+    echo "[*] Updating yt-dlp to nightly..."
+    "$YTDL_BIN" --update-to nightly
 
     echo "[*] New version:"
     "$YTDL_BIN" --version
 
+    # Test without cookies
+    echo "[*] Testing yt-dlp WITHOUT cookies..."
+    "$YTDL_BIN" --js-runtimes node --get-id "$TEST_VIDEO_URL" --quiet > /dev/null
+    if [ $? -eq 0 ]; then
+        echo "[+] Success: yt-dlp is working (without cookies)."
+    else
+        echo "[-] Error: yt-dlp test FAILED (without cookies)."
+    fi
+
     # Test with cookies
     if [ -f "$COOKIES_FILE" ]; then
-        echo "[*] Testing yt-dlp with cookies file: $COOKIES_FILE"
-        VIDEO_ID=$("$YTDL_BIN" --cookies "$COOKIES_FILE" --get-id "$TEST_VIDEO_URL" --quiet 2>/dev/null)
+        echo "[*] Testing yt-dlp WITH cookies file: $COOKIES_FILE"
+        VIDEO_ID=$("$YTDL_BIN" --js-runtimes node --cookies "$COOKIES_FILE" --get-id "$TEST_VIDEO_URL" --quiet 2>/dev/null)
         
         if [ "$VIDEO_ID" == "dQw4w9WgXcQ" ]; then
             echo "[+] Success: yt-dlp is working correctly with the provided cookies."
         else
-            echo "[-] Error: yt-dlp test failed. Cookies might be expired or invalid."
-            echo "    Make sure to update $COOKIES_FILE with fresh cookies from your browser."
+            echo "[-] Error: yt-dlp test FAILED with cookies. Cookies might be expired, invalid, or causing issues."
+            echo "    Make sure to update $COOKIES_FILE with fresh cookies from your browser if you intend to use them."
         fi
     else
-        echo "[!] Warning: Cookies file not found at $COOKIES_FILE"
-        echo "    Falling back to no-cookies test..."
-        "$YTDL_BIN" --get-id "$TEST_VIDEO_URL" --quiet > /dev/null
-        if [ $? -eq 0 ]; then
-            echo "[+] Success: yt-dlp is working (without cookies)."
-        else
-            echo "[-] Error: yt-dlp test failed even without cookies."
-        fi
+        echo "[!] Warning: Cookies file not found at $COOKIES_FILE, skipping cookies test."
     fi
 else
     echo "[-] Fatal Error: Could not find or download yt-dlp binary."
