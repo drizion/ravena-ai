@@ -2094,7 +2094,7 @@ class WhatsAppBotEvoGo {
 			if (options.mentionAll) {
 				payload.mentionAll = true;
 			} else if (options.mentions) {
-				payload.mentionedJid = options.mentions.join(",");
+				payload.mentionedJid = options.mentions; // era .join(",")
 			}
 
 			//this.logger.debug(`[sendMessage] '${endpoint}'`, { contentType: typeof content, content, payload });
