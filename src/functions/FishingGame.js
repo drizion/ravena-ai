@@ -1304,9 +1304,6 @@ Dynamic, action-ready close-up composition, medium depth-of-field, hyper-detaile
 
 ((Write text in bottom of image centered, bold font, fantasy: ${fishName}, ${fishWeight.toFixed(2)}kg @ ${dateString}))`;
 
-		if (!sdModule || !sdModule.commands || !sdModule.commands[0] || !sdModule.commands[0].method)
-			return null;
-
 		const mockMessage = {
 			author: "SYSTEM",
 			authorName: "Sistema",
@@ -1316,7 +1313,11 @@ Dynamic, action-ready close-up composition, medium depth-of-field, hyper-detaile
 				react: async () => {}
 			}
 		};
-		const result = await sdModule.commands[0].method(
+
+		if (!sdModule || !sdModule.generateImage)
+			return null;
+
+		const result = await sdModule.generateImage(
 			bot,
 			mockMessage,
 			prompt.split(" "),
