@@ -11,7 +11,8 @@ O foco deste bot é a utilização do mesmo em grupos, onde ele pode notificar s
 
 Este bot foi implemetado utilizando duas tecnologias:
 - [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js): Manipula o WhatsAppWeb através de um navegador controlado pelo puppeteer, fácil de configurar, mas com muitas mensagens fica com delay, trava e/ou desconecta. **Recomendo** *muito* utilizar ele, pela facilidade de configurar - o padrão do bot é usar isso, não se preocupe
-- [EvoutionAPI](github.com/EvolutionAPI/evolution-api): Os bots ficam logados no Evolution que utiliza o [Baileys](https://github.com/WhiskeySockets/Baileys), direto no websocket do whatsapp. Extremamente rápido e não dá delays (até agora), mais difícil de implementar. _Para ativar, é necessário definir no bots.json_
+- [EvoutionAPI - GO](github.com/EvolutionAPI/evolution-go): Os bots ficam logados no Evolution que utiliza o [Whatsmeow](https://github.com/tulir/whatsmeow), direto no websocket do whatsapp, mas usando Go. Extremamente robusto e rápido e não dá delays, mais difícil de implementar. *Este é como as ravenas oficiais se conectam atualmente.* _Para ativar, é necessário definir no bots.json_
+- [EvoutionAPI](github.com/EvolutionAPI/evolution-api): Os bots ficam logados no Evolution que utiliza o [Baileys](https://github.com/WhiskeySockets/Baileys), direto no websocket do whatsapp. Rápido e não dá muitos delays, mais difícil de implementar. _Para ativar, é necessário definir no bots.json_
 
 Obs.: Eu criei o wrapper pra EvolutionAPI me baseando na implementação do wwebjs, então existem _muitos_ fallbacks, não se assuste.
 
