@@ -1314,8 +1314,7 @@ Dynamic, action-ready close-up composition, medium depth-of-field, hyper-detaile
 			}
 		};
 
-		if (!sdModule || !sdModule.generateImage)
-			return null;
+		if (!sdModule || !sdModule.generateImage) return null;
 
 		const result = await sdModule.generateImage(
 			bot,

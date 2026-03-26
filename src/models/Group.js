@@ -57,6 +57,7 @@ class Group {
 		this.mutedCommands = data.mutedCommands ?? [];
 		this.mutedCategories = data.mutedCategories ?? [];
 		this.nicks = data.nicks ?? [];
+		this.warnings = data.warnings ?? [];
 		this.customAIPrompt = data.customAIPrompt ?? [];
 
 		// Metadados
@@ -96,6 +97,7 @@ class Group {
 			// FIX: Adicionado mutedCategories que estava faltando
 			mutedCategories: this.mutedCategories,
 			nicks: this.nicks,
+			warnings: this.warnings,
 			customAIPrompt: this.customAIPrompt,
 			createdAt: this.createdAt,
 			updatedAt: this.updatedAt
@@ -174,6 +176,7 @@ class Group {
 		if (data.mutedCommands) this.mutedCommands = data.mutedCommands;
 		if (data.mutedCategories) this.mutedCategories = data.mutedCategories; // Added support for updating mutedCategories
 		if (data.nicks) this.nicks = data.nicks;
+		if (data.warnings) this.warnings = data.warnings;
 		if (data.customAIPrompt) this.customAIPrompt = data.customAIPrompt;
 
 		// Atualiza carimbos de data/hora

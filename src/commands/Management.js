@@ -322,6 +322,18 @@ class Management {
 			delWebhook: {
 				method: "delWebhook",
 				description: "Apaga um webhook deste grupo"
+			},
+			advertir: {
+				method: "advertirUser",
+				description: "Adiciona uma advertência aos membros mencionados"
+			},
+			advertencias: {
+				method: "listWarnings",
+				description: "Lista as advertências atuais do grupo"
+			},
+			"limpar-advertencias": {
+				method: "clearWarnings",
+				description: "Remove as advertências dos membros mencionados"
 			}
 		};
 
@@ -6091,6 +6103,214 @@ class Management {
 		return new ReturnMessage({
 			chatId: group.id,
 			content: `Webhook '${newWebhook.name}' configurado com sucesso!`
+		});
+	}
+
+	/**
+	 * Adiciona advertência aos membros mencionados
+	 * @param {WhatsAppBot} bot - Instância do bot
+	 * @param {Object} message - Dados da mensagem
+	 * @param {Array} args - Argumentos do comando
+	 * @param {Object} group - Dados do grupo
+	 * @returns {Promise<ReturnMessage>} Mensagem de retorno
+	 */
+	/**
+	 * Gera os emojis de advertência baseados na contagem
+	 * @param {number} count - Número de advertências
+	 * @returns {string} - String formatada com emojis, ex: [🟢🟢🟢]
+	 */
+	getWarningEmojis(count) {
+		const colors = ["🟢", "🟡", "🟠", "🔴", "⚫️"];
+
+		if (count >= 12) return "[⚫️⚫️⚫️]";
+
+		const level = Math.floor((count - 1) / 3);
+		const higherCount = ((count - 1) % 3) + 1;
+		const higherColor = colors[level + 1] || "⚫️";
+		const lowerColor = colors[level] || "🟢";
+
+		let emojis = "";
+		for (let i = 0; i < higherCount; i++) emojis += higherColor;
+		for (let i = 0; i < 3 - higherCount; i++) emojis += lowerColor;
+
+		return `[${emojis}]`;
+	}
+
+	/**
+	 * Adiciona advertência aos membros mencionados
+	 * @param {WhatsAppBot} bot - Instância do bot
+	 * @param {Object} message - Dados da mensagem
+	 * @param {Array} args - Argumentos do comando
+	 * @param {Object} group - Dados do grupo
+	 * @returns {Promise<ReturnMessage>} Mensagem de retorno
+	 */
+	async advertirUser(bot, message, args, group) {
+		if (!group) {
+			return new ReturnMessage({
+				chatId: message.author,
+				content: "Este comando só pode ser usado em grupos."
+			});
+		}
+
+		const mentions = message.mentions ?? [];
+
+		if (mentions.length === 0) {
+			return new ReturnMessage({
+				chatId: group.id,
+				content:
+					"Para advertir um membro, marque o mesmo com @. Para ver as advertencias do grupo, envie !g-advertencias"
+			});
+		}
+
+		if (!group.warnings) {
+			group.warnings = [];
+		}
+
+		let response = "🚨 *Advertência*\n";
+
+		for (const jid of mentions) {
+			const number = jid.split("@")[0];
+			const existingIndex = group.warnings.findIndex((w) => w.jid === jid || w.numero === number);
+
+			let currentCount = 1;
+			if (existingIndex !== -1) {
+				group.warnings[existingIndex].count += 1;
+				currentCount = group.warnings[existingIndex].count;
+				// Atualiza para o JID completo caso estivesse apenas o número
+				group.warnings[existingIndex].jid = jid;
+			} else {
+				group.warnings.push({ jid, numero: number, count: 1 });
+			}
+
+			const emojis = this.getWarningEmojis(currentCount);
+			response += `- ${emojis} @${number} (${currentCount}) ❗️\n`;
+		}
+
+		response += "\n⚠️ _Respeitem as regras do grupo!_ 🚔";
+
+		//this.logger.debug(`[advertencias] `, { response, mentions });
+
+		await this.database.saveGroup(group);
+
+		return new ReturnMessage({
+			chatId: group.id,
+			content: response,
+			options: {
+				mentions
+			}
+		});
+	}
+
+	/**
+	 * Lista as advertências atuais do grupo
+	 * @param {WhatsAppBot} bot - Instância do bot
+	 * @param {Object} message - Dados da mensagem
+	 * @param {Array} args - Argumentos do comando
+	 * @param {Object} group - Dados do grupo
+	 * @returns {Promise<ReturnMessage>} Mensagem de retorno
+	 */
+	async listWarnings(bot, message, args, group) {
+		if (!group) {
+			return new ReturnMessage({
+				chatId: message.author,
+				content: "Este comando só pode ser usado em grupos."
+			});
+		}
+
+		if (!group.warnings || group.warnings.length === 0) {
+			return new ReturnMessage({
+				chatId: group.id,
+				content: "Não há advertências registradas neste grupo. 😇"
+			});
+		}
+
+		// Ordena por maior número de advertências
+		const sortedWarnings = [...group.warnings].sort((a, b) => b.count - a.count);
+
+		let response = "🚓 *Advertências Atuais* 🚨\n";
+		const mentions = [];
+
+		for (const warn of sortedWarnings) {
+			const emojis = this.getWarningEmojis(warn.count);
+			const jid = warn.jid || `${warn.numero}@lid`;
+			const number = jid.split("@")[0];
+
+			response += `- ${emojis} @${number} (${warn.count})\n`;
+			mentions.push(jid);
+		}
+
+		response += "\n_Respeitem sempre as regras do grupo!_ ⚠️";
+
+		//this.logger.debug(`[advertencias] `, { response, mentions });
+		return new ReturnMessage({
+			chatId: group.id,
+			content: response,
+			options: {
+				mentions
+			}
+		});
+	}
+	/**
+	 * Remove as advertências das pessoas mencionadas
+	 * @param {WhatsAppBot} bot - Instância do bot
+	 * @param {Object} message - Dados da mensagem
+	 * @param {Array} args - Argumentos do comando
+	 * @param {Object} group - Dados do grupo
+	 * @returns {Promise<ReturnMessage>} Mensagem de retorno
+	 */
+	async clearWarnings(bot, message, args, group) {
+		if (!group) {
+			return new ReturnMessage({
+				chatId: message.author,
+				content: "Este comando só pode ser usado em grupos."
+			});
+		}
+
+		const mentions = message.mentions ?? [];
+
+		if (mentions.length === 0) {
+			return new ReturnMessage({
+				chatId: group.id,
+				content: "Para limpar advertências, marque os membros com @."
+			});
+		}
+
+		if (!group.warnings) {
+			group.warnings = [];
+		}
+
+		let response = "✅ *Advertências Removidas*\n";
+		const removedMentions = [];
+
+		for (const jid of mentions) {
+			const number = jid.split("@")[0];
+			const existingIndex = group.warnings.findIndex((w) => w.jid === jid || w.numero === number);
+
+			if (existingIndex !== -1) {
+				const count = group.warnings[existingIndex].count;
+				group.warnings.splice(existingIndex, 1);
+				response += `- @${number} (${count}) 🍀\n`;
+				removedMentions.push(jid);
+			}
+		}
+
+		if (removedMentions.length === 0) {
+			return new ReturnMessage({
+				chatId: group.id,
+				content: "Nenhum dos membros mencionados possui advertências."
+			});
+		}
+
+		response += "\n_Da próxima vez, respeite as regras do grupo!_ 🚔";
+
+		await this.database.saveGroup(group);
+
+		return new ReturnMessage({
+			chatId: group.id,
+			content: response,
+			options: {
+				mentions: removedMentions
+			}
 		});
 	}
 }
