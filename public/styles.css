@@ -1050,6 +1050,21 @@ nav a.active {
     font-size: 0.85rem;
     letter-spacing: 0.05em;
     border-bottom: 2px solid var(--medium-purple);
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+}
+
+.stats-table th:hover {
+    background-color: var(--medium-purple);
+}
+
+.stats-table th.sort-asc::after {
+    content: ' ↑';
+}
+
+.stats-table th.sort-desc::after {
+    content: ' ↓';
 }
 
 .stats-table tbody tr:nth-child(even) {

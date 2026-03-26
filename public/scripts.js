@@ -8,6 +8,9 @@ let botMessageTimestamps = {};
 let averageMsgsHr = 0;
 let hasInitializedRealtime = false;
 const BOT_STATS_CACHE_KEY = 'ravena_bot_stats_v1';
+let currentStatsSort = { column: 'day', direction: 'desc' };
+let showOnlyConventional = false;
+let lastStatsData = null;
 
 // Function to animate number change
 function animateValue(obj, start, end, duration) {
@@ -883,6 +886,7 @@ async function fetchBotDetailedStats() {
             const data = JSON.parse(cached);
             if (data && Array.isArray(data)) {
                 // console.log("Loaded stats from cache");
+                lastStatsData = data;
                 renderBotStatsTable(data);
                 renderBotWeeklyChartFromStats(data);
             }
@@ -900,6 +904,7 @@ async function fetchBotDetailedStats() {
         } catch (e) {}
 
         // 3. Render Fresh Data
+        lastStatsData = data;
         renderBotStatsTable(data);
         renderBotWeeklyChartFromStats(data);
 
@@ -915,6 +920,7 @@ async function fetchBotDetailedStats() {
 
 function renderBotStatsTable(data) {
     const tbody = document.querySelector('#botStatsTable tbody');
+    const headers = document.querySelectorAll('#botStatsTable th');
     tbody.innerHTML = '';
 
     if (!data || data.length === 0) {
@@ -922,40 +928,64 @@ function renderBotStatsTable(data) {
         return;
     }
 
-    const formatNum = (num) => new Intl.NumberFormat('pt-BR').format(num);
+    // Helper to get bot flags from lastHealthData
+    const getBotFlags = (botId) => {
+        if (!lastHealthData || !lastHealthData.bots) return { vip: false, comunitario: false };
+        const bot = lastHealthData.bots.find(b => b.id === botId);
+        if (bot) return { vip: !!bot.vip, comunitario: !!bot.comunitario };
+        // Fallback for known VIPs if health data is not yet available
+        if (botId === 'ravenavip' || botId === 'ravenaviip') return { vip: true, comunitario: false };
+        return { vip: false, comunitario: false };
+    };
 
-    // Separar o total
-    let totalRow = data.find(row => row.id === 'TOTAL');
+    // Filter and Sort Data
+    let filteredData = data.filter(row => row.id !== 'TOTAL');
     
-    // Separar VIPs e Outros
-    let vips = [];
-    let others = [];
-    
-    data.forEach(row => {
-        if (row.id === 'TOTAL') return;
-        if (row.id === 'ravenavip' || row.id === 'ravenaviip') {
-            vips.push(row);
-        } else {
-            others.push(row);
+    if (showOnlyConventional) {
+        filteredData = filteredData.filter(row => {
+            const flags = getBotFlags(row.id);
+            return !flags.vip && !flags.comunitario;
+        });
+    }
+
+    const columnMap = {
+        'Bot': 'id',
+        'Grupos': 'groupsCount',
+        'Hora (1h)': 'hour',
+        'Hoje (24h)': 'day',
+        'Semana (7d)': 'week',
+        'Mês (30d)': 'month',
+        'Ano (365d)': 'year'
+    };
+
+    const sortCol = columnMap[currentStatsSort.column] || 'day';
+    const sortDir = currentStatsSort.direction === 'asc' ? 1 : -1;
+
+    filteredData.sort((a, b) => {
+        let valA = a[sortCol];
+        let valB = b[sortCol];
+        
+        if (typeof valA === 'string') {
+            return valA.localeCompare(valB) * sortDir;
+        }
+        return (valA - valB) * sortDir;
+    });
+
+    // Update Header Sort Icons
+    headers.forEach(h => {
+        h.classList.remove('sort-asc', 'sort-desc');
+        if (h.innerText === currentStatsSort.column) {
+            h.classList.add(currentStatsSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
         }
     });
 
-    // Ordenar bots normais por mensagens de hoje (day) decrescente
-    others.sort((a, b) => (b.day || 0) - (a.day || 0));
+    const formatNum = (num) => new Intl.NumberFormat('pt-BR').format(num);
 
-    // Reintegrar: Outros, VIPs no final, Total (no final de tudo ou inicio? geralmente Total é o último)
-    // O pedido foi: "always leave ravenavip and ravenaviip botids last on the table"
-    // Então: Others sorted, then VIPs, then Total
-    
-    const rowsToRender = [...others, ...vips];
-    if (totalRow) rowsToRender.push(totalRow);
-
-    rowsToRender.forEach(row => {
+    filteredData.forEach(row => {
+        const flags = getBotFlags(row.id);
         const tr = document.createElement('tr');
-        if (row.id === 'TOTAL') {
-            tr.style.fontWeight = 'bold';
-            tr.classList.add('total-row');
-        }
+        if (flags.vip) tr.classList.add('vip-row');
+        if (flags.comunitario) tr.classList.add('comunitario-row');
         
         tr.innerHTML = `
             <td>${row.id}</td>
@@ -968,6 +998,26 @@ function renderBotStatsTable(data) {
         `;
         tbody.appendChild(tr);
     });
+
+    // Add TOTAL row at the end if not filtering
+    if (!showOnlyConventional) {
+        const totalRow = data.find(row => row.id === 'TOTAL');
+        if (totalRow) {
+            const tr = document.createElement('tr');
+            tr.style.fontWeight = 'bold';
+            tr.classList.add('total-row');
+            tr.innerHTML = `
+                <td>${totalRow.id}</td>
+                <td>${formatNum(totalRow.groupsCount)}</td>
+                <td>${formatNum(totalRow.hour)}</td>
+                <td>${formatNum(totalRow.day)}</td>
+                <td>${formatNum(totalRow.week)}</td>
+                <td>${formatNum(totalRow.month)}</td>
+                <td>${formatNum(totalRow.year)}</td>
+            `;
+            tbody.appendChild(tr);
+        }
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -975,7 +1025,31 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchTopDonates();
     fetchHealthData();
     fetchBotDetailedStats();
-    
+
+    // Stats Table Sorting
+    const statsTableHeaders = document.querySelectorAll('#botStatsTable th');
+    statsTableHeaders.forEach(th => {
+        th.addEventListener('click', () => {
+            const colName = th.innerText;
+            if (currentStatsSort.column === colName) {
+                currentStatsSort.direction = currentStatsSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentStatsSort.column = colName;
+                currentStatsSort.direction = 'desc';
+            }
+            if (lastStatsData) renderBotStatsTable(lastStatsData);
+        });
+    });
+
+    // Shift + R Shortcut
+    document.addEventListener('keydown', (e) => {
+        if (e.shiftKey && e.key.toUpperCase() === 'R') {
+            e.preventDefault();
+            showOnlyConventional = !showOnlyConventional;
+            if (lastStatsData) renderBotStatsTable(lastStatsData);
+        }
+    });
+
     const timeFilters = document.querySelectorAll('.time-filter');
     timeFilters.forEach(filter => {
         filter.addEventListener('click', () => {
