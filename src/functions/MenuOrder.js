@@ -96,6 +96,8 @@ const COMMAND_ORDER = [
 	"pinto",
 	"pinto-ranking",
 	"pinto-reset",
+	"slots",
+	"slots-premios",
 	"anonimo",
 	"roll",
 	"d10",

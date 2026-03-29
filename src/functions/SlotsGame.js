@@ -129,10 +129,10 @@ async function slotsCommand(bot, message, args, group) {
 
 	const isWin = roll1 === roll2 && roll2 === roll3;
 
-	let resultMessage = `🎰 *CAÇA-NÍQUEIS* 🎰\n`;
-	resultMessage += `___________________________________________________\n`;
+	let resultMessage = `🎰 *CAÇA-COISAS* 🎰\n`;
+	resultMessage += `\`\`\`----------------------\n`;
 	resultMessage += `|  [ ${emoji1} ] [ ${emoji2} ] [ ${emoji3} ]  |\n`;
-	resultMessage += `¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯\n\n`;
+	resultMessage += `----------------------\`\`\`\n\n`;
 
 	if (isWin) {
 		const winMsg = WIN_MESSAGES[Math.floor(Math.random() * WIN_MESSAGES.length)];
@@ -140,7 +140,7 @@ async function slotsCommand(bot, message, args, group) {
 
 		// Determina o prêmio (70% normal, 30% bom)
 		const prizeRand = Math.random();
-		if (prizeRand < 0.7) {
+		if (prizeRand < 0.3) {
 			// Prêmio Normal (Lixo)
 			const prize = JUNK_PRIZES[Math.floor(Math.random() * JUNK_PRIZES.length)];
 			resultMessage += `🎁 Você ganhou: *${prize}*!\n`;
