@@ -59,7 +59,7 @@ const WIN_MESSAGES = [
 
 const LOSE_MESSAGES = [
 	"Não foi dessa vez... A casa sempre vence! 💸",
-	"Quase! Só que não. Tente de novo em 2 minutos! 🤡",
+	"Quase! Só que não. Tente de novo daqui a pouco! 🤡",
 	"O azar é seu sobrenome? Que triste... 🙊",
 	"Mais sorte na próxima (ou não). 📉",
 	"Seu dinheiro foi pro ralo! Literalmente. 🚽",
@@ -234,7 +234,7 @@ const commands = [
 		name: "slots",
 		description: "Joga o caça-níqueis",
 		category: "jogos",
-		cooldown: 120,
+		cooldown: 15,
 		reactions: { after: "🎰", error: "❌" },
 		method: slotsCommand
 	}),
