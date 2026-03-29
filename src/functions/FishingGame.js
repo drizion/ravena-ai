@@ -2873,5 +2873,7 @@ function saveSync() {}
 module.exports = {
 	commands,
 	forceSaveFishingData: saveSync,
-	addBaits
+	addBaits,
+	addBuff,
+	UPGRADES
 };
