@@ -8,6 +8,7 @@ const Database = require("../utils/Database");
 const AdminUtils = require("../utils/AdminUtils");
 const sdModule = require("./ComfyUICommands");
 const ReturnMessage = require("../models/ReturnMessage");
+const SlotsGame = require("./SlotsGame");
 
 const logger = new Logger("fishing-game");
 
@@ -422,6 +423,15 @@ const UPGRADES = [
 	//{ name: "Amuleto do Pescador", chance: 0.01, emoji: "🧿", effect: "rare_chance_boost", value: 0.0003, duration: 5, description: "Aumenta a chance de encontrar peixes raros nas próximas 5 pescarias." },
 	//{ name: "Isca de Diamante", chance: 0.005, emoji: "💎", effect: "rare_chance_boost", value: 0.001, duration: 3, description: "Aumenta drasticamente a chance de raros por 3 pescarias." },
 	//{ name: "Licença de Pesca Premium", chance: 0.03, emoji: "📜", effect: "cooldown_reduction", value: 0.5, duration: 5, description: "Reduz o tempo de espera para pescar em 50% nas próximas 5 pescarias." },
+	{
+		name: "Ficha de Cassino",
+		chance: 0.04,
+		emoji: "🎰",
+		effect: "slots_coins",
+		minValue: 1,
+		maxValue: 5,
+		description: "Ganha de 1 a 5 moedinhas para usar no !slots!"
+	},
 	{
 		name: "Balança Adulterada",
 		chance: 0.01,
@@ -1060,7 +1070,11 @@ function checkRandomItem() {
 	for (const upgrade of UPGRADES) {
 		if (Math.random() < upgrade.chance * factors.buffChance) {
 			const itemData = { ...upgrade, type: "upgrade" };
-			if (upgrade.effect === "extra_baits" || upgrade.effect === "next_fish_bonus") {
+			if (
+				upgrade.effect === "extra_baits" ||
+				upgrade.effect === "next_fish_bonus" ||
+				upgrade.effect === "slots_coins"
+			) {
 				itemData.value =
 					Math.floor(Math.random() * (upgrade.maxValue - upgrade.minValue + 1)) + upgrade.minValue;
 			}
@@ -1127,6 +1141,10 @@ async function applyItemEffect(userData, item) {
 				case "extra_baits":
 					userData.baits = userData.baits + item.value;
 					effectMessage = `\n\n${item.emoji} Você encontrou um ${item.name}! +${item.value} iscas adicionadas (${userData.baits}/${MAX_BAITS}).`;
+					break;
+				case "slots_coins":
+					await SlotsGame.addCoins(userData.userId, item.value);
+					effectMessage = `\n\n${item.emoji} Você encontrou um ${item.name}! +${item.value} moedinhas adicionadas ao seu saldo do !slots.`;
 					break;
 			}
 			break;

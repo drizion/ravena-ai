@@ -323,12 +323,22 @@ async function slotsPrizesCommand(bot, message, args, group) {
 	});
 }
 
+/**
+ * Adiciona moedinhas a um usuário (usado por outros módulos)
+ */
+async function addCoins(userId, amount) {
+	let userData = await getUserData(userId);
+	userData = regenerateCoins(userData);
+	userData.coins = Math.min(userData.coins + amount, MAX_COINS);
+	await saveUserData(userData);
+	return userData;
+}
+
 const commands = [
 	new Command({
 		name: "slots",
 		description: "Joga o caça-níqueis",
 		category: "jogos",
-		cooldown: 1,
 		reactions: { after: "🎰", error: "❌" },
 		method: slotsCommand
 	}),
@@ -342,4 +352,4 @@ const commands = [
 	})
 ];
 
-module.exports = { commands };
+module.exports = { commands, addCoins };
