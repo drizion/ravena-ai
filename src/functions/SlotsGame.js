@@ -16,7 +16,9 @@ database.getSQLiteDb(
     CREATE TABLE IF NOT EXISTS slots_users (
         user_id TEXT PRIMARY KEY,
         total_plays INTEGER DEFAULT 0,
-        total_wins INTEGER DEFAULT 0
+        total_wins INTEGER DEFAULT 0,
+        coins INTEGER DEFAULT 5,
+        last_coin_regen INTEGER
     );
 
     CREATE TABLE IF NOT EXISTS slots_prizes (
@@ -29,6 +31,18 @@ database.getSQLiteDb(
 `
 );
 
+// Migration for existing databases
+(async () => {
+	try {
+		await database.dbRun(dbName, "ALTER TABLE slots_users ADD COLUMN coins INTEGER DEFAULT 5");
+		await database.dbRun(dbName, "ALTER TABLE slots_users ADD COLUMN last_coin_regen INTEGER");
+	} catch (e) {
+		// Ignore if columns already exist
+	}
+})();
+
+const MAX_COINS = 5;
+const COIN_REGEN_TIME = 2 * 60; // 2 minutes in seconds
 const SLOT_EMOJIS = ["🍎", "🍋", "🍒", "🍇", "🍉", "🍓", "🍑", "🍍", "🥭", "💎"];
 
 const JUNK_PRIZES = [
@@ -75,28 +89,83 @@ const LOSE_MESSAGES = [
 async function getUserData(userId) {
 	let user = await database.dbGet(dbName, "SELECT * FROM slots_users WHERE user_id = ?", [userId]);
 	if (!user) {
+		const now = Date.now();
 		await database.dbRun(
 			dbName,
-			"INSERT INTO slots_users (user_id, total_plays, total_wins) VALUES (?, 0, 0)",
-			[userId]
+			"INSERT INTO slots_users (user_id, total_plays, total_wins, coins, last_coin_regen) VALUES (?, 0, 0, ?, ?)",
+			[userId, MAX_COINS, now]
 		);
-		user = { user_id: userId, total_plays: 0, total_wins: 0 };
+		user = {
+			user_id: userId,
+			total_plays: 0,
+			total_wins: 0,
+			coins: MAX_COINS,
+			last_coin_regen: now
+		};
 	}
 	return user;
 }
 
 /**
- * Salva estatísticas do usuário
+ * Salva dados do usuário
  */
-async function saveUserStats(userId, win = false) {
+async function saveUserData(userData) {
 	await database.dbRun(
 		dbName,
 		`UPDATE slots_users 
-         SET total_plays = total_plays + 1, 
-             total_wins = total_wins + ? 
+         SET total_plays = ?, 
+             total_wins = ?,
+             coins = ?,
+             last_coin_regen = ? 
          WHERE user_id = ?`,
-		[win ? 1 : 0, userId]
+		[
+			userData.total_plays,
+			userData.total_wins,
+			userData.coins,
+			userData.last_coin_regen,
+			userData.user_id
+		]
 	);
+}
+
+/**
+ * Regenera moedinhas do usuário
+ */
+function regenerateCoins(userData) {
+	if (userData.coins >= MAX_COINS) {
+		userData.last_coin_regen = Date.now();
+		return userData;
+	}
+
+	const now = Date.now();
+	const lastRegen = userData.last_coin_regen || now;
+	const elapsedSeconds = Math.floor((now - lastRegen) / 1000);
+	const regensCount = Math.floor(elapsedSeconds / COIN_REGEN_TIME);
+
+	if (regensCount > 0) {
+		userData.coins = Math.min(userData.coins + regensCount, MAX_COINS);
+		userData.last_coin_regen = now - (elapsedSeconds % COIN_REGEN_TIME) * 1000;
+	}
+
+	return userData;
+}
+
+function getNextCoinRegenTime(userData) {
+	const now = Date.now();
+	const lastRegen = userData.last_coin_regen || now;
+	const elapsedSeconds = Math.floor((now - lastRegen) / 1000);
+	const secondsUntilNextCoin = COIN_REGEN_TIME - (elapsedSeconds % COIN_REGEN_TIME);
+
+	return {
+		secondsUntilNextCoin,
+		nextCoinTime: new Date(now + secondsUntilNextCoin * 1000)
+	};
+}
+
+function formatTimeString(seconds) {
+	const minutes = Math.floor(seconds / 60);
+	const remainingSeconds = seconds % 60;
+	return `${minutes}m ${remainingSeconds}s`;
 }
 
 /**
@@ -116,7 +185,23 @@ async function savePrize(userId, prizeName, prizeType) {
 async function slotsCommand(bot, message, args, group) {
 	const userId = message.author;
 	const chatId = message.group ?? message.author;
-	const userData = await getUserData(userId);
+	let userData = await getUserData(userId);
+
+	// Regenera moedas
+	userData = regenerateCoins(userData);
+
+	if (userData.coins <= 0) {
+		const nextRegen = getNextCoinRegenTime(userData);
+		const waitTime = formatTimeString(nextRegen.secondsUntilNextCoin);
+		return new ReturnMessage({
+			chatId,
+			content: `❌ Você não tem moedinhas suficientes para jogar! \n\n🪙 Próxima moedinha em: *${waitTime}*`
+		});
+	}
+
+	// Consome uma moeda
+	userData.coins -= 1;
+	userData.total_plays += 1;
 
 	// Rola os números
 	const roll1 = Math.floor(Math.random() * SLOT_EMOJIS.length);
@@ -135,10 +220,11 @@ async function slotsCommand(bot, message, args, group) {
 	resultMessage += `----------------------\`\`\`\n\n`;
 
 	if (isWin) {
+		userData.total_wins += 1;
 		const winMsg = WIN_MESSAGES[Math.floor(Math.random() * WIN_MESSAGES.length)];
 		resultMessage += `🎊 *${winMsg}* 🎊\n\n`;
 
-		// Determina o prêmio (70% normal, 30% bom)
+		// Determina o prêmio (30% lixo, 70% bom)
 		const prizeRand = Math.random();
 		if (prizeRand < 0.3) {
 			// Prêmio Normal (Lixo)
@@ -147,9 +233,16 @@ async function slotsCommand(bot, message, args, group) {
 			resultMessage += `_Incrível como você tem sorte pra ganhar porcaria._ 🙄`;
 			await savePrize(userId, prize, "normal");
 		} else {
-			// Prêmio Bom (Pesca)
+			// Prêmio Bom (Pesca ou Moedas)
 			const goodRand = Math.random();
-			if (goodRand < 0.7) {
+			if (goodRand < 0.4) {
+				// Moedinhas (1-5) - NOVO
+				const coinsWon = Math.floor(Math.random() * 5) + 1;
+				userData.coins = Math.min(userData.coins + coinsWon, MAX_COINS);
+				resultMessage += `🎁 VOCÊ GANHOU: *${coinsWon} Moedinhas*! 🪙\n`;
+				resultMessage += `_Mais chances de girar a sorte!_`;
+				await savePrize(userId, `${coinsWon} Moedinhas`, "bom");
+			} else if (goodRand < 0.8) {
 				// Iscas (1-10)
 				const baits = Math.floor(Math.random() * 10) + 1;
 				resultMessage += `🎁 VOCÊ GANHOU: *${baits} Iscas de Pesca*! 🎣\n`;
@@ -172,7 +265,6 @@ async function slotsCommand(bot, message, args, group) {
 					originalName: upgrade.name
 				};
 
-				// Handle randomization if needed for some effects
 				if (upgrade.effect === "extra_baits" || upgrade.effect === "next_fish_bonus") {
 					buff.value =
 						Math.floor(Math.random() * (upgrade.maxValue - upgrade.minValue + 1)) +
@@ -183,12 +275,14 @@ async function slotsCommand(bot, message, args, group) {
 				await savePrize(userId, upgrade.name, "bom");
 			}
 		}
-		await saveUserStats(userId, true);
 	} else {
 		const loseMsg = LOSE_MESSAGES[Math.floor(Math.random() * LOSE_MESSAGES.length)];
 		resultMessage += `❌ ${loseMsg}`;
-		await saveUserStats(userId, false);
 	}
+
+	resultMessage += `\n\n> 🪙 Moedinhas: ${userData.coins}/${MAX_COINS}`;
+
+	await saveUserData(userData);
 
 	return new ReturnMessage({
 		chatId,
@@ -234,7 +328,7 @@ const commands = [
 		name: "slots",
 		description: "Joga o caça-níqueis",
 		category: "jogos",
-		cooldown: 15,
+		cooldown: 1,
 		reactions: { after: "🎰", error: "❌" },
 		method: slotsCommand
 	}),
