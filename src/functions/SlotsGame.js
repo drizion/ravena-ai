@@ -41,17 +41,6 @@ database.getSQLiteDb(
 `
 );
 
-// Migration for existing databases
-(async () => {
-	try {
-		await database.dbRun(dbName, "ALTER TABLE slots_users ADD COLUMN coins INTEGER DEFAULT 5");
-		await database.dbRun(dbName, "ALTER TABLE slots_users ADD COLUMN last_coin_regen INTEGER");
-		await database.dbRun(dbName, "ALTER TABLE slots_users ADD COLUMN user_name TEXT");
-	} catch (e) {
-		// Ignore if columns already exist
-	}
-})();
-
 const MAX_COINS = 5;
 const COIN_REGEN_TIME = 2 * 60; // 2 minutes in seconds
 const SLOT_EMOJIS = ["🍎", "🍋", "🍒", "🍇", "🍉", "🍓", "🍑", "🍍", "🥭", "💎"];
