@@ -15,6 +15,7 @@ database.getSQLiteDb(
 	`
     CREATE TABLE IF NOT EXISTS slots_users (
         user_id TEXT PRIMARY KEY,
+        user_name TEXT,
         total_plays INTEGER DEFAULT 0,
         total_wins INTEGER DEFAULT 0,
         coins INTEGER DEFAULT 5,
@@ -28,6 +29,15 @@ database.getSQLiteDb(
         prize_type TEXT,
         timestamp INTEGER
     );
+
+    CREATE TABLE IF NOT EXISTS slots_group_stats (
+        group_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        user_name TEXT,
+        total_plays INTEGER DEFAULT 0,
+        total_wins INTEGER DEFAULT 0,
+        PRIMARY KEY (group_id, user_id)
+    );
 `
 );
 
@@ -36,6 +46,7 @@ database.getSQLiteDb(
 	try {
 		await database.dbRun(dbName, "ALTER TABLE slots_users ADD COLUMN coins INTEGER DEFAULT 5");
 		await database.dbRun(dbName, "ALTER TABLE slots_users ADD COLUMN last_coin_regen INTEGER");
+		await database.dbRun(dbName, "ALTER TABLE slots_users ADD COLUMN user_name TEXT");
 	} catch (e) {
 		// Ignore if columns already exist
 	}
@@ -86,22 +97,29 @@ const LOSE_MESSAGES = [
 /**
  * Obtém dados do usuário
  */
-async function getUserData(userId) {
+async function getUserData(userId, userName = null) {
 	let user = await database.dbGet(dbName, "SELECT * FROM slots_users WHERE user_id = ?", [userId]);
 	if (!user) {
 		const now = Date.now();
 		await database.dbRun(
 			dbName,
-			"INSERT INTO slots_users (user_id, total_plays, total_wins, coins, last_coin_regen) VALUES (?, 0, 0, ?, ?)",
-			[userId, MAX_COINS, now]
+			"INSERT INTO slots_users (user_id, user_name, total_plays, total_wins, coins, last_coin_regen) VALUES (?, ?, 0, 0, ?, ?)",
+			[userId, userName, MAX_COINS, now]
 		);
 		user = {
 			user_id: userId,
+			user_name: userName,
 			total_plays: 0,
 			total_wins: 0,
 			coins: MAX_COINS,
 			last_coin_regen: now
 		};
+	} else if (userName && user.user_name !== userName) {
+		user.user_name = userName;
+		await database.dbRun(dbName, "UPDATE slots_users SET user_name = ? WHERE user_id = ?", [
+			userName,
+			userId
+		]);
 	}
 	return user;
 }
@@ -116,13 +134,15 @@ async function saveUserData(userData) {
          SET total_plays = ?, 
              total_wins = ?,
              coins = ?,
-             last_coin_regen = ? 
+             last_coin_regen = ?,
+             user_name = ?
          WHERE user_id = ?`,
 		[
 			userData.total_plays,
 			userData.total_wins,
 			userData.coins,
 			userData.last_coin_regen,
+			userData.user_name,
 			userData.user_id
 		]
 	);
@@ -180,12 +200,40 @@ async function savePrize(userId, prizeName, prizeType) {
 }
 
 /**
+ * Registra estatísticas do grupo
+ */
+async function recordGroupStats(groupId, userId, userName, isWin) {
+	await database.dbRun(
+		dbName,
+		`INSERT INTO slots_group_stats (group_id, user_id, user_name, total_plays, total_wins)
+         VALUES (?, ?, ?, 1, ?)
+         ON CONFLICT(group_id, user_id) DO UPDATE SET 
+            total_plays = total_plays + 1, 
+            total_wins = total_wins + ?, 
+            user_name = excluded.user_name`,
+		[groupId, userId, userName, isWin ? 1 : 0, isWin ? 1 : 0]
+	);
+}
+
+/**
  * Comando principal do slots
  */
 async function slotsCommand(bot, message, args, group) {
 	const userId = message.author;
 	const chatId = message.group ?? message.author;
-	let userData = await getUserData(userId);
+
+	let userName = message.authorName ?? "";
+	if (userName.length === 0) {
+		try {
+			const contact = await message.origin.getContact();
+			userName = contact.pushname || contact.name || "Jogador";
+		} catch (error) {
+			logger.error("Erro ao obter contato:", error);
+			userName = "Jogador";
+		}
+	}
+
+	let userData = await getUserData(userId, userName);
 
 	// Regenera moedas
 	userData = regenerateCoins(userData);
@@ -214,6 +262,10 @@ async function slotsCommand(bot, message, args, group) {
 
 	const isWin = roll1 === roll2 && roll2 === roll3;
 
+	if (message.group) {
+		await recordGroupStats(message.group, userId, userName, isWin);
+	}
+
 	let resultMessage = `🎰 *CAÇA-COISAS* 🎰\n`;
 	resultMessage += `\`\`\`----------------------\n`;
 	resultMessage += `|  [ ${emoji1} ] [ ${emoji2} ] [ ${emoji3} ]  |\n`;
@@ -221,6 +273,7 @@ async function slotsCommand(bot, message, args, group) {
 
 	if (isWin) {
 		userData.total_wins += 1;
+
 		const winMsg = WIN_MESSAGES[Math.floor(Math.random() * WIN_MESSAGES.length)];
 		resultMessage += `🎊 *${winMsg}* 🎊\n\n`;
 
@@ -306,7 +359,7 @@ async function slotsPrizesCommand(bot, message, args, group) {
 	if (!prizes || prizes.length === 0) {
 		return new ReturnMessage({
 			chatId,
-			content: "🎰 Você ainda não ganhou nenhum prêmio no caça-níqueis. Tente a sorte com !slots!"
+			content: "🎰 Você ainda não ganhou nenhum prêmio no caça-coisas. Tente a sorte com !slots!"
 		});
 	}
 
@@ -334,21 +387,107 @@ async function addCoins(userId, amount) {
 	return userData;
 }
 
+const EMOJIS_RANKING = ["", "🥇", "🥈", "🥉", "🐅", "🐆", "🦌", "🐐", "🐏", "🐓", "🐇"];
+
+/**
+ * Mostra ranking do caça-coisas no grupo
+ */
+async function slotsRankingCommand(bot, message, args, group) {
+	try {
+		if (!message.group) {
+			return new ReturnMessage({
+				chatId: message.author,
+				content: "🎰 O ranking do Caça-coisas só pode ser visualizado em grupos."
+			});
+		}
+
+		const groupId = message.group;
+
+		// Ranking de Vencedores (mais vitórias)
+		const winnersRanking = await database.dbAll(
+			dbName,
+			`SELECT user_name, total_wins
+             FROM slots_group_stats
+             WHERE group_id = ? AND total_wins > 0
+             ORDER BY total_wins DESC
+             LIMIT 10`,
+			[groupId]
+		);
+
+		// Ranking de Perdedores (mais jogadas sem vitória)
+		const losersRanking = await database.dbAll(
+			dbName,
+			`SELECT user_name, (total_plays - total_wins) as losses
+             FROM slots_group_stats
+             WHERE group_id = ? AND losses > 0
+             ORDER BY losses DESC
+             LIMIT 10`,
+			[groupId]
+		);
+
+		if (winnersRanking.length === 0 && losersRanking.length === 0) {
+			return new ReturnMessage({
+				chatId: groupId,
+				content: "🎰 Ainda não há dados para o ranking neste grupo. Use *!slots* para participar!"
+			});
+		}
+
+		let mensagem = `🎰 *Rankings Caça-coisas - ${group.name || "Grupo"}* 🏆\n\n`;
+
+		if (winnersRanking.length > 0) {
+			mensagem += "🍀 *Top Vencedores (Vitórias)*\n";
+			winnersRanking.forEach((jogador, index) => {
+				const emoji = index < EMOJIS_RANKING.length ? EMOJIS_RANKING[index + 1] : "";
+				mensagem += `  ${emoji} ${index + 1}°: ${jogador.total_wins} - ${jogador.user_name || "Desconhecido"}\n`;
+			});
+			mensagem += "\n";
+		}
+
+		if (losersRanking.length > 0) {
+			mensagem += "🤡 *Ranking de Jogadas sem Vitória (Perdedores)*\n";
+			losersRanking.forEach((jogador, index) => {
+				const medal =
+					index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `${index + 1}.`;
+				mensagem += `  ${medal} ${jogador.losses} perdas - ${jogador.user_name || "Desconhecido"}\n`;
+			});
+		}
+
+		return new ReturnMessage({
+			chatId: groupId,
+			content: mensagem
+		});
+	} catch (error) {
+		logger.error("Erro ao mostrar ranking do slots:", error);
+		return new ReturnMessage({
+			chatId: message.group ?? message.author,
+			content: "❌ Erro ao buscar ranking do Caça-coisas."
+		});
+	}
+}
+
 const commands = [
 	new Command({
 		name: "slots",
-		description: "Joga o caça-níqueis",
+		description: "Joga o caça-coisas",
 		category: "jogos",
 		reactions: { after: "🎰", error: "❌" },
 		method: slotsCommand
 	}),
 	new Command({
 		name: "slots-premios",
-		description: "Lista seus prêmios do caça-níqueis",
+		description: "Lista seus prêmios do caça-coisas",
 		category: "jogos",
 		cooldown: 10,
 		reactions: { after: "🏆", error: "❌" },
 		method: slotsPrizesCommand
+	}),
+	new Command({
+		name: "slots-ranking",
+		description: "Mostra o ranking de vitórias do caça-coisas no grupo",
+		category: "jogos",
+		cooldown: 10,
+		reactions: { after: "🏆", error: "❌" },
+		method: slotsRankingCommand
 	})
 ];
 
