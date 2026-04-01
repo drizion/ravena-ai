@@ -28,6 +28,14 @@ database.getSQLiteDb(
         prize_type TEXT,
         timestamp INTEGER
     );
+
+    CREATE TABLE IF NOT EXISTS slots_group_wins (
+        group_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        user_name TEXT,
+        wins INTEGER DEFAULT 0,
+        PRIMARY KEY (group_id, user_id)
+    );
 `
 );
 
@@ -180,11 +188,36 @@ async function savePrize(userId, prizeName, prizeType) {
 }
 
 /**
+ * Registra uma vitória no ranking do grupo
+ */
+async function recordGroupWin(groupId, userId, userName) {
+	await database.dbRun(
+		dbName,
+		`INSERT INTO slots_group_wins (group_id, user_id, user_name, wins)
+         VALUES (?, ?, ?, 1)
+         ON CONFLICT(group_id, user_id) DO UPDATE SET wins = wins + 1, user_name = excluded.user_name`,
+		[groupId, userId, userName]
+	);
+}
+
+/**
  * Comando principal do slots
  */
 async function slotsCommand(bot, message, args, group) {
 	const userId = message.author;
 	const chatId = message.group ?? message.author;
+
+	let userName = message.authorName ?? "";
+	if (userName.length === 0) {
+		try {
+			const contact = await message.origin.getContact();
+			userName = contact.pushname || contact.name || "Jogador";
+		} catch (error) {
+			logger.error("Erro ao obter contato:", error);
+			userName = "Jogador";
+		}
+	}
+
 	let userData = await getUserData(userId);
 
 	// Regenera moedas
@@ -221,6 +254,11 @@ async function slotsCommand(bot, message, args, group) {
 
 	if (isWin) {
 		userData.total_wins += 1;
+
+		if (message.group) {
+			await recordGroupWin(message.group, userId, userName);
+		}
+
 		const winMsg = WIN_MESSAGES[Math.floor(Math.random() * WIN_MESSAGES.length)];
 		resultMessage += `🎊 *${winMsg}* 🎊\n\n`;
 
@@ -334,6 +372,59 @@ async function addCoins(userId, amount) {
 	return userData;
 }
 
+const EMOJIS_RANKING = ["", "🥇", "🥈", "🥉", "🐅", "🐆", "🦌", "🐐", "🐏", "🐓", "🐇"];
+
+/**
+ * Mostra ranking de vitórias do slots no grupo
+ */
+async function slotsRankingCommand(bot, message, args, group) {
+	try {
+		if (!message.group) {
+			return new ReturnMessage({
+				chatId: message.author,
+				content: "🎰 O ranking do caça-níqueis só pode ser visualizado em grupos."
+			});
+		}
+
+		const groupId = message.group;
+
+		const ranking = await database.dbAll(
+			dbName,
+			`SELECT user_name, wins
+             FROM slots_group_wins
+             WHERE group_id = ? AND wins > 0
+             ORDER BY wins DESC
+             LIMIT 10`,
+			[groupId]
+		);
+
+		if (!ranking || ranking.length === 0) {
+			return new ReturnMessage({
+				chatId: groupId,
+				content: "🎰 Ainda não há vencedores no caça-níqueis deste grupo."
+			});
+		}
+
+		let mensagem = "🎰 *Ranking Caça-Níqueis* 🏆\n\n";
+		mensagem += "🍀 *Vitórias no Grupo*\n";
+		ranking.forEach((jogador, index) => {
+			const emoji = index < EMOJIS_RANKING.length ? EMOJIS_RANKING[index + 1] : "";
+			mensagem += `\t${emoji} ${index + 1}°: ${jogador.wins} vitória${jogador.wins !== 1 ? "s" : ""} - ${jogador.user_name || "Desconhecido"}\n`;
+		});
+
+		return new ReturnMessage({
+			chatId: groupId,
+			content: mensagem
+		});
+	} catch (error) {
+		logger.error("Erro ao mostrar ranking do slots:", error);
+		return new ReturnMessage({
+			chatId: message.group ?? message.author,
+			content: "Erro ao mostrar ranking do caça-níqueis. Por favor, tente novamente."
+		});
+	}
+}
+
 const commands = [
 	new Command({
 		name: "slots",
@@ -349,6 +440,14 @@ const commands = [
 		cooldown: 10,
 		reactions: { after: "🏆", error: "❌" },
 		method: slotsPrizesCommand
+	}),
+	new Command({
+		name: "slots-ranking",
+		description: "Mostra o ranking de vitórias do caça-níqueis no grupo",
+		category: "jogos",
+		cooldown: 10,
+		reactions: { after: "🏆", error: "❌" },
+		method: slotsRankingCommand
 	})
 ];
 
