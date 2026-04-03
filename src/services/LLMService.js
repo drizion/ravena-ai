@@ -39,6 +39,10 @@ class LLMService {
 		this.ollamaEndpoint =
 			config.ollamaEndpoint ?? process.env.OLLAMA_ENDPOINT ?? "http://localhost:11434";
 		this.ollamaModel = config.ollamaModel ?? process.env.OLLAMA_MODEL ?? "gemma3:12b";
+		this.ollamaTemperature =
+			config.ollamaTemperature ?? parseFloat(process.env.OLLAMA_TEMPERATURE) ?? 0.7;
+		this.ollamaTopK = config.ollamaTopK ?? parseInt(process.env.OLLAMA_TOP_K);
+		this.ollamaTopP = config.ollamaTopP ?? parseFloat(process.env.OLLAMA_TOP_P);
 
 		// Initialize Database for stats
 		this.database = Database.getInstance();
@@ -84,6 +88,9 @@ class LLMService {
 				method: async (options) => {
 					// Apply config values
 					if (config.model) options.model = config.model;
+					if (config.temperature !== undefined) options.temperature = config.temperature;
+					if (config.top_k !== undefined) options.top_k = config.top_k;
+					if (config.top_p !== undefined) options.top_p = config.top_p;
 					if (config.timeout_multiplier) {
 						options.timeout = options.timeout
 							? options.timeout * config.timeout_multiplier
@@ -714,8 +721,10 @@ class LLMService {
 				format: ollamaFormat,
 				stream: false,
 				options: {
-					temperature: options.temperature ?? 0.7,
-					num_predict: options.maxTokens ?? 8096
+					temperature: options.temperature ?? this.ollamaTemperature ?? 0.7,
+					num_predict: options.maxTokens ?? 8096,
+					top_k: options.top_k ?? this.ollamaTopK,
+					top_p: options.top_p ?? this.ollamaTopP
 				}
 			};
 
