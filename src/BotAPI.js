@@ -51,6 +51,9 @@ class BotAPI {
 		// Estado da UPS
 		this.lastUpsStatus = null;
 		this.lastServicesStatus = null;
+		this.upsTimeout = null;
+		this.powerOutageNotified = false;
+		this.powerOutageMinTime = (parseInt(process.env.POWER_OUTAGE_MIN_TIME) || 5) * 1000;
 
 		// Cache para os dados analíticos processados
 		this.analyticsCache = {
@@ -161,8 +164,8 @@ class BotAPI {
 		}
 
 		// 3. Check LLM (Main + Backup)
-		const llmMain = "http://192.168.3.200:12345";
-		const llmBackup = "http://192.168.195.211:11434";
+		const llmMain = "http://192.168.195.212:11434";
+		const llmBackup = "http://192.168.3.200:12345";
 
 		const mainUp = await checkUrl(llmMain);
 		if (mainUp) {
@@ -552,19 +555,44 @@ class BotAPI {
 					return res.send("ok - status unchanged");
 				}
 
-				let message = "";
 				if (status === "OB") {
-					message =
-						"🚨⚡️ *URGENTE*: _queda de energia_ ⚡️🚨\nO servidor está atualmente sendo suportado pelo Nobreak. Se a energia não retornar em alguns segundos, todos os serviços serão desligados por segurança";
+					// Outage detected - start debounce timer
+					if (this.upsTimeout) clearTimeout(this.upsTimeout);
+
+					this.upsTimeout = setTimeout(async () => {
+						const message =
+							"🚨⚡️ *URGENTE*: _queda de energia_ ⚡️🚨\nO servidor está atualmente sendo suportado pelo Nobreak. Se a energia não retornar em alguns segundos, todos os serviços serão desligados por segurança";
+						this.lastUpsStatus = "OB";
+						this.powerOutageNotified = true;
+						this.upsTimeout = null;
+						await this.notifyPowerStatus(message);
+					}, this.powerOutageMinTime);
+
+					return res.send(`ok - debounce started (${this.powerOutageMinTime / 1000}s)`);
 				} else if (status === "OL") {
-					message = "⚡️✅ *Energia restabelecida*: _podemos relaxar (por enquanto)_";
-				} else {
-					return res.send("ok - ignored status");
+					// Power restored
+					// If we were waiting to notify about OB, cancel it
+					if (this.upsTimeout) {
+						clearTimeout(this.upsTimeout);
+						this.upsTimeout = null;
+						this.lastUpsStatus = "OL";
+						return res.send("ok - outage cancelled (debounced)");
+					}
+
+					// Only notify OL if OB was actually notified
+					if (this.powerOutageNotified) {
+						const message = "⚡️✅ *Energia restabelecida*: _podemos relaxar (por enquanto)_";
+						this.lastUpsStatus = "OL";
+						this.powerOutageNotified = false;
+						await this.notifyPowerStatus(message);
+						return res.send("ok - restoration notified");
+					}
+
+					this.lastUpsStatus = "OL";
+					return res.send("ok - status updated to OL");
 				}
 
-				this.lastUpsStatus = status;
-				await this.notifyPowerStatus(message);
-				res.send("ok");
+				res.send("ok - ignored status");
 			} catch (error) {
 				this.logger.error("Error processing UPS powerChange:", error);
 				res.status(500).send("error");
@@ -581,10 +609,17 @@ class BotAPI {
 					return res.send("ok - status unchanged");
 				}
 
+				// Cancel any pending OB notification
+				if (this.upsTimeout) {
+					clearTimeout(this.upsTimeout);
+					this.upsTimeout = null;
+				}
+
 				const message =
 					"🚨⚡️🚨 *URGENTE*: _desligamento_ 🚨⚡️🚨\nA energia não retornou, então o servidor será desligado agora - voltando apenas de forma manual.";
 
 				this.lastUpsStatus = "CRITICAL";
+				this.powerOutageNotified = true;
 				await this.notifyPowerStatus(message);
 				res.send("ok");
 			} catch (error) {
