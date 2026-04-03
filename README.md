@@ -1,4 +1,4 @@
-﻿# RavenaBot AI
+# RavenaBot AI
 
 ![Ravenabot AI - img by chatgpt](ravenabanner.png)
 
@@ -87,16 +87,20 @@ Para funções bastante utilizadas do bot
 
 3. Configure o arquivo `.env` (veja a seção [Configuração](#-configuração))
 
-4. Copie o arquivo `bots.json.example` para `bots.json`
+4. Copie o arquivo `service-providers.json.example` para `service-providers.json`
 
-5. Configure o arquivo `bots.json`
+5. Configure os provedores de APIs (LLM, Whisper, etc) no `service-providers.json` ou via painel web `/service-providers`
 
-6. Inicie o bot:
+6. Copie o arquivo `bots.json.example` para `bots.json`
+
+7. Configure o arquivo `bots.json`
+
+8. Inicie o bot:
    ```bash
    npm start
    ```
 
-7. Escaneie o código QR que aparecerá no console usando o WhatsApp no seu celular.
+9. Escaneie o código QR que aparecerá no console usando o WhatsApp no seu celular.
 
 ## ⚙️ Configuração
 
@@ -174,16 +178,11 @@ GRUPOS_PLACA_PREMIUM=grupo1,grupo2  # Nomes de grupos que podem usar a API placa
 SOUNDCLOUD_CLIENT_ID=       # Pegar do network no navegador
 SOUNDCLOUD_OAUTH_TOKEN=       # Pegar do network no navegador
 
-# URL de APIs Locais
-API_TIMEOUT=10000           # 
-SDWEBUI_URL=http://192.168.3.200:7860     # Porta padrão SDWebui
-SDWEBUI_TOKEN=                # base64 de user:password de --api-auth
-LOCAL_LLM_ENDPOINT=http://localhost:9666  # Porta padrão LMStudio
-LOCAL_LLM_MODEL=google/gemma-3-12b      # Pegar nome do /v1/models
-OLLAMA_ENDPOINT=http://localhost:11434
-OLLAMA_MODEL=gemma3:12b
-#LMStudioToken=               # Não implementado ainda
-ALLTALK_API=http://localhost:7851       # Porta padrão AllTalk v2
+# Gerenciamento de Serviços
+# Agora os URLs de APIs (Whisper, ComfyUI, etc) são configurados no arquivo service-providers.json
+# Você pode gerenciar eles pela interface web: https://sua-ravena.win/service-providers
+
+API_TIMEOUT=30000           # Timeout padrão para chamadas de API
 
 # Configuração das doações (provavelmente inútil pra ti que vai rodar o bot particular)
 DONATION_LINK=https://tipa.ai/moothz

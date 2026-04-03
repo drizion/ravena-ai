@@ -16,6 +16,8 @@ const logger = new Logger("comfyui-commands");
 const nsfwPredict = NSFWPredict.getInstance();
 const LLMService = require("../services/LLMService");
 const llmService = LLMService.getInstance();
+const ServiceProviderService = require("../services/ServiceProviderService");
+const serviceProviderService = ServiceProviderService.getInstance();
 
 // Initialize Media Stats Database
 database.getSQLiteDb(
@@ -50,23 +52,31 @@ async function trackComfyStats(resolution, count = 1, model = "unknown") {
 	}
 }
 
-let COMFYUI_URL = process.env.COMFYUI_URL || "http://127.0.0.1:8188";
-if (!COMFYUI_URL.match(/^https?:\/\//)) {
-	COMFYUI_URL = "http://" + COMFYUI_URL;
+const samplers = ["dpmpp_sde", "euler_ancestral", "res_multistep"];
+const schedulers = ["simple", "beta"]; // ddim_uniform
+
+function getComfyUIUrl() {
+	const providers = serviceProviderService.getProviders("comfyui");
+	let url = providers[0]?.url || "http://127.0.0.1:8188";
+	if (!url.match(/^https?:\/\//)) {
+		url = "http://" + url;
+	}
+	return url;
 }
 
 const aesthetic = "\n\n(Aesthetic: Gothic, lightly purple-ish tinted atmosphere, cartoony)";
 
-const samplers = ["dpmpp_sde", "euler_ancestral", "res_multistep"];
-const schedulers = ["simple", "beta"]; // ddim_uniform
+function getWsUrl() {
+	const url = getComfyUIUrl();
+	const urlObj = new URL(url);
+	const httpProtocol = urlObj.protocol; // 'http:' or 'https:'
+	const wsProtocol = httpProtocol === "https:" ? "wss:" : "ws:";
+	const host = urlObj.host;
 
-const urlObj = new URL(COMFYUI_URL);
-const httpProtocol = urlObj.protocol; // 'http:' or 'https:'
-const wsProtocol = httpProtocol === "https:" ? "wss:" : "ws:";
-const host = urlObj.host;
-
-const httpBaseUrl = `${httpProtocol}//${host}`;
-const wsUrl = `${wsProtocol}//${host}/ws`;
+	const httpBaseUrl = `${httpProtocol}//${host}`;
+	const wsUrl = `${wsProtocol}//${host}/ws`;
+	return { httpBaseUrl, wsUrl };
+}
 
 const clientId = uuidv4();
 let ws = null;
@@ -75,6 +85,7 @@ const pendingRequests = new Map();
 function connectWebSocket() {
 	if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
 
+	const { wsUrl } = getWsUrl();
 	logger.info(`Connecting to ComfyUI WebSocket at ${wsUrl}...`);
 	try {
 		ws = new WebSocket(`${wsUrl}?clientId=${clientId}`);
@@ -145,6 +156,7 @@ async function handleExecutionSuccess(promptId) {
 	pendingRequests.delete(promptId);
 
 	try {
+		const { httpBaseUrl } = getWsUrl();
 		const historyResponse = await axios.get(`${httpBaseUrl}/history/${promptId}`);
 		const history = historyResponse.data[promptId];
 
@@ -276,6 +288,7 @@ async function queuePrompt(promptText, sampler = "dpmpp_sde", scheduler = "beta"
 		}
 	};
 
+	const { httpBaseUrl } = getWsUrl();
 	const response = await axios.post(`${httpBaseUrl}/prompt`, {
 		prompt: apiPrompt,
 		client_id: clientId

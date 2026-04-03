@@ -1,0 +1,45 @@
+{
+	"llm": [
+		{
+			"name": "ollama-gemma4:31b",
+			"type": "ollama",
+			"url": "http://192.168.1.10:11434",
+			"model": "gemma4:31b",
+			"enabled": true
+		},
+		{
+			"name": "gemini",
+			"type": "gemini",
+			"model": "gemini-2.1-flash",
+			"enabled": true
+		}
+	],
+	"whisper": [
+		{
+			"name": "primary",
+			"url": "http://192.168.1.10:3378",
+			"enabled": true
+		}
+	],
+	"comfyui": [
+		{
+			"name": "primary",
+			"url": "http://192.168.1.10:8188",
+			"enabled": true
+		}
+	],
+	"sdwebui": [
+		{
+			"name": "primary",
+			"url": "http://localhost:7860",
+			"enabled": true
+		}
+	],
+	"alltalk": [
+		{
+			"name": "primary",
+			"url": "http://192.168.1.10:7851",
+			"enabled": true
+		}
+	]
+}

@@ -11,6 +11,7 @@ const { exec, spawn } = require("child_process");
 const axios = require("axios");
 const WebManagement = require("./utils/WebManagement");
 const { CATEGORY_EMOJIS, COMMAND_ORDER } = require("./functions/MenuOrder");
+const ServiceProviderService = require("./services/ServiceProviderService");
 
 const WEBHOOK_RATE_LIMIT = 120000;
 
@@ -92,6 +93,8 @@ class BotAPI {
 		// Carrega dados analíticos em cache ao iniciar
 		this.updateAnalyticsCache();
 
+		this.serviceProviderService = ServiceProviderService.getInstance();
+
 		// Configura atualização periódica do cache (a cada 10 minutos)
 		this.cacheUpdateInterval = setInterval(
 			() => this.updateAnalyticsCache(),
@@ -123,15 +126,14 @@ class BotAPI {
 			imagine: "down",
 			llm: "down",
 			whisper: "down",
-			alltalk: "down"
+			alltalk: "down",
+			sdwebui: "down"
 		};
 
 		// 1. Check Evolution Go Systemd Service
-		// Tenta verificar via systemctl
 		try {
 			await new Promise((resolve) => {
 				exec("systemctl is-active evolution-go", (error, stdout) => {
-					// systemctl retorna exit code 0 se ativo, 3 se inativo, etc.
 					if (!error && stdout && stdout.trim() === "active") {
 						services.evolutiongo = "up";
 					} else {
@@ -144,7 +146,6 @@ class BotAPI {
 			services.evolutiongo = "down";
 		}
 
-		// Função auxiliar para timeout curto
 		const checkUrl = async (url) => {
 			if (!url) return false;
 			try {
@@ -158,59 +159,27 @@ class BotAPI {
 			}
 		};
 
-		// 2. Check Imagine (ComfyUI)
-		if (await checkUrl(process.env.COMFYUI_URL)) {
-			services.imagine = "up";
-		}
+		const checkCategoryStatus = async (category) => {
+			const providers = this.serviceProviderService.getProviders(category);
+			if (providers.length === 0) return "down";
 
-		// 3. Check LLM (Main + Backup)
-		const llmMain = "http://192.168.195.212:11434";
-		const llmBackup = "http://192.168.3.200:12345";
+			// First is main
+			const mainUp = await checkUrl(providers[0].url);
+			if (mainUp) return "up";
 
-		const mainUp = await checkUrl(llmMain);
-		if (mainUp) {
-			services.llm = "up"; // Green
-		} else {
-			const backupUp = await checkUrl(llmBackup);
-			if (backupUp) {
-				services.llm = "backup"; // Yellow
-			} else {
-				services.llm = "down"; // Red
+			// Others are backup
+			for (let i = 1; i < providers.length; i++) {
+				if (await checkUrl(providers[i].url)) return "backup";
 			}
-		}
 
-		// 4. Check Whisper
-		const whisperUrls = (process.env.WHISPER_API_URL || "")
-			.split(",")
-			.map((u) => u.trim())
-			.filter((u) => u.length > 0);
+			return "down";
+		};
 
-		if (whisperUrls.length > 0) {
-			const mainUp = await checkUrl(whisperUrls[0]);
-			if (mainUp) {
-				services.whisper = "up";
-			} else {
-				let anyBackupUp = false;
-				for (let i = 1; i < whisperUrls.length; i++) {
-					if (await checkUrl(whisperUrls[i])) {
-						anyBackupUp = true;
-						break;
-					}
-				}
-				if (anyBackupUp) {
-					services.whisper = "backup";
-				} else {
-					services.whisper = "down";
-				}
-			}
-		} else {
-			services.whisper = "down";
-		}
-
-		// 5. Check AllTalk
-		if (await checkUrl(process.env.ALLTALK_API)) {
-			services.alltalk = "up";
-		}
+		services.imagine = await checkCategoryStatus("comfyui");
+		services.llm = await checkCategoryStatus("llm");
+		services.whisper = await checkCategoryStatus("whisper");
+		services.alltalk = await checkCategoryStatus("alltalk");
+		services.sdwebui = await checkCategoryStatus("sdwebui");
 
 		this.lastServicesStatus = services;
 
@@ -787,6 +756,52 @@ class BotAPI {
 		this.app.get("/cmd", (req, res) => {
 			const filePath = path.join(__dirname, "../public/cmd.html");
 			res.sendFile(filePath);
+		});
+
+		// Serve service providers management page
+		this.app.get("/service-providers", authenticateBasic, (req, res) => {
+			const filePath = path.join(__dirname, "../public/service-providers.html");
+			res.sendFile(filePath);
+		});
+
+		// API endpoints for Service Providers CRUD
+		this.app.get("/api/service-providers", authenticateBasic, (req, res) => {
+			res.json(this.serviceProviderService.getConfig());
+		});
+
+		this.app.post("/api/service-providers", authenticateBasic, async (req, res) => {
+			try {
+				const newConfig = req.body;
+				await this.serviceProviderService.saveConfig(newConfig);
+
+				// Reload providers in services if needed
+				const LLMService = require("./services/LLMService");
+				LLMService.getInstance().buildProviders();
+
+				res.json({ status: "ok", message: "Configuration saved successfully" });
+			} catch (error) {
+				this.logger.error("Error saving service providers via API:", error);
+				res.status(500).json({ status: "error", message: error.message });
+			}
+		});
+
+		// API endpoint for LLM Queue status
+		this.app.get("/api/llm/queue", authenticateBasic, (req, res) => {
+			const LLMService = require("./services/LLMService");
+			res.json(LLMService.getInstance().getQueueStatus());
+		});
+
+		// API endpoint for LLM Stats (last hour by default)
+		this.app.get("/api/llm/stats", authenticateBasic, async (req, res) => {
+			try {
+				const LLMService = require("./services/LLMService");
+				const timeframe = parseInt(req.query.timeframe) || 60 * 60 * 1000; // 1 hour
+				const stats = await LLMService.getInstance().getStats(timeframe);
+				res.json(stats);
+			} catch (error) {
+				this.logger.error("Error fetching LLM stats via API:", error);
+				res.status(500).json({ status: "error", message: error.message });
+			}
 		});
 
 		// Get Public Commands

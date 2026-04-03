@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Provedores de Serviço - RavenaBot</title>
+    <link rel="stylesheet" href="/management.css?v=15">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.css">
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+    <style>
+        .category-section {
+            margin-bottom: 30px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .category-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 10px;
+        }
+        .provider-card {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 10px;
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr auto;
+            gap: 15px;
+            align-items: center;
+        }
+        .provider-card.disabled {
+            opacity: 0.5;
+        }
+        .provider-info {
+            display: flex;
+            flex-direction: column;
+        }
+        .provider-name {
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .provider-type {
+            font-size: 0.8em;
+            color: #aaa;
+        }
+        .provider-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .btn-add {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 5px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .status-badge {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7em;
+            text-transform: uppercase;
+        }
+        .status-main { background: #28a745; color: white; }
+        .status-backup { background: #ffc107; color: black; }
+        
+        /* Modal improvements */
+        .modal-body .form-group { margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="/android-chrome-192x192.png" alt="RavenaBot Logo">
+                    <h1>RavenaBot</h1>
+                </div>
+                <div class="user-info">
+                    <div id="user-details">
+                        <p><strong>Configurações de Sistema</strong></p>
+                        <p>Provedores de APIs Externas</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div id="loading-container">
+                <div class="loading-spinner"></div>
+                <p>Carregando provedores...</p>
+            </div>
+
+            <div id="error-container" class="hidden">
+                <div class="error-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                <h2>Erro ao carregar</h2>
+                <p id="error-message">Detalhes do erro aqui.</p>
+                <button id="retry-button" class="btn btn-primary">Tentar novamente</button>
+            </div>
+
+            <div id="dashboard-content" class="hidden">
+                <div class="alert alert-info" style="margin-bottom: 20px; background: rgba(0, 123, 255, 0.1); padding: 15px; border-radius: 8px; border-left: 5px solid #007bff;">
+                    <i class="fas fa-info-circle"></i> O primeiro provedor habilitado de cada categoria é considerado o <strong>Principal</strong> (Verde). Os subsequentes são considerados <strong>Backup</strong> (Amarelo).
+                </div>
+
+                <div id="categories-container">
+                    <!-- Categorias serão inseridas aqui via JS -->
+                </div>
+
+                <!-- NEW: Monitoring Sections -->
+                <div class="category-section" style="margin-top: 40px; border-top: 2px solid #007bff; padding-top: 20px;">
+                    <div class="category-header">
+                        <h3><i class="fas fa-tasks"></i> Status da Fila LLM (Real-time)</h3>
+                        <span id="queue-last-update" style="font-size: 0.7em; color: #888;"></span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table" id="llm-queue-table">
+                            <thead>
+                                <tr>
+                                    <th>Prioridade</th>
+                                    <th>Pendentes</th>
+                                    <th>Processando</th>
+                                    <th>Concluídos (Sessão)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="llm-queue-body">
+                                <tr><td colspan="4" class="text-center">Carregando fila...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="category-section">
+                    <div class="category-header">
+                        <h3><i class="fas fa-chart-line"></i> Desempenho na Última Hora (LLM)</h3>
+                        <span id="stats-last-update" style="font-size: 0.7em; color: #888;"></span>
+                    </div>
+                    <div class="grid-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                        <div class="stat-card" style="background: rgba(0,123,255,0.1); padding: 15px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 0.8em; color: #aaa;">Total de Requisições</div>
+                            <div id="stat-total-req" style="font-size: 1.5em; font-weight: bold;">0</div>
+                        </div>
+                        <div class="stat-card" style="background: rgba(40,167,69,0.1); padding: 15px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 0.8em; color: #aaa;">Input Tokens</div>
+                            <div id="stat-total-in" style="font-size: 1.5em; font-weight: bold;">0</div>
+                        </div>
+                        <div class="stat-card" style="background: rgba(255,193,7,0.1); padding: 15px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 0.8em; color: #aaa;">Output Tokens</div>
+                            <div id="stat-total-out" style="font-size: 1.5em; font-weight: bold;">0</div>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table" id="llm-stats-table">
+                            <thead>
+                                <tr>
+                                    <th>Provedor</th>
+                                    <th>Tipo</th>
+                                    <th>Requisições</th>
+                                    <th>Input Tokens</th>
+                                    <th>Output Tokens</th>
+                                </tr>
+                            </thead>
+                            <tbody id="llm-stats-body">
+                                <tr><td colspan="5" class="text-center">Carregando estatísticas...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="form-actions" style="margin-top: 30px; position: sticky; bottom: 20px; background: #1a1a1a; padding: 15px; border-radius: 8px; box-shadow: 0 -5px 15px rgba(0,0,0,0.5);">
+                    <button type="button" id="btn-save-all" class="btn btn-primary btn-lg" style="width: 100%;">
+                        <i class="fas fa-save"></i> SALVAR TODAS AS ALTERAÇÕES
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>ravenabot - infraestrutura</p>
+        </footer>
+    </div>
+
+    <!-- Modal para Adicionar/Editar Provedor -->
+    <div id="provider-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Editar Provedor</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit-category">
+                <input type="hidden" id="edit-index">
+
+                <div class="form-group">
+                    <label>Nome do Provedor</label>
+                    <input type="text" id="prov-name" class="form-control" placeholder="Ex: Ollama Principal">
+                </div>
+
+                <div class="form-group">
+                    <label>URL (Endpoint)</label>
+                    <input type="text" id="prov-url" class="form-control" placeholder="http://192.168.1.100:11434">
+                </div>
+
+                <div id="llm-extra-fields" class="hidden">
+                    <div class="form-group">
+                        <label>Tipo de LLM</label>
+                        <select id="prov-type" class="form-control">
+                            <option value="ollama">Ollama</option>
+                            <option value="gemini">Google Gemini</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="deepseek">DeepSeek</option>
+                            <option value="lmstudio">LMStudio</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Modelo</label>
+                        <input type="text" id="prov-model" class="form-control" placeholder="Ex: gemma3:12b">
+                    </div>
+                    <div class="form-group">
+                        <label>Multiplicador de Timeout (Opcional)</label>
+                        <input type="number" id="prov-timeout" class="form-control" placeholder="1" step="0.1">
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="prov-ignore-video">
+                        <label for="prov-ignore-video">Ignorar Vídeo (Multimodal)</label>
+                    </div>
+                </div>
+
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="prov-enabled">
+                    <label for="prov-enabled">Habilitado</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="btn-delete-prov" class="btn btn-danger hidden">Deletar</button>
+                <div class="spacer"></div>
+                <button type="button" class="btn btn-secondary close-modal-btn">Cancelar</button>
+                <button type="button" id="btn-save-prov" class="btn btn-primary">Adicionar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script Minimalista para Gerenciamento -->
+    <script src="/service-providers.js"></script>
+</body>
+</html>

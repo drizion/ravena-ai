@@ -14,12 +14,14 @@ const LLMService = require("../services/LLMService");
 const Command = require("../models/Command");
 const ReturnMessage = require("../models/ReturnMessage");
 const CmdUsage = require("../utils/CmdUsage");
+const ServiceProviderService = require("../services/ServiceProviderService");
 
 const execPromise = util.promisify(exec);
 const logger = new Logger("speech-commands");
 const database = Database.getInstance();
 const cmdUsage = CmdUsage.getInstance();
 const llmService = LLMService.getInstance();
+const serviceProviderService = ServiceProviderService.getInstance();
 
 // Initialize Media Stats Database
 database.getSQLiteDb(
@@ -48,7 +50,6 @@ database.getSQLiteDb(
 );
 
 const ffmpegPath = process.env.FFMPEG_PATH || "ffmpeg";
-const allTalkAPI = process.env.ALLTALK_API || "http://localhost:7851/";
 
 const runOn = process.env.WHISPER_USE_GPU ? "" : "--device cpu";
 
@@ -266,7 +267,9 @@ async function textToSpeech(bot, message, args, group, char = "ravena") {
 		const tempFilePath = path.join(tempDir, tempFilename);
 
 		// Monta a URL para a API do AllTalk
-		const apiUrl = `${allTalkAPI}/api/tts-generate`;
+		const allTalkProviders = serviceProviderService.getProviders("alltalk");
+		const allTalkUrl = allTalkProviders[0]?.url || "http://localhost:7851/";
+		const apiUrl = `${allTalkUrl}/api/tts-generate`;
 
 		// Cria os parâmetros para a requisição usando URLSearchParams
 		const params = new URLSearchParams({
@@ -296,7 +299,7 @@ async function textToSpeech(bot, message, args, group, char = "ravena") {
 		console.log(response.data);
 
 		// Obter o arquivo de áudio da API
-		const urlResultado = `${allTalkAPI}${response.data.output_file_url}`;
+		const urlResultado = `${allTalkUrl}${response.data.output_file_url}`;
 		logger.info(`Baixando mídia de '${urlResultado}'`);
 
 		const audioResponse = await axios({
@@ -386,10 +389,8 @@ async function textToSpeech(bot, message, args, group, char = "ravena") {
  * @returns {Promise<{text: string, duration: number}>}
  */
 async function transcribeViaAPI(audioPath, onEstimation) {
-	const urls = (process.env.WHISPER_API_URL || "")
-		.split(",")
-		.map((u) => u.trim())
-		.filter((u) => u.length > 0);
+	const whisperProviders = serviceProviderService.getProviders("whisper");
+	const urls = whisperProviders.map((p) => p.url);
 
 	if (urls.length === 0) {
 		throw new Error("WHISPER_API_URL not configured");
@@ -532,7 +533,8 @@ async function speechToText(bot, message, args, group, optimizeWithLLM = true) {
 
 		let transcribedText = "";
 
-		if (process.env.WHISPER_API_URL) {
+		const whisperProviders = serviceProviderService.getProviders("whisper");
+		if (whisperProviders.length > 0) {
 			// Use Whisper API
 			logger.debug(`[speechToText] Usando Whisper API (Multi-URL)`);
 
@@ -734,7 +736,8 @@ async function processAutoSTT(bot, message, group, opts) {
 
 		let transcribedText = "";
 
-		if (process.env.WHISPER_API_URL) {
+		const autoWhisperProviders = serviceProviderService.getProviders("whisper");
+		if (autoWhisperProviders.length > 0) {
 			// Use Whisper API
 			logger.debug(`[processAutoSTT] Usando Whisper API (Multi-URL)`);
 

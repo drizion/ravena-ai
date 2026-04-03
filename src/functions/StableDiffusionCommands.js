@@ -1,4 +1,4 @@
-﻿const path = require("path");
+const path = require("path");
 const axios = require("axios");
 const fs = require("fs").promises;
 const sharp = require("sharp");
@@ -13,12 +13,17 @@ const nsfwPredict = NSFWPredict.getInstance();
 
 const LLMService = require("../services/LLMService");
 const llmService = LLMService.getInstance();
+const ServiceProviderService = require("../services/ServiceProviderService");
+const serviceProviderService = ServiceProviderService.getInstance();
 const sdWebUIToken = `Basic ${process.env.SDWEBUI_TOKEN ?? ""}`;
 
 //logger.info('Módulo StableDiffusionCommands carregado');
 
 // Configuração da API SD WebUI
-const API_URL = process.env.SDWEBUI_URL || "http://localhost:7860";
+function getApiUrl() {
+	const providers = serviceProviderService.getProviders("sdwebui");
+	return providers[0]?.url || "http://localhost:7860";
+}
 /* Parametros bons pra lightning
 const DEFAULT_PARAMS = {
   width: 832,
@@ -126,7 +131,7 @@ async function generateImage(bot, message, args, group, skipNotify = false) {
 		};
 
 		// Faz a requisição à API
-		const response = await axios.post(`${API_URL}/sdapi/v1/txt2img`, payload, {
+		const response = await axios.post(`${getApiUrl()}/sdapi/v1/txt2img`, payload, {
 			headers: {
 				Authorization: sdWebUIToken,
 				"Content-Type": "application/json"

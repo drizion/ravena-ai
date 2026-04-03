@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const Database = require("../utils/Database");
 const Queue = require("./Queue");
+const ServiceProviderService = require("./ServiceProviderService");
 
 /**
  * Serviço para interagir com APIs de LLM
@@ -63,38 +64,98 @@ class LLMService {
 			true
 		);
 
-		this.providerDefinitions = [
-			{
-				name: "ollama-gemma3:12b-it-qat",
+		this.serviceProviderService = ServiceProviderService.getInstance();
+		this.buildProviders();
+
+		this.lastQueueChangeTimestamp = 0;
+		this.resetQueueTimeout = 10 * 60 * 1000; // 10 minutos
+	}
+
+	/**
+	 * Constrói a lista de provedores a partir da configuração
+	 */
+	buildProviders() {
+		const llmConfigs = this.serviceProviderService.getProviders("llm");
+		this.providerDefinitions = [];
+
+		for (const config of llmConfigs) {
+			const providerDef = {
+				name: config.name,
 				method: async (options) => {
-					options.model = "gemma3:12b-it-qat";
-					options.timeout = options.timeout ? options.timeout * 2 : 120000;
-					options.ignoreVideo = true;
-					const response = await this.ollamaCompletion({
-						customEndpoint: "http://192.168.3.200:12345", // Backup server 03/2026~
+					// Apply config values
+					if (config.model) options.model = config.model;
+					if (config.timeout_multiplier) {
+						options.timeout = options.timeout
+							? options.timeout * config.timeout_multiplier
+							: 30000 * config.timeout_multiplier;
+					}
+					if (config.ignoreVideo !== undefined) options.ignoreVideo = config.ignoreVideo;
+
+					const completionOptions = {
+						customEndpoint: config.url,
 						...options
-					});
-					if (response && response.message && response.message.content) {
-						return response.message.content;
+					};
+
+					let response;
+					switch (config.type) {
+						case "ollama":
+							response = await this.ollamaCompletion(completionOptions);
+							if (response && response.message && response.message.content) {
+								return response.message.content;
+							}
+							if (
+								response &&
+								response.choices &&
+								response.choices[0] &&
+								response.choices[0].message
+							) {
+								return response.choices[0].message.content;
+							}
+							throw new Error(`Resposta inválida ou vazia do Ollama (${config.name})`);
+						case "gemini":
+							response = await this.geminiCompletion(completionOptions);
+							return response.candidates[0].content.parts[0].text;
+						case "openai":
+						case "deepseek":
+						case "lmstudio":
+							// Mapping for other types if needed, similar to getCompletionFromSpecificProvider
+							const providerMethod = `${config.type}Completion`;
+							if (typeof this[providerMethod] === "function") {
+								response = await this[providerMethod]({
+									...completionOptions,
+									useLocal: config.type === "lmstudio"
+								});
+								// Handle standard OpenAI format
+								if (
+									response &&
+									response.choices &&
+									response.choices[0] &&
+									response.choices[0].message
+								) {
+									return response.choices[0].message.content;
+								}
+								return response;
+							}
+							throw new Error(`Tipo de provedor não suportado: ${config.type}`);
+						default:
+							throw new Error(`Tipo de provedor desconhecido: ${config.type}`);
 					}
-					if (response && response.choices && response.choices[0] && response.choices[0].message) {
-						return response.choices[0].message.content;
-					}
-					throw new Error("Resposta inválida ou vazia do Ollama");
 				}
-			},
-			{
-				name: "gemini",
+			};
+			this.providerDefinitions.push(providerDef);
+		}
+
+		// Se não houver provedores habilitados, adiciona o Gemini como fallback se a chave existir
+		if (this.providerDefinitions.length === 0 && this.geminiKey) {
+			this.providerDefinitions.push({
+				name: "gemini-fallback",
 				method: async (options) => {
 					const response = await this.geminiCompletion(options);
 					return response.candidates[0].content.parts[0].text;
 				}
-			}
-		];
-
+			});
+		}
 		this.providerQueue = [...this.providerDefinitions];
-		this.lastQueueChangeTimestamp = 0;
-		this.resetQueueTimeout = 10 * 60 * 1000; // 10 minutos
 	}
 
 	/**
@@ -162,9 +223,15 @@ class LLMService {
 	 * Retrieves aggregated usage statistics from the database.
 	 * @returns {Promise<Object>} - Aggregated stats.
 	 */
-	async getStats() {
+	async getStats(timeframeMs = null) {
 		try {
-			const rows = await this.database.dbAll(this.DB_NAME, "SELECT * FROM usage_stats");
+			let query = "SELECT * FROM usage_stats";
+			const params = [];
+			if (timeframeMs) {
+				query += " WHERE timestamp > ?";
+				params.push(Date.now() - timeframeMs);
+			}
+			const rows = await this.database.dbAll(this.DB_NAME, query, params);
 
 			const stats = {
 				total_requests: 0,
