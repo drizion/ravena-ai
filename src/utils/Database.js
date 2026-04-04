@@ -42,12 +42,33 @@ class Database {
 		// Setup cleanup handlers
 		this.setupCleanupHandlers();
 
-		// Setup scheduled backups
-		this.setupScheduledBackups();
+		this.backupStarted = false;
 		this.lastScheduledBackup = this.getLastScheduledBackupTime();
+
+		// Fallback: Start backup system after 5 minutes if no write occurred
+		setTimeout(
+			() => {
+				this.triggerBackupStart("timeout");
+			},
+			5 * 60 * 1000
+		);
+	}
+
+	/**
+	 * Trigger the start of the backup system (Remote and Scheduled)
+	 * @param {string} reason - The reason for starting (write or timeout)
+	 */
+	triggerBackupStart(reason = "write") {
+		if (this.backupStarted) return;
+		this.backupStarted = true;
+
+		this.logger.info(`Starting backup system. Reason: ${reason}`);
 
 		// Start independent remote backup interval
 		this.backupSystem.startRemoteBackupInterval();
+
+		// Setup local scheduled backups
+		this.setupScheduledBackups();
 	}
 
 	/**
@@ -216,6 +237,7 @@ class Database {
 	 * Run a SQL query on the core database
 	 */
 	run(sql, params = []) {
+		this.triggerBackupStart();
 		if (!this.coreDb) {
 			return Promise.reject(new Error("Core Database not initialized or currently restoring."));
 		}
@@ -315,6 +337,7 @@ class Database {
 	}
 
 	async saveGroup(group) {
+		this.triggerBackupStart();
 		try {
 			await this.run(
 				`INSERT INTO groups (id, name, json_data) VALUES (?, ?, ?) 
@@ -343,6 +366,7 @@ class Database {
 	}
 
 	async saveCustomCommand(groupId, command) {
+		this.triggerBackupStart();
 		try {
 			await this.run(
 				`INSERT INTO custom_commands (group_id, trigger, json_data) VALUES (?, ?, ?)
@@ -396,6 +420,7 @@ class Database {
 	}
 
 	async saveCustomVariables(variables) {
+		this.triggerBackupStart();
 		try {
 			const filePath = path.join(this.databasePath, "custom-variables.json");
 			fs.writeFileSync(filePath, JSON.stringify(variables, null, 2));
@@ -421,6 +446,7 @@ class Database {
 	}
 
 	async saveLoadReports(reports) {
+		this.triggerBackupStart();
 		try {
 			// Start transaction
 			await this.run("BEGIN TRANSACTION");
@@ -446,6 +472,7 @@ class Database {
 	}
 
 	async addLoadReport(report) {
+		this.triggerBackupStart();
 		try {
 			await this.run(
 				"INSERT INTO load_reports (bot_id, timestamp_end, json_data) VALUES (?, ?, ?)",
@@ -472,6 +499,7 @@ class Database {
 	}
 
 	async saveDonations(donations) {
+		this.triggerBackupStart();
 		try {
 			await this.run("BEGIN TRANSACTION");
 			await this.run("DELETE FROM donations");
@@ -492,6 +520,7 @@ class Database {
 	}
 
 	async addDonation(name, amount, numero = undefined) {
+		this.triggerBackupStart();
 		try {
 			const row = await this.get(
 				"SELECT name, json_data FROM donations WHERE name = ? COLLATE NOCASE",
@@ -536,6 +565,7 @@ class Database {
 	}
 
 	async updateDonorNumber(name, numero) {
+		this.triggerBackupStart();
 		try {
 			const row = await this.get("SELECT json_data FROM donations WHERE name = ? COLLATE NOCASE", [
 				name
@@ -560,6 +590,7 @@ class Database {
 	}
 
 	async updateDonationAmount(name, amount) {
+		this.triggerBackupStart();
 		try {
 			const row = await this.get("SELECT json_data FROM donations WHERE name = ? COLLATE NOCASE", [
 				name
@@ -605,6 +636,7 @@ class Database {
 	}
 
 	async mergeDonors(targetName, sourceName) {
+		this.triggerBackupStart();
 		try {
 			const targetRow = await this.get(
 				"SELECT json_data FROM donations WHERE name = ? COLLATE NOCASE",
@@ -669,6 +701,7 @@ class Database {
 	}
 
 	async savePendingJoins(joins) {
+		this.triggerBackupStart();
 		try {
 			await this.run("BEGIN TRANSACTION");
 			await this.run("DELETE FROM pending_joins");
@@ -689,6 +722,7 @@ class Database {
 	}
 
 	async savePendingJoin(inviteCode, data) {
+		this.triggerBackupStart();
 		try {
 			// Upsert
 			const joinData = {
@@ -710,6 +744,7 @@ class Database {
 	}
 
 	async removePendingJoin(inviteCode) {
+		this.triggerBackupStart();
 		try {
 			await this.run("DELETE FROM pending_joins WHERE code = ?", [inviteCode]);
 			return true;
@@ -732,6 +767,7 @@ class Database {
 	}
 
 	async toggleUserInvites(phoneNumber, block) {
+		this.triggerBackupStart();
 		try {
 			const row = await this.get("SELECT json_data FROM soft_blocks WHERE number = ?", [
 				phoneNumber
@@ -790,6 +826,7 @@ class Database {
 	}
 
 	saveJSONToFile(filePath, data) {
+		this.triggerBackupStart();
 		try {
 			const dir = path.dirname(filePath);
 			if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -866,6 +903,7 @@ class Database {
 	}
 
 	dbRun(dbName, sql, params = []) {
+		this.triggerBackupStart();
 		const db = this.sqlites[dbName];
 		if (!db) {
 			return Promise.reject(
