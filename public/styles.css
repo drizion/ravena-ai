@@ -105,6 +105,11 @@ h1 {
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
+.recent-donates-banner {
+    background: linear-gradient(90deg, rgba(35, 6, 109, 1) 0%, rgba(35, 6, 109, 1) 58%, rgba(134, 29, 253, 1) 67%, rgba(134, 29, 253, 1) 100%);
+    text-shadow: 1px 1px #000;
+}
+
 .scrolling-banner {
     display: flex;
     align-items: center;

@@ -156,15 +156,31 @@ async function showTopDonors(bot, message, args, group) {
 			});
 		}
 
-		// 1. Encontra a última doação
-		const lastDonation = donations.reduce(
-			(latest, current) =>
-				current.timestamp && current.timestamp > (latest.timestamp || 0) ? current : latest,
-			{}
-		);
-		const timeSinceLastDonation = lastDonation.timestamp
-			? formatTimeAgo(lastDonation.timestamp)
-			: "Nunca";
+		// 1. Encontra a última doação absoluta
+		let lastDonationEntry = null;
+		let lastDonorName = "";
+
+		donations.forEach((donor) => {
+			if (donor.historico && donor.historico.length > 0) {
+				const donorLatest = donor.historico.reduce((latest, h) =>
+					h.ts > (latest.ts || 0) ? h : latest
+				);
+				if (!lastDonationEntry || donorLatest.ts > lastDonationEntry.ts) {
+					lastDonationEntry = donorLatest;
+					lastDonorName = donor.nome;
+				}
+			} else if (donor.timestamp) {
+				if (!lastDonationEntry || donor.timestamp > (lastDonationEntry.ts || 0)) {
+					lastDonationEntry = { ts: donor.timestamp, valor: donor.valor };
+					lastDonorName = donor.nome;
+				}
+			}
+		});
+
+		const timeSinceLastDonation = lastDonationEntry ? formatTimeAgo(lastDonationEntry.ts) : "Nunca";
+		const lastDonationInfo = lastDonationEntry
+			? `, por *${lastDonorName}* _(R$${lastDonationEntry.valor.toFixed(2)})_`
+			: "";
 
 		// 2. Calcula doações dos últimos 3 meses a partir do histórico
 		const threeMonthsAgo = new Date();
@@ -207,12 +223,17 @@ async function showTopDonors(bot, message, args, group) {
 		// Limita aos 1000 principais doadores
 		const topDonors = donations.slice(0, 1000);
 
+		// Calcula porcentagem da meta de 150
+		const goalAmount = 150;
+		const percentage = Math.min(100, Math.floor((totalRecentAmount / goalAmount) * 100));
+
 		// Constrói mensagem
 		let donorsMsg = await readDonationHeader();
 
 		// Adiciona as novas seções
-		donorsMsg += `🕙 A última doação foi recebida ${timeSinceLastDonation}.\n\n`;
-		donorsMsg += `💰 *Últimos 3 meses:* R$${totalRecentAmount.toFixed(2)}\n\n`;
+		donorsMsg += `🕙 A última doação foi recebida ${timeSinceLastDonation}${lastDonationInfo}.\n\n`;
+		donorsMsg += `💰 *Últimos 3 meses:* R$${totalRecentAmount.toFixed(2)} (${percentage}% da meta)\n`;
+		donorsMsg += `Entre energia do servidor e recargas, estimo um gasto mensal por volta dos R$50. Toda ajuda é bem vinda!\n\n`;
 
 		if (topRecentDonors.length > 0) {
 			donorsMsg += "🏆 *Top Doadores (Últimos 3 meses):*\n";

@@ -247,6 +247,41 @@ function formatPhoneNumber(number) {
   return number;
 }
 
+// Função para buscar e renderizar doações recentes (3 meses)
+async function fetchRecentTopDonates() {
+    try {
+        const response = await fetch('/recent-top-donates');
+        if (!response.ok) {
+            throw new Error('Erro ao buscar doações recentes');
+        }
+        const data = await response.json();
+        const { totalRecentAmount, topRecentDonors } = data;
+        const recentDonatesTextElement = document.getElementById('recentTopDonatesText');
+
+        const currencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+        const totalText = `💰 TOTAL ÚLTIMOS 3 MESES: ${currencyFormatter.format(totalRecentAmount)}`;
+        
+        // Meta oculta de 150
+        const goalAmount = 150;
+        const percentage = Math.min(100, Math.floor((totalRecentAmount / goalAmount) * 100));
+        const progressText = `${currencyFormatter.format(totalRecentAmount)} (${percentage}%)`;
+
+        if (topRecentDonors.length > 0) {
+            const donorsText = topRecentDonors
+                .map(d => `${d.nome}: ${currencyFormatter.format(d.valor)}`)
+                .join('  •  ');
+            
+            recentDonatesTextElement.textContent = `🏆 TOP DONATES (3 MESES): Total ${progressText}  •  ${donorsText}  •  `.repeat(5);
+        } else {
+            recentDonatesTextElement.textContent = `🏆 TOP DONATES (3 MESES): Total ${progressText}  •  Nenhuma doação recente registrada.`;
+        }
+    } catch (error) {
+        console.error('Erro ao carregar doações recentes:', error);
+        const recentDonatesTextElement = document.getElementById('recentTopDonatesText');
+        recentDonatesTextElement.textContent = '🏆 TOP DONATES (3 MESES): Erro ao carregar.';
+    }
+}
+
 // Função para buscar e renderizar top doações
 async function fetchTopDonates() {
     try {
@@ -268,14 +303,14 @@ async function fetchTopDonates() {
                 .join('  •  ');
             
             // Repete o texto para garantir o preenchimento do banner
-            donatesTextElement.textContent = `🏆 TOP DONATES:  •  ${text}  •  `.repeat(5);
+            donatesTextElement.textContent = `🏆 TOP DONATES (GERAL):  •  ${text}  •  `.repeat(5);
         } else {
-            donatesTextElement.textContent = '🏆 TOP DONATES: Nenhuma doação registrada ainda.';
+            donatesTextElement.textContent = '🏆 TOP DONATES (GERAL): Nenhuma doação registrada ainda.';
         }
     } catch (error) {
         console.error('Erro ao carregar top doações:', error);
         const donatesTextElement = document.getElementById('topDonatesText');
-        donatesTextElement.textContent = '🏆 TOP DONATES: Erro ao carregar.';
+        donatesTextElement.textContent = '🏆 TOP DONATES (GERAL): Erro ao carregar.';
     }
 }
 
@@ -851,34 +886,43 @@ function renderYearlyChart(data, commonOptions) {
     
     Highcharts.chart(container, {
         ...commonOptions,
-        chart: { ...commonOptions.chart, zoomType: 'x' }, // Removed specific type to allow series override
+        chart: { ...commonOptions.chart, zoomType: 'x' }, 
         xAxis: {
             ...commonOptions.xAxis,
-            categories: data.dates, // data.dates now contains mixed labels (Month Names + DD/MM)
+            categories: data.dates, 
             labels: {
                 ...commonOptions.xAxis.labels,
                 rotation: -45,
-                step: 1 // Show all labels if possible, or let Highcharts decide
+                step: 1 
             },
             title: { text: null }
         },
+        yAxis: [{ // Primary axis (Eixo Esquerdo - Diário)
+            title: { text: 'Mensagens Diárias', style: { color: '#04a9f0' } },
+            labels: { style: { color: '#04a9f0' } },
+            gridLineColor: 'rgba(71, 72, 108, 0.3)'
+        }, { // Secondary axis (Eixo Direito - Mensal)
+            title: { text: 'Total Mensal', style: { color: '#3e0ea7' } },
+            labels: { style: { color: '#3e0ea7' } },
+            opposite: true,
+            gridLineWidth: 0 
+        }],
         tooltip: {
-            shared: false, // Don't share because points are mutually exclusive (Bar OR Line)
+            shared: false, 
             formatter: function() {
-                // If it's a bar (Month Total)
-                if (this.series.type === 'column') {
-                    return `<b>${this.x}</b><br/>${this.series.name}: <b>${this.y}</b> msgs`;
-                }
-                // If it's a line (Daily)
-                return `<b>${this.x}</b><br/>${this.series.name}: <b>${this.y}</b> msgs`;
+                return `<b>${this.x}</b><br/>${this.series.name}: <b>${new Intl.NumberFormat('pt-BR').format(this.y)}</b> msgs`;
             },
             backgroundColor: 'rgba(35, 6, 109, 0.9)',
             style: { color: '#fff' },
             borderWidth: 0
         },
-        series: data.series // Series array already contains type: 'column'/'areaspline'
+        series: data.series.map(s => ({
+            ...s,
+            yAxis: s.type === 'column' ? 1 : 0
+        }))
     });
 }
+
 
 async function fetchBotDetailedStats() {
     // 1. Try Load from Cache
@@ -1024,6 +1068,7 @@ function renderBotStatsTable(data) {
 
 document.addEventListener('DOMContentLoaded', () => {
     checkAdminMode();
+    fetchRecentTopDonates();
     fetchTopDonates();
     fetchHealthData();
     fetchBotDetailedStats();
@@ -1077,6 +1122,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     setInterval(fetchHealthData, 30000);
+    setInterval(fetchRecentTopDonates, 5 * 60 * 1000);
     setInterval(fetchTopDonates, 5 * 60 * 1000); // Atualiza doações a cada 5 minutos
 
     // SSE connection for realtime activity

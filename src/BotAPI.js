@@ -723,6 +723,19 @@ class BotAPI {
 			}
 		});
 
+		this.app.get("/manage/:token", (req, res) => {
+			const { token } = req.params;
+			const filePath = path.join(__dirname, "../public/management.html");
+			this.logger.info(`[management] => '${token}'`);
+			res.sendFile(filePath);
+		});
+
+		// Serve public commands page
+		this.app.get("/cmd", (req, res) => {
+			const filePath = path.join(__dirname, "../public/cmd.html");
+			res.sendFile(filePath);
+		});
+
 		// Endpoint para Top Donates
 		this.app.get("/top-donates", async (req, res) => {
 			try {
@@ -745,18 +758,55 @@ class BotAPI {
 			}
 		});
 
-		// Serve management page
-		this.app.get("/manage/:token", (req, res) => {
-			const { token } = req.params;
-			const filePath = path.join(__dirname, "../public/management.html");
-			this.logger.info(`[management] => '${token}'`);
-			res.sendFile(filePath);
-		});
+		// Endpoint para Top Donates dos últimos 3 meses
+		this.app.get("/recent-top-donates", async (req, res) => {
+			try {
+				const donations = await this.database.getDonations();
 
-		// Serve public commands page
-		this.app.get("/cmd", (req, res) => {
-			const filePath = path.join(__dirname, "../public/cmd.html");
-			res.sendFile(filePath);
+				const threeMonthsAgo = new Date();
+				threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+				const threeMonthsAgoTs = threeMonthsAgo.getTime();
+
+				let totalRecentAmount = 0;
+				const recentDonorsSummary = {};
+
+				donations.forEach((donor) => {
+					// 1. Calcula valor do histórico recente
+					const recentAmount = (donor.historico ?? [])
+						.filter((h) => h.ts > threeMonthsAgoTs)
+						.reduce((sum, h) => sum + h.valor, 0);
+
+					// 2. Fallback para dados sem histórico
+					if (
+						recentAmount === 0 &&
+						(!donor.historico || donor.historico.length === 0) &&
+						donor.timestamp &&
+						donor.timestamp > threeMonthsAgoTs
+					) {
+						const fallbackAmount = donor.valor;
+						if (fallbackAmount > 0) {
+							totalRecentAmount += fallbackAmount;
+							recentDonorsSummary[donor.nome] = { nome: donor.nome, valor: fallbackAmount };
+						}
+					} else if (recentAmount > 0) {
+						totalRecentAmount += recentAmount;
+						recentDonorsSummary[donor.nome] = { nome: donor.nome, valor: recentAmount };
+					}
+				});
+
+				// Ordena e pega os top 15
+				const topRecentDonors = Object.values(recentDonorsSummary)
+					.sort((a, b) => b.valor - a.valor)
+					.slice(0, 15);
+
+				res.json({
+					totalRecentAmount,
+					topRecentDonors
+				});
+			} catch (error) {
+				this.logger.error("Erro ao processar doações recentes:", error);
+				res.status(500).json({ error: "Erro ao processar doações recentes" });
+			}
 		});
 
 		// Serve service providers management page
