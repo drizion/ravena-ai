@@ -11,6 +11,8 @@ const BOT_STATS_CACHE_KEY = 'ravena_bot_stats_v1';
 let currentStatsSort = { column: 'day', direction: 'desc' };
 let showOnlyConventional = false;
 let lastStatsData = null;
+let llmStatusData = null;
+let llmCountdownInterval = null;
 
 // Function to animate number change
 function animateValue(obj, start, end, duration) {
@@ -1080,57 +1082,84 @@ document.addEventListener('DOMContentLoaded', () => {
     // SSE connection for realtime activity
     if (window.EventSource) {
         const evtSource = new EventSource("/api/stream");
-        const activityLight = document.getElementById('message-activity');
         const overlay = document.getElementById('ws-loading-overlay');
         
         // State variables
-        let lastActivity = Date.now();
         let evolutionStatus = 'unknown'; // 'up', 'down', 'unknown'
 
         // Status update function for general services
-        const updateStatusLight = (elementId, status) => {
+        const updateStatusLight = (elementId, statusData) => {
             const el = document.getElementById(elementId);
             if (!el) return;
             
+            // Handle both string status (old) and object status (new/detailed)
+            let status = typeof statusData === 'string' ? statusData : statusData.status;
+
             // Remove existing classes
-            el.classList.remove('up', 'down', 'backup', 'green', 'red', 'yellow');
+            el.classList.remove('up', 'down', 'backup', 'backup-dim', 'green', 'red', 'yellow');
             
             if (status === 'up') el.classList.add('up');
             else if (status === 'down') el.classList.add('down');
-            else if (status === 'backup') el.classList.add('backup');
-            else el.classList.add('down'); // Default to down/red
-        };
-
-        // Message activity light logic loop
-        setInterval(() => {
-            if (!activityLight) return;
-
-            // Priority 1: Evolution Service Down
-            if (evolutionStatus === 'down' || evolutionStatus === 'unknown') {
-                 activityLight.className = 'status-indicator-light activity-grey';
-                 return;
-            }
-
-            const now = Date.now();
-            const diff = now - lastActivity;
-
-            // Remove animation classes first to reset or switch
-            // We keep the base class
-            
-            if (diff > 60000) { // > 60s
-                activityLight.className = 'status-indicator-light activity-danger';
-            } else if (diff > 30000) { // > 30s
-                activityLight.className = 'status-indicator-light activity-warning';
-            } else {
-                // Idle or Flash (Flash is handled by event, here we revert to idle if not flashing)
-                // However, flash class has a transition. We shouldn't remove it immediately if it was just added.
-                // But the event handler adds 'activity-flash' and setTimeout removes it.
-                // So here we just ensure if neither warning nor danger, it is idle (or flash if currently flashing)
-                if (!activityLight.classList.contains('activity-flash')) {
-                     activityLight.className = 'status-indicator-light activity-idle';
+            else if (status === 'backup') {
+                if (elementId === 'api-llm' && typeof statusData === 'object' && !statusData.isPrimary) {
+                    el.classList.add('backup-dim');
+                } else {
+                    el.classList.add('backup');
                 }
             }
-        }, 1000);
+            else el.classList.add('down'); // Default to down/red
+
+            // Detailed handling for LLM
+            if (elementId === 'api-llm' && typeof statusData === 'object') {
+                llmStatusData = statusData;
+                updateLLMTooltip();
+                
+                // Reset or start countdown if in backup
+                if (status === 'backup' && statusData.resetSeconds > 0) {
+                    if (llmCountdownInterval) clearInterval(llmCountdownInterval);
+                    llmCountdownInterval = setInterval(() => {
+                        if (llmStatusData && llmStatusData.resetSeconds > 0) {
+                            llmStatusData.resetSeconds--;
+                            updateLLMTooltip();
+                        } else {
+                            clearInterval(llmCountdownInterval);
+                            llmCountdownInterval = null;
+                        }
+                    }, 1000);
+                } else if (llmCountdownInterval) {
+                    clearInterval(llmCountdownInterval);
+                    llmCountdownInterval = null;
+                }
+            }
+        };
+
+        const updateLLMTooltip = () => {
+            const el = document.getElementById('api-llm');
+            if (!el || !llmStatusData) return;
+            const tooltip = el.querySelector('.tooltip-text');
+            if (!tooltip) return;
+
+            let modelInfo = llmStatusData.model || 'Desconhecido';
+            if (llmStatusData.status === 'backup' && llmStatusData.resetSeconds > 0) {
+                modelInfo += `, ${llmStatusData.resetSeconds}s`;
+            }
+
+            tooltip.textContent = `[${modelInfo}] !ia/!resumo/!interagir / Servidor IA de linguagem (LLM)`;
+        };
+
+        const blinkIndicator = (id) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.classList.remove('flash');
+            void el.offsetWidth; // Force reflow
+            el.classList.add('flash');
+            
+            if (el._flashTimeout) clearTimeout(el._flashTimeout);
+            el._flashTimeout = setTimeout(() => {
+                el.classList.remove('flash');
+                delete el._flashTimeout;
+            }, 200);
+        };
 
         evtSource.onopen = () => {
             if (overlay) overlay.style.display = 'none';
@@ -1139,51 +1168,49 @@ document.addEventListener('DOMContentLoaded', () => {
         evtSource.onerror = (err) => {
             // Browser automatically tries to reconnect
             if (overlay) overlay.style.display = 'flex';
-             // Also grey out activity
-             if (activityLight) activityLight.className = 'status-indicator-light activity-grey';
         };
 
         evtSource.addEventListener('activity', (e) => {
             const data = JSON.parse(e.data);
-            if (data && data.type === 'message') {
-                lastActivity = Date.now();
+            if (!data) return;
+
+            const type = data.type;
+            
+            // Map activity type to DOM element ID
+            const typeMap = {
+                'message': 'service-evolutiongo',
+                'imagine': 'api-imagine',
+                'llm': 'api-llm',
+                'whisper': 'api-whisper',
+                'alltalk': 'api-alltalk'
+            };
+
+            const targetId = typeMap[type];
+            if (targetId) blinkIndicator(targetId);
+
+            // Handle bot-specific activity (card flash and counters)
+            if (type === 'message') {
                 messageTimestamps.push(Date.now());
-
                 if (data.botId) {
-                     if (!botMessageTimestamps[data.botId]) botMessageTimestamps[data.botId] = [];
-                     botMessageTimestamps[data.botId].push(Date.now());
-                     updateBotRealtimeCounters();
-                     
-                     // FLASH EFFECT FOR BOT CARD
-                     const botStatusDot = document.getElementById(`status-${data.botId}`);
-                     if (botStatusDot) {
-                         botStatusDot.classList.remove('flash');
-                         void botStatusDot.offsetWidth; // Force reflow to allow re-triggering animation
-                         botStatusDot.classList.add('flash');
-                         
-                         // Clear previous timeout if any
-                         if (botStatusDot._flashTimeout) clearTimeout(botStatusDot._flashTimeout);
-                         
-                         botStatusDot._flashTimeout = setTimeout(() => {
-                             botStatusDot.classList.remove('flash');
-                             delete botStatusDot._flashTimeout;
-                         }, 400); // Slightly longer than animation
-                     }
-                }
-
-                updateRealtimeCounter();
-
-                if (activityLight) {
-                    // Force flash
-                    activityLight.classList.remove('activity-idle', 'activity-warning', 'activity-danger');
-                    activityLight.classList.add('activity-flash');
+                    if (!botMessageTimestamps[data.botId]) botMessageTimestamps[data.botId] = [];
+                    botMessageTimestamps[data.botId].push(Date.now());
+                    updateBotRealtimeCounters();
                     
-                    // Remove flash class after 100ms (to fallback to idle via interval or css transition)
-                    setTimeout(() => {
-                        activityLight.classList.remove('activity-flash');
-                         // The interval loop will pick up 'activity-idle' shortly
-                    }, 100);
+                    // FLASH EFFECT FOR BOT CARD
+                    const botStatusDot = document.getElementById(`status-${data.botId}`);
+                    if (botStatusDot) {
+                        botStatusDot.classList.remove('flash');
+                        void botStatusDot.offsetWidth;
+                        botStatusDot.classList.add('flash');
+                        
+                        if (botStatusDot._flashTimeout) clearTimeout(botStatusDot._flashTimeout);
+                        botStatusDot._flashTimeout = setTimeout(() => {
+                            botStatusDot.classList.remove('flash');
+                            delete botStatusDot._flashTimeout;
+                        }, 400);
+                    }
                 }
+                updateRealtimeCounter();
             }
         });
 

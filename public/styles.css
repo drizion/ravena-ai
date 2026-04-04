@@ -379,7 +379,17 @@ h1 {
 }
 
 .status-dot.flash::after {
-    animation: reflection-flash 0.3s ease-out; /* Fast flash */
+    animation: reflection-flash 0.3s ease-out; /* Fast flash for bot cards */
+}
+
+.status-indicator-light.flash {
+    animation: indicator-flash 0.2s ease-out; /* Slightly slower and smoother */
+}
+
+@keyframes indicator-flash {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
 }
 
 .bot-details {
@@ -808,6 +818,17 @@ footer {
     border-color: var(--dark-purple) transparent transparent transparent;
 }
 
+.status-table .tooltip-text {
+    bottom: auto;
+    top: 135%;
+}
+
+.status-table .tooltip-text::after {
+    top: auto;
+    bottom: 100%;
+    border-color: transparent transparent var(--dark-purple) transparent;
+}
+
 .tooltip-container:hover .tooltip-text {
     visibility: visible;
     opacity: 1;
@@ -1094,6 +1115,7 @@ nav a.active {
 
 /* Status Light Indicator General */
 .status-indicator-light {
+    position: relative;
     width: 20px;
     height: 20px;
     border-radius: 50%;
@@ -1117,6 +1139,11 @@ nav a.active {
 .status-indicator-light.backup, .status-indicator-light.yellow {
     background-color: #dfd86b !important;
     box-shadow: 0 0 8px #dfd86b !important;
+}
+
+.status-indicator-light.backup-dim {
+    background-color: #96ca78 !important;
+    box-shadow: 0 0 8px #96ca78 !important;
 }
 
 /* Message Activity Specifics */

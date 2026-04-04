@@ -27,7 +27,7 @@ async function main() {
 
 	try {
 		// Cria manipulador de eventos compartilhado com SingleTon do StabilityMonitor
-		const eventHandler = new EventHandler();
+		const eventHandler = EventHandler.getInstance();
 
 		// Monitor de estabilidade também é compartilhado
 		//const stabilityMonitor = new StabilityMonitor({instances: botInstances})

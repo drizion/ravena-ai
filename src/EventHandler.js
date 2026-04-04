@@ -21,8 +21,14 @@ const ReturnMessage = require("./models/ReturnMessage");
 const EventEmitter = require("events");
 
 class EventHandler extends EventEmitter {
+	static instance = null;
+
 	constructor() {
 		super();
+		if (EventHandler.instance) {
+			return EventHandler.instance;
+		}
+		EventHandler.instance = this;
 		this.logger = new Logger("event-handler");
 		this.database = Database.getInstance();
 		this.commandHandler = new CommandHandler();
@@ -1338,6 +1344,16 @@ Para fazer a configuração do grupo sem poluir aqui, envie \`!g-painel\`, ou me
 			this.logger.error(`Erro ao verificar permissões para ação "${action}":`, error);
 			return false;
 		}
+	}
+	/**
+	 * Obtém a instância única do EventHandler
+	 * @returns {EventHandler}
+	 */
+	static getInstance() {
+		if (!EventHandler.instance) {
+			EventHandler.instance = new EventHandler();
+		}
+		return EventHandler.instance;
 	}
 }
 

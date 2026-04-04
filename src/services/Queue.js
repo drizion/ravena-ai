@@ -3,6 +3,8 @@ class Queue {
 		this.concurrency = options.concurrency || 1;
 		this.pending = 0;
 		this.queue = [];
+		this.processing = {}; // { priority: count }
+		this.fulfilled = {}; // { priority: count }
 	}
 
 	add(fn, options = {}) {
@@ -66,9 +68,9 @@ class Queue {
 		}
 
 		this.pending++;
-		// Sort is removed from here to allow position-based insertions (addAt)
-		// and efficient stable sorting via _insertSorted
 		const item = this.queue.shift();
+		const p = item.priority.toString();
+		this.processing[p] = (this.processing[p] || 0) + 1;
 
 		// Execute
 		Promise.resolve()
@@ -81,16 +83,30 @@ class Queue {
 			})
 			.finally(() => {
 				this.pending--;
+				this.processing[p] = Math.max(0, this.processing[p] - 1);
+				this.fulfilled[p] = (this.fulfilled[p] || 0) + 1;
 				this._process();
 			});
 	}
 
 	getStats() {
 		const stats = {};
-		for (const item of this.queue) {
-			const p = item.priority.toString();
-			stats[p] = (stats[p] || 0) + 1;
-		}
+
+		// Collect all priorities from all states to ensure we return a complete object
+		const allPriorities = new Set([
+			...this.queue.map((i) => i.priority.toString()),
+			...Object.keys(this.processing),
+			...Object.keys(this.fulfilled)
+		]);
+
+		allPriorities.forEach((p) => {
+			stats[p] = {
+				pending: this.queue.filter((i) => i.priority.toString() === p).length,
+				processing: this.processing[p] || 0,
+				fulfilled: this.fulfilled[p] || 0
+			};
+		});
+
 		return stats;
 	}
 

@@ -15,7 +15,6 @@ const database = Database.getInstance();
 const logger = new Logger("comfyui-commands");
 const nsfwPredict = NSFWPredict.getInstance();
 const LLMService = require("../services/LLMService");
-const llmService = LLMService.getInstance();
 const ServiceProviderService = require("../services/ServiceProviderService");
 const serviceProviderService = ServiceProviderService.getInstance();
 
@@ -313,6 +312,7 @@ async function queuePrompt(promptText, sampler = "dpmpp_sde", scheduler = "beta"
  * Gera uma imagem usando ComfyUI
  */
 async function generateImage(bot, message, args, group, skipNotify = true) {
+	const llmService = LLMService.getInstance();
 	const chatId = message.group ?? message.author;
 	const returnMessages = [];
 
@@ -402,6 +402,8 @@ async function generateImage(bot, message, args, group, skipNotify = true) {
 		const scheduler = schedulers[Math.floor(Math.random() * schedulers.length)];
 
 		// Queue Prompt and Wait for Image
+		const EventHandler = require("../EventHandler");
+		EventHandler.getInstance().emit("activity", { type: "imagine" });
 		let imageBuffer = await queuePrompt(prompt + aesthetic, sampler, scheduler);
 
 		// Track stats

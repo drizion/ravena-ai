@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnSaveAll = document.getElementById('btn-save-all');
     
     let config = {};
+    let costData = {};
     const categories = ['llm', 'whisper', 'comfyui', 'sdwebui', 'alltalk'];
     const categoryNames = {
         'llm': 'Inteligência Artificial (LLM)',
@@ -22,14 +23,50 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchData() {
         showLoading(true);
         try {
-            const response = await fetch('/api/service-providers');
-            if (!response.ok) throw new Error('Não autorizado ou erro no servidor');
-            config = await response.json();
+            const [configRes, costRes] = await Promise.all([
+                fetch('/api/service-providers'),
+                fetch('/llm-cost-estimate.json')
+            ]);
+
+            if (!configRes.ok) throw new Error('Não autorizado ou erro no servidor');
+            config = await configRes.json();
+            
+            if (costRes.ok) {
+                costData = await costRes.json();
+                populateCostPickers();
+            }
+
             renderCategories();
             showLoading(false);
         } catch (err) {
             showError(err.message);
         }
+    }
+
+    function populateCostPickers() {
+        const types = ['text', 'image', 'stt', 'tts'];
+        types.forEach(type => {
+            const picker = document.getElementById(`cost-picker-${type}`);
+            if (!picker) return;
+            
+            let models = costData[type] || [];
+            
+            // Sort models by price (cheapest first)
+            models.sort((a, b) => {
+                const getPrice = (m) => {
+                    if (m.price !== undefined) return m.price;
+                    if (m.input !== undefined) return (m.input + m.output) / 2;
+                    if (m.price_per_minute !== undefined) return m.price_per_minute;
+                    if (m.price_per_1m_chars !== undefined) return m.price_per_1m_chars;
+                    return 0;
+                };
+                return getPrice(a) - getPrice(b);
+            });
+
+            picker.innerHTML = models.map((m, i) => `<option value="${i}">${m.name}</option>`).join('');
+            
+            if (picker.options.length > 0) picker.selectedIndex = 0;
+        });
     }
 
     function renderCategories() {
@@ -208,28 +245,39 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/api/llm/queue');
             if (!response.ok) return;
             const data = await response.json();
-            renderQueue(data);
+            
+            if (data.status === 'ok' && data.queues) {
+                renderQueue(data.queues);
+            } else if (data.status === 'ok') {
+                // Handle case where queues might be directly sent (legacy or fallback)
+                renderQueue(data.queues || data);
+            }
+            
             document.getElementById('queue-last-update').innerText = 'Última atualização: ' + new Date().toLocaleTimeString();
         } catch (err) {
             console.error('Erro ao buscar fila:', err);
         }
     }
 
-    function renderQueue(data) {
+    function renderQueue(queues) {
         const body = document.getElementById('llm-queue-body');
         body.innerHTML = '';
         
-        // Priorities are usually 0, 1, 2, 3
-        const priorities = Object.keys(data.queues).sort();
+        if (!queues || typeof queues !== 'object') {
+            body.innerHTML = '<tr><td colspan="4" class="text-center">Formato de dados da fila inválido</td></tr>';
+            return;
+        }
+
+        const priorities = Object.keys(queues).sort((a, b) => b - a); // Higher priority first
         
         priorities.forEach(p => {
-            const q = data.queues[p];
+            const q = queues[p];
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>Prioridade ${p}</td>
-                <td>${q.pending}</td>
-                <td>${q.processing}</td>
-                <td>${q.fulfilled}</td>
+                <td>${q.pending || 0}</td>
+                <td>${q.processing || 0}</td>
+                <td>${q.fulfilled || 0}</td>
             `;
             body.appendChild(tr);
         });
@@ -239,9 +287,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    let currentTimeframe = 3600000; // 1 hour default
+
     async function fetchStats() {
         try {
-            const response = await fetch('/api/llm/stats?timeframe=3600000');
+            const response = await fetch(`/api/llm/stats?timeframe=${currentTimeframe}`);
             if (!response.ok) return;
             const data = await response.json();
             renderStats(data);
@@ -251,37 +301,155 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    window.openTimeframeModal = () => {
+        document.getElementById('timeframe-modal').classList.remove('hidden');
+    };
+
+    window.closeTimeframeModal = () => {
+        document.getElementById('timeframe-modal').classList.add('hidden');
+    };
+
+    window.selectTimeframe = (value, label) => {
+        currentTimeframe = value;
+        document.getElementById('current-timeframe-label').innerText = label;
+        
+        // Update active class in buttons
+        document.querySelectorAll('.timeframe-option').forEach(btn => {
+            btn.classList.toggle('active', parseInt(btn.dataset.value) === value);
+        });
+        
+        closeTimeframeModal();
+        fetchStats();
+    };
+
+    window.calculateCosts = () => {
+        // This will be called by pickers and after renderStats
+        if (window.lastStatsData) {
+            renderStats(window.lastStatsData);
+        }
+    };
+
     function renderStats(data) {
-        document.getElementById('stat-total-req').innerText = data.total_requests || 0;
-        document.getElementById('stat-total-in').innerText = (data.total_input_tokens || 0).toLocaleString();
-        document.getElementById('stat-total-out').innerText = (data.total_output_tokens || 0).toLocaleString();
+        if (!data) return;
+        window.lastStatsData = data;
+        
+        let totalEstimatedCost = 0;
+
+        // Dynamic header update
+        const headerTextEl = document.getElementById('stats-header-text');
+        const labelEl = document.getElementById('current-timeframe-label');
+        
+        if (currentTimeframe === 0 && data.first_record_timestamp) {
+            const date = new Date(data.first_record_timestamp);
+            const formattedDate = date.toLocaleDateString('pt-BR');
+            if (headerTextEl) {
+                headerTextEl.innerHTML = `Desempenho desde <span id="current-timeframe-label" class="clickable-period" onclick="openTimeframeModal()">${formattedDate}</span>`;
+            }
+        } else if (headerTextEl && labelEl) {
+            // Restore "na" if not "All Time" but only if we need to reset
+            if (headerTextEl.innerText.includes('desde')) {
+                headerTextEl.innerHTML = `Desempenho na <span id="current-timeframe-label" class="clickable-period" onclick="openTimeframeModal()">${labelEl.innerText}</span>`;
+            }
+        }
+
+        const elIn = document.getElementById('stat-total-in');
+        const elOut = document.getElementById('stat-total-out');
+        const elCost = document.getElementById('stat-total-cost');
+        
+        if (elIn) elIn.innerText = (data.total_input_tokens || 0).toLocaleString();
+        if (elOut) elOut.innerText = (data.total_output_tokens || 0).toLocaleString();
 
         const body = document.getElementById('llm-stats-body');
         body.innerHTML = '';
 
-        const providers = Object.keys(data.by_provider);
+        const providers = Object.keys(data.by_provider || {});
         if (providers.length === 0) {
-            body.innerHTML = '<tr><td colspan="5" class="text-center">Nenhuma requisição na última hora</td></tr>';
+            body.innerHTML = '<tr><td colspan="6" class="text-center">Nenhuma requisição no período selecionado</td></tr>';
             return;
         }
 
+        // Get current selected models for cost calculation
+        const getModel = (type) => {
+            const picker = document.getElementById(`cost-picker-${type.replace('_', '-')}`);
+            if (!picker || !costData[type]) return null;
+            return costData[type][picker.selectedIndex];
+        };
+
+        const activeModels = {
+            text: getModel('text'),
+            image: getModel('image'),
+            stt: getModel('stt'),
+            tts: getModel('tts')
+        };
+
         providers.forEach(prov => {
             const pData = data.by_provider[prov];
-            const types = Object.keys(pData.by_type);
+            if (!pData) return;
+            
+            // Pre-process types to merge 'video' into 'text'
+            const mergedByType = {};
+            Object.keys(pData.by_type || {}).forEach(type => {
+                const targetType = type === 'video' ? 'text' : type;
+                if (!mergedByType[targetType]) {
+                    mergedByType[targetType] = { requests: 0, input_tokens: 0, output_tokens: 0, duration_sec: 0 };
+                }
+                mergedByType[targetType].requests += pData.by_type[type].requests;
+                mergedByType[targetType].input_tokens += pData.by_type[type].input_tokens;
+                mergedByType[targetType].output_tokens += pData.by_type[type].output_tokens;
+                if (pData.by_type[type].duration_sec) mergedByType[targetType].duration_sec += pData.by_type[type].duration_sec;
+            });
+
+            const types = Object.keys(mergedByType);
             
             types.forEach((type, index) => {
-                const tData = pData.by_type[type];
+                const tData = mergedByType[type];
+                
+                // Calculate Cost for this row
+                let rowCost = 0;
+                const model = activeModels[type]; 
+
+                if (model) {
+                    if (type === 'text') {
+                        rowCost = (tData.input_tokens / 1000000 * model.input) + (tData.output_tokens / 1000000 * model.output);
+                    } else if (type === 'image') {
+                        if (model.price !== undefined) {
+                            rowCost = tData.requests * model.price;
+                        } else {
+                            rowCost = (tData.input_tokens + tData.output_tokens) / 1000000 * (model.price || 1.0);
+                        }
+                    } else if (type === 'stt') {
+                        if (model.price_per_minute) {
+                            const durationMin = (tData.duration_sec || (tData.requests * 10)) / 60;
+                            rowCost = durationMin * model.price_per_minute;
+                        } else if (model.price_per_1m_chars) {
+                            rowCost = tData.input_tokens / 1000000 * model.price_per_1m_chars;
+                        }
+                    } else if (type === 'tts') {
+                        if (model.price_per_1m_chars) {
+                            rowCost = tData.output_tokens / 1000000 * model.price_per_1m_chars;
+                        } else if (model.price !== undefined) {
+                            rowCost = tData.requests * model.price;
+                        }
+                    }
+                }
+
+                totalEstimatedCost += rowCost;
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     ${index === 0 ? `<td rowspan="${types.length}" style="vertical-align: middle; font-weight: bold;">${prov}</td>` : ''}
-                    <td><span class="status-badge" style="background: #444;">${type}</span></td>
+                    <td><span class="status-badge" style="background: #444;">${type.toUpperCase()}</span></td>
                     <td>${tData.requests}</td>
                     <td>${tData.input_tokens.toLocaleString()}</td>
                     <td>${tData.output_tokens.toLocaleString()}</td>
+                    <td style="color: #2ecc71; font-weight: bold;">$ ${rowCost.toFixed(4)}</td>
                 `;
                 body.appendChild(tr);
             });
         });
+
+        const elTotalCost = document.getElementById('stat-total-cost');
+        if (elTotalCost) elTotalCost.innerText = '$ ' + totalEstimatedCost.toFixed(2);
     }
 
     // Auto-refresh stats and queue every 30 seconds

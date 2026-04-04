@@ -232,61 +232,188 @@ class LLMService {
 	 */
 	async getStats(timeframeMs = null) {
 		try {
-			let query = "SELECT * FROM usage_stats";
+			// --- LLM Stats ---
+			let query =
+				"SELECT provider, request_type, COUNT(*) as requests, SUM(input_tokens) as input_tokens, SUM(output_tokens) as output_tokens, MIN(timestamp) as min_ts FROM usage_stats";
 			const params = [];
 			if (timeframeMs) {
 				query += " WHERE timestamp > ?";
 				params.push(Date.now() - timeframeMs);
 			}
+			query += " GROUP BY provider, request_type";
+
 			const rows = await this.database.dbAll(this.DB_NAME, query, params);
 
 			const stats = {
 				total_requests: 0,
 				total_input_tokens: 0,
 				total_output_tokens: 0,
+				first_record_timestamp: null,
 				by_type: {
 					text: { requests: 0, input_tokens: 0, output_tokens: 0 },
 					image: { requests: 0, input_tokens: 0, output_tokens: 0 },
-					video: { requests: 0, input_tokens: 0, output_tokens: 0 }
+					video: { requests: 0, input_tokens: 0, output_tokens: 0 },
+					stt: { requests: 0, input_tokens: 0, output_tokens: 0 },
+					tts: { requests: 0, input_tokens: 0, output_tokens: 0 }
 				},
 				by_provider: {}
 			};
 
 			for (const row of rows) {
-				stats.total_requests++;
+				const type = row.request_type || "text";
+				const provider = row.provider || "Unknown";
+
+				stats.total_requests += row.requests;
 				stats.total_input_tokens += row.input_tokens;
 				stats.total_output_tokens += row.output_tokens;
 
-				const type = row.request_type || "text";
-				if (!stats.by_type[type]) {
-					stats.by_type[type] = {
-						requests: 0,
-						input_tokens: 0,
-						output_tokens: 0
-					};
+				if (
+					row.min_ts &&
+					(!stats.first_record_timestamp || row.min_ts < stats.first_record_timestamp)
+				) {
+					stats.first_record_timestamp = row.min_ts;
 				}
 
-				stats.by_type[type].requests++;
+				if (!stats.by_type[type]) {
+					stats.by_type[type] = { requests: 0, input_tokens: 0, output_tokens: 0 };
+				}
+				stats.by_type[type].requests += row.requests;
 				stats.by_type[type].input_tokens += row.input_tokens;
 				stats.by_type[type].output_tokens += row.output_tokens;
 
-				const provider = row.provider;
 				if (!stats.by_provider[provider]) {
 					stats.by_provider[provider] = {
 						requests: 0,
 						input_tokens: 0,
-						output_tokens: 0
+						output_tokens: 0,
+						by_type: {}
 					};
 				}
-				stats.by_provider[provider].requests++;
+				stats.by_provider[provider].requests += row.requests;
 				stats.by_provider[provider].input_tokens += row.input_tokens;
 				stats.by_provider[provider].output_tokens += row.output_tokens;
+				stats.by_provider[provider].by_type[type] = {
+					requests: row.requests,
+					input_tokens: row.input_tokens,
+					output_tokens: row.output_tokens
+				};
+			}
+
+			// --- Audio Stats (Transcription & Generation) ---
+			const speechProvider = "Speech System";
+			const speechParams = timeframeMs ? [Date.now() - timeframeMs] : [];
+			const speechFilter = timeframeMs ? " WHERE timestamp > ?" : "";
+
+			// ALWAYS query absolute earliest timestamps across all relevant tables
+			// to provide a correct 'since' date for the dashboard.
+			const [llmFirst, sttFirst, ttsFirst] = await Promise.all([
+				this.database.dbGet(this.DB_NAME, "SELECT MIN(timestamp) as ts FROM usage_stats"),
+				this.database.dbGet(
+					"media_stats",
+					"SELECT MIN(timestamp) as ts FROM speech_transcription_stats"
+				),
+				this.database.dbGet(
+					"media_stats",
+					"SELECT MIN(timestamp) as ts FROM speech_generation_stats"
+				)
+			]);
+			const absoluteTimestamps = [llmFirst?.ts, sttFirst?.ts, ttsFirst?.ts].filter((ts) => ts);
+			if (absoluteTimestamps.length > 0) {
+				const absoluteMin = Math.min(...absoluteTimestamps);
+				if (!stats.first_record_timestamp || absoluteMin < stats.first_record_timestamp) {
+					stats.first_record_timestamp = absoluteMin;
+				}
+			}
+
+			try {
+				// STT Stats
+				const sttAgg = await this.database.dbGet(
+					"media_stats",
+					`SELECT COUNT(*) as requests, SUM(char_count) as input_tokens, SUM(duration_sec) as duration_sec, MIN(timestamp) as min_ts FROM speech_transcription_stats${speechFilter}`,
+					speechParams
+				);
+
+				if (sttAgg && sttAgg.requests > 0) {
+					if (!stats.by_provider[speechProvider]) {
+						stats.by_provider[speechProvider] = {
+							requests: 0,
+							input_tokens: 0,
+							output_tokens: 0,
+							by_type: {}
+						};
+					}
+
+					const data = {
+						requests: sttAgg.requests,
+						input_tokens: sttAgg.input_tokens || 0,
+						output_tokens: 0,
+						duration_sec: sttAgg.duration_sec || 0
+					};
+
+					stats.total_requests += data.requests;
+					stats.total_input_tokens += data.input_tokens;
+					stats.by_type.stt.requests += data.requests;
+					stats.by_type.stt.input_tokens += data.input_tokens;
+
+					stats.by_provider[speechProvider].requests += data.requests;
+					stats.by_provider[speechProvider].input_tokens += data.input_tokens;
+					stats.by_provider[speechProvider].by_type.stt = data;
+
+					if (
+						sttAgg.min_ts &&
+						(!stats.first_record_timestamp || sttAgg.min_ts < stats.first_record_timestamp)
+					) {
+						stats.first_record_timestamp = sttAgg.min_ts;
+					}
+				}
+
+				// TTS Stats
+				const ttsAgg = await this.database.dbGet(
+					"media_stats",
+					`SELECT COUNT(*) as requests, SUM(char_count) as output_tokens, MIN(timestamp) as min_ts FROM speech_generation_stats${speechFilter}`,
+					speechParams
+				);
+
+				if (ttsAgg && ttsAgg.requests > 0) {
+					if (!stats.by_provider[speechProvider]) {
+						stats.by_provider[speechProvider] = {
+							requests: 0,
+							input_tokens: 0,
+							output_tokens: 0,
+							by_type: {}
+						};
+					}
+
+					const data = {
+						requests: ttsAgg.requests,
+						input_tokens: 0,
+						output_tokens: ttsAgg.output_tokens || 0
+					};
+
+					stats.total_requests += data.requests;
+					stats.total_output_tokens += data.output_tokens;
+					stats.by_type.tts.requests += data.requests;
+					stats.by_type.tts.output_tokens += data.output_tokens;
+
+					stats.by_provider[speechProvider].requests += data.requests;
+					stats.by_provider[speechProvider].output_tokens += data.output_tokens;
+					stats.by_provider[speechProvider].by_type.tts = data;
+
+					if (
+						ttsAgg.min_ts &&
+						(!stats.first_record_timestamp || ttsAgg.min_ts < stats.first_record_timestamp)
+					) {
+						stats.first_record_timestamp = ttsAgg.min_ts;
+					}
+				}
+			} catch (speechErr) {
+				this.logger.error("Error getting optimized speech stats:", speechErr);
 			}
 
 			return stats;
-		} catch (e) {
-			this.logger.error("Error getting stats", e);
-			return {};
+		} catch (err) {
+			this.logger.error("Error getting optimized LLM stats:", err);
+			return null;
 		}
 	}
 
@@ -782,6 +909,8 @@ class LLMService {
 	 * @returns {Promise<string>} - O texto gerado
 	 */
 	async getCompletion(options) {
+		const EventHandler = require("../EventHandler");
+		EventHandler.getInstance().emit("activity", { type: "llm" });
 		const priority = options.priority ?? 0;
 		const maxQueueRetries = 2; // Limit times we can send back to queue
 
@@ -1101,6 +1230,34 @@ class LLMService {
 		throw new Error(
 			"Erro: Não foi possível gerar uma resposta de nenhum provedor disponível. Por favor, tente novamente mais tarde."
 		);
+	}
+
+	/**
+	 * Retorna o status detalhado do serviço LLM, incluindo o modelo ativo e o tempo para reset da fila.
+	 * @returns {Object} - Objeto com o status, modelo ativo e segundos para reset.
+	 */
+	getDetailedStatus() {
+		const totalProviders = this.providerQueue.length;
+		if (totalProviders === 0) {
+			return { status: "down", model: "Nenhum", isPrimary: false, resetSeconds: 0 };
+		}
+
+		const activeProvider = this.providerQueue[0];
+		const primaryProvider = this.providerDefinitions[0];
+		const isPrimary = activeProvider.name === primaryProvider.name;
+
+		let resetSeconds = 0;
+		if (!isPrimary && this.lastQueueChangeTimestamp > 0) {
+			const elapsed = Date.now() - this.lastQueueChangeTimestamp;
+			resetSeconds = Math.max(0, Math.floor((this.resetQueueTimeout - elapsed) / 1000));
+		}
+
+		return {
+			status: isPrimary ? "up" : "backup",
+			model: activeProvider.name,
+			isPrimary,
+			resetSeconds
+		};
 	}
 }
 

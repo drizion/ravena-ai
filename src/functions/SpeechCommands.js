@@ -20,7 +20,6 @@ const execPromise = util.promisify(exec);
 const logger = new Logger("speech-commands");
 const database = Database.getInstance();
 const cmdUsage = CmdUsage.getInstance();
-const llmService = LLMService.getInstance();
 const serviceProviderService = ServiceProviderService.getInstance();
 
 // Initialize Media Stats Database
@@ -260,6 +259,8 @@ async function textToSpeech(bot, message, args, group, char = "ravena") {
 		}
 
 		logger.debug(`Convertendo texto para voz (${JSON.stringify(character)}): ${text}`);
+		const EventHandler = require("../EventHandler");
+		EventHandler.getInstance().emit("activity", { type: "alltalk" });
 
 		// Nome do arquivo temporário
 		const hash = crypto.randomBytes(2).toString("hex");
@@ -537,6 +538,8 @@ async function speechToText(bot, message, args, group, optimizeWithLLM = true) {
 		if (whisperProviders.length > 0) {
 			// Use Whisper API
 			logger.debug(`[speechToText] Usando Whisper API (Multi-URL)`);
+			const EventHandler = require("../EventHandler");
+			EventHandler.getInstance().emit("activity", { type: "whisper" });
 
 			try {
 				const result = await transcribeViaAPI(audioPath, (duration, estimatedTime) => {
@@ -740,6 +743,8 @@ async function processAutoSTT(bot, message, group, opts) {
 		if (autoWhisperProviders.length > 0) {
 			// Use Whisper API
 			logger.debug(`[processAutoSTT] Usando Whisper API (Multi-URL)`);
+			const EventHandler = require("../EventHandler");
+			EventHandler.getInstance().emit("activity", { type: "whisper" });
 
 			try {
 				const result = await transcribeViaAPI(audioPath, (duration, estimatedTime) => {

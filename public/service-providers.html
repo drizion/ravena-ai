@@ -71,6 +71,70 @@
         
         /* Modal improvements */
         .modal-body .form-group { margin-bottom: 15px; }
+
+        /* Stats Clickable Period */
+        .clickable-period {
+            cursor: pointer;
+            text-decoration: underline;
+            text-decoration-style: dashed;
+            color: #007bff;
+            transition: color 0.2s;
+        }
+        .clickable-period:hover {
+            color: #0056b3;
+        }
+
+        .timeframe-option {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: white;
+            text-align: left;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .timeframe-option:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .timeframe-option.active {
+            border-color: #007bff;
+            background: rgba(0, 123, 255, 0.1);
+        }
+
+        /* Stats Grid Layout */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            padding: 20px 15px;
+            border-radius: 8px;
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .stat-label {
+            font-size: 0.75em;
+            color: #ccc;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 500;
+        }
+        .stat-value {
+            font-size: 1.6em;
+            font-weight: 700;
+            color: #fff;
+        }
     </style>
 </head>
 <body>
@@ -137,21 +201,21 @@
 
                 <div class="category-section">
                     <div class="category-header">
-                        <h3><i class="fas fa-chart-line"></i> Desempenho na Última Hora (LLM)</h3>
+                        <h3><i class="fas fa-chart-line"></i> <span id="stats-header-text">Desempenho na <span id="current-timeframe-label" class="clickable-period" onclick="openTimeframeModal()">Última Hora</span></span> (LLM)</h3>
                         <span id="stats-last-update" style="font-size: 0.7em; color: #888;"></span>
                     </div>
-                    <div class="grid-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
-                        <div class="stat-card" style="background: rgba(0,123,255,0.1); padding: 15px; border-radius: 8px; text-align: center;">
-                            <div style="font-size: 0.8em; color: #aaa;">Total de Requisições</div>
-                            <div id="stat-total-req" style="font-size: 1.5em; font-weight: bold;">0</div>
+                    <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr);">
+                        <div class="stat-card" style="background: rgba(40, 167, 69, 0.15); border: 1px solid rgba(40, 167, 69, 0.3);">
+                            <div class="stat-label">InTokens / min</div>
+                            <div class="stat-value" id="stat-total-in">0</div>
                         </div>
-                        <div class="stat-card" style="background: rgba(40,167,69,0.1); padding: 15px; border-radius: 8px; text-align: center;">
-                            <div style="font-size: 0.8em; color: #aaa;">Input Tokens</div>
-                            <div id="stat-total-in" style="font-size: 1.5em; font-weight: bold;">0</div>
+                        <div class="stat-card" style="background: rgba(255, 193, 7, 0.15); border: 1px solid rgba(255, 193, 7, 0.3);">
+                            <div class="stat-label">OutTokens / min</div>
+                            <div class="stat-value" id="stat-total-out">0</div>
                         </div>
-                        <div class="stat-card" style="background: rgba(255,193,7,0.1); padding: 15px; border-radius: 8px; text-align: center;">
-                            <div style="font-size: 0.8em; color: #aaa;">Output Tokens</div>
-                            <div id="stat-total-out" style="font-size: 1.5em; font-weight: bold;">0</div>
+                        <div class="stat-card" style="background: rgba(220, 53, 69, 0.15); border: 1px solid rgba(220, 53, 69, 0.3);">
+                            <div class="stat-label" style="color: #ff9999;">Custo Estimado (USD)</div>
+                            <div class="stat-value" id="stat-total-cost" style="color: #ff4444;">$ 0.00</div>
                         </div>
                     </div>
                     <div class="table-responsive">
@@ -161,14 +225,37 @@
                                     <th>Provedor</th>
                                     <th>Tipo</th>
                                     <th>Requisições</th>
-                                    <th>Input Tokens</th>
-                                    <th>Output Tokens</th>
+                                    <th>InTokens / min</th>
+                                    <th>OutTokens / min</th>
+                                    <th>Custo Estimado</th>
                                 </tr>
                             </thead>
                             <tbody id="llm-stats-body">
-                                <tr><td colspan="5" class="text-center">Carregando estatísticas...</td></tr>
+                                <tr><td colspan="6" class="text-center">Carregando estatísticas...</td></tr>
                             </tbody>
                         </table>
+                    </div>
+
+                    <div class="cost-pickers-container" style="margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+                        <h4 style="margin-bottom: 15px; color: #ccc;">Simulador de Custos (Modelos Pagos)</h4>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                            <div class="picker-group">
+                                <label style="display: block; font-size: 0.8em; margin-bottom: 5px; color: #888;">Modelo de Texto</label>
+                                <select id="cost-picker-text" class="form-control" onchange="calculateCosts()"></select>
+                            </div>
+                            <div class="picker-group">
+                                <label style="display: block; font-size: 0.8em; margin-bottom: 5px; color: #888;">Modelo de Imagem</label>
+                                <select id="cost-picker-image" class="form-control" onchange="calculateCosts()"></select>
+                            </div>
+                            <div class="picker-group">
+                                <label style="display: block; font-size: 0.8em; margin-bottom: 5px; color: #888;">Transcrição Áudio (STT)</label>
+                                <select id="cost-picker-stt" class="form-control" onchange="calculateCosts()"></select>
+                            </div>
+                            <div class="picker-group">
+                                <label style="display: block; font-size: 0.8em; margin-bottom: 5px; color: #888;">Geração Áudio (TTS)</label>
+                                <select id="cost-picker-tts" class="form-control" onchange="calculateCosts()"></select>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -241,6 +328,26 @@
                 <div class="spacer"></div>
                 <button type="button" class="btn btn-secondary close-modal-btn">Cancelar</button>
                 <button type="button" id="btn-save-prov" class="btn btn-primary">Adicionar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Selecionar Período (Estatísticas) -->
+    <div id="timeframe-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>Selecionar Período</h2>
+                <span class="close-modal" aria-label="Fechar" onclick="closeTimeframeModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <button class="timeframe-option active" data-value="3600000" onclick="selectTimeframe(3600000, 'última hora')">Última Hora</button>
+                <button class="timeframe-option" data-value="604800000" onclick="selectTimeframe(604800000, '7 dias')">Últimos 7 Dias</button>
+                <button class="timeframe-option" data-value="1296000000" onclick="selectTimeframe(1296000000, '15 dias')">Últimos 15 Dias</button>
+                <button class="timeframe-option" data-value="2592000000" onclick="selectTimeframe(2592000000, '30 dias')">Últimos 30 Dias</button>
+                <button class="timeframe-option" data-value="0" onclick="selectTimeframe(0, 'todo o período')">Todo o Período</button>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary close-modal-btn" onclick="closeTimeframeModal()">Fechar</button>
             </div>
         </div>
     </div>

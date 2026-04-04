@@ -176,7 +176,8 @@ class BotAPI {
 		};
 
 		services.imagine = await checkCategoryStatus("comfyui");
-		services.llm = await checkCategoryStatus("llm");
+		const LLMService = require("./services/LLMService");
+		services.llm = LLMService.getInstance().getDetailedStatus();
 		services.whisper = await checkCategoryStatus("whisper");
 		services.alltalk = await checkCategoryStatus("alltalk");
 		services.sdwebui = await checkCategoryStatus("sdwebui");
@@ -788,14 +789,18 @@ class BotAPI {
 		// API endpoint for LLM Queue status
 		this.app.get("/api/llm/queue", authenticateBasic, (req, res) => {
 			const LLMService = require("./services/LLMService");
-			res.json(LLMService.getInstance().getQueueStatus());
+			res.json({
+				status: "ok",
+				queues: LLMService.getInstance().getQueueStatus()
+			});
 		});
 
 		// API endpoint for LLM Stats (last hour by default)
 		this.app.get("/api/llm/stats", authenticateBasic, async (req, res) => {
 			try {
 				const LLMService = require("./services/LLMService");
-				const timeframe = parseInt(req.query.timeframe) || 60 * 60 * 1000; // 1 hour
+				const timeframe =
+					req.query.timeframe !== undefined ? parseInt(req.query.timeframe) : 60 * 60 * 1000;
 				const stats = await LLMService.getInstance().getStats(timeframe);
 				res.json(stats);
 			} catch (error) {
