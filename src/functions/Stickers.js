@@ -8,6 +8,7 @@ const sharp = require("sharp");
 const ffmpeg = require("fluent-ffmpeg");
 const { MessageMedia } = require("whatsapp-web.js");
 const CmdUsage = require("../utils/CmdUsage");
+const LLMService = require("../services/LLMService");
 
 const logger = new Logger("sticker-commands");
 const database = Database.getInstance();
@@ -62,6 +63,92 @@ async function saveTempMedia(mediaBuffer, mimeType) {
 	return tempFilePath;
 }
 
+/**
+ * Faz uma query LLM para saber qual a melhor coordenada de corte (em porcentagem)
+ * @param {Buffer|string} mediaBuffer - Buffer ou base64 da mídia
+ * @param {string} mimeType - Tipo MIME da mídia
+ * @returns {Promise<number>} - Porcentagem sugerida (0-100)
+ */
+async function getLLMCropPercentage(mediaBuffer, mimeType) {
+	try {
+		logger.info("[getLLMCropPercentage] Solicitando sugestão de corte ao LLM");
+
+		// Converter base64 para Buffer se necessário
+		let imageBuffer = mediaBuffer;
+		if (typeof mediaBuffer === "string") {
+			imageBuffer = Buffer.from(mediaBuffer, "base64");
+		} else if (mediaBuffer.data && typeof mediaBuffer.data === "string") {
+			imageBuffer = Buffer.from(mediaBuffer.data, "base64");
+		}
+
+		// Se for vídeo, extrair o primeiro frame para análise do LLM usando sharp
+		// Sharp consegue ler o primeiro frame de um buffer de imagem/gif/webp
+		const image = sharp(imageBuffer);
+		const metadata = await image.metadata();
+
+		const isLandscape = metadata.width > metadata.height;
+		const orientation = isLandscape
+			? "paisagem (mais larga que alta)"
+			: "retrato (mais alta que larga)";
+		const dimension = isLandscape ? "horizontal (eixo X)" : "vertical (eixo Y)";
+		const startTerm = isLandscape ? "esquerda" : "topo";
+		const endTerm = isLandscape ? "direita" : "base";
+
+		const prompt = `Analise esta imagem e identifique a 'área de interesse' (a parte mais relevante, como um rosto ou objeto principal).
+A imagem está no formato ${orientation}.
+Retorne o centro ${dimension} desta área como uma porcentagem (0 a 100).
+0 representa o/a ${startTerm} e 100 representa o/a ${endTerm}.
+Responda APENAS com um objeto JSON seguindo este schema: { "percentage": número }`;
+
+		const cropSchema = {
+			type: "json_schema",
+			json_schema: {
+				name: "crop_analysis",
+				schema: {
+					type: "object",
+					properties: {
+						percentage: {
+							type: "number",
+							description: "A coordenada central ideal (0-100) para um corte quadrado"
+						},
+						reason: {
+							type: "string",
+							description: "Breve motivo da escolha"
+						}
+					},
+					required: ["percentage"]
+				}
+			}
+		};
+
+		const response = await LLMService.getInstance().getCompletion({
+			prompt,
+			image: imageBuffer.toString("base64"),
+			response_format: cropSchema,
+			temperature: 0.2,
+			priority: 5,
+			systemContext: "Você é um especialista em processamento e análise de imagens."
+		});
+
+		try {
+			const parsed = JSON.parse(response);
+			if (typeof parsed.percentage === "number") {
+				logger.info(
+					`[getLLMCropPercentage] LLM sugeriu: ${parsed.percentage}% (${parsed.reason || "sem motivo"})`
+				);
+				return Math.max(0, Math.min(100, parsed.percentage));
+			}
+		} catch (e) {
+			logger.warn(`[getLLMCropPercentage] Erro ao parsear resposta do LLM: ${response}`);
+		}
+
+		return 50; // Fallback para o centro
+	} catch (error) {
+		logger.error("[getLLMCropPercentage] Erro ao obter sugestão do LLM:", error);
+		return 50;
+	}
+}
+
 // Função para converter um buffer de mídia em um buffer de sticker quadrado
 async function makeSquareMedia(mediaBuffer, mimeType, cropType = "center") {
 	try {
@@ -87,7 +174,22 @@ async function makeSquareMedia(mediaBuffer, mimeType, cropType = "center") {
 			let left = 0;
 			let top = 0;
 
-			if (cropType === "center") {
+			// Verificar se o cropType é uma porcentagem (vinda do LLM ou manual)
+			const percentage = parseFloat(cropType);
+
+			if (!isNaN(percentage)) {
+				if (metadata.width > metadata.height) {
+					// Paisagem: Ajustar horizontal (X)
+					const centerX = (metadata.width * percentage) / 100;
+					left = Math.max(0, Math.min(metadata.width - size, centerX - size / 2));
+					top = 0;
+				} else {
+					// Retrato: Ajustar vertical (Y)
+					const centerY = (metadata.height * percentage) / 100;
+					top = Math.max(0, Math.min(metadata.height - size, centerY - size / 2));
+					left = 0;
+				}
+			} else if (cropType === "center") {
 				// Centraliza o corte
 				left = Math.max(0, (metadata.width - size) / 2);
 				top = Math.max(0, (metadata.height - size) / 2);
@@ -141,7 +243,32 @@ async function makeSquareMedia(mediaBuffer, mimeType, cropType = "center") {
 			let outputLabel = "scaled";
 
 			// Estratégia: primeiro determinar a área de corte e depois redimensionar para 400x400
-			if (cropType === "center") {
+			const percentage = parseFloat(cropType);
+
+			if (!isNaN(percentage)) {
+				// Cortar com base na porcentagem e depois redimensionar
+				filterCommand = [
+					{
+						filter: "crop",
+						options: {
+							w: "min(iw,ih)",
+							h: "min(iw,ih)",
+							x: `clip((iw * ${percentage}/100) - (min(iw,ih)/2), 0, iw - min(iw,ih))`,
+							y: `clip((ih * ${percentage}/100) - (min(iw,ih)/2), 0, ih - min(iw,ih))`
+						},
+						outputs: "cropped"
+					},
+					{
+						filter: "scale",
+						options: {
+							w: 400,
+							h: 400
+						},
+						inputs: "cropped",
+						outputs: "scaled"
+					}
+				];
+			} else if (cropType === "center") {
 				// Cortar para quadrado no centro e depois redimensionar
 				filterCommand = [
 					{
@@ -482,8 +609,14 @@ async function squareStickerCommand(bot, message, args, group, cropType) {
 		// Log para debug
 		logger.debug(`Mídia obtida: tipo=${mimeType}, mediaBuffer=${typeof mediaBuffer}`);
 
+		// Determinar o tipo de corte final (se for LLM, fazer a query agora)
+		let finalCropType = cropType;
+		if (cropType === "llm") {
+			finalCropType = await getLLMCropPercentage(mediaBuffer, mimeType);
+		}
+
 		// Processar a mídia para torná-la quadrada
-		const processedBuffer = await processMediaToSquare(mediaBuffer, mimeType, cropType);
+		const processedBuffer = await processMediaToSquare(mediaBuffer, mimeType, finalCropType);
 
 		// Salvar o buffer processado em um arquivo temporário
 		await ensureTempDir();
@@ -695,6 +828,38 @@ const commands = [
 		method: async (bot, message, args, group) =>
 			// Agora usa o modo transparente como padrão
 			await squareStickerCommand(bot, message, args, group, "transparent")
+	}),
+	new Command({
+		name: "sqi",
+		description: "Sticker quadrado com corte inteligente via IA",
+		category: "midia",
+		group: "sstickerqua",
+		needsMedia: true,
+		caseSensitive: false,
+		cooldown: 0,
+		reactions: {
+			before: process.env.LOADING_EMOJI ?? "🌀",
+			after: "🖼",
+			error: "❌"
+		},
+		method: async (bot, message, args, group) =>
+			await squareStickerCommand(bot, message, args, group, "llm")
+	}),
+	new Command({
+		name: "stickerqi",
+		description: "Sticker quadrado com corte inteligente via IA",
+		category: "midia",
+		group: "sstickerqua",
+		needsMedia: true,
+		caseSensitive: false,
+		cooldown: 0,
+		reactions: {
+			before: process.env.LOADING_EMOJI ?? "🌀",
+			after: "🖼",
+			error: "❌"
+		},
+		method: async (bot, message, args, group) =>
+			await squareStickerCommand(bot, message, args, group, "llm")
 	}),
 	new Command({
 		name: "sq",
