@@ -233,7 +233,7 @@ async function showTopDonors(bot, message, args, group) {
 		// Adiciona as novas seções
 		donorsMsg += `🕙 A última doação foi recebida ${timeSinceLastDonation}${lastDonationInfo}.\n\n`;
 		donorsMsg += `💰 *Últimos 3 meses:* R$${totalRecentAmount.toFixed(2)} (${percentage}% da meta)\n`;
-		donorsMsg += `Entre energia do servidor e recargas, estimo um gasto mensal por volta dos R$50. Toda ajuda é bem vinda!\n\n`;
+		donorsMsg += `Entre energia do servidor, recargas e outros gastos, estimo um gasto mensal por volta dos R$50. _Toda ajuda é bem vinda!_\n\n`;
 
 		if (topRecentDonors.length > 0) {
 			donorsMsg += "🏆 *Top Doadores (Últimos 3 meses):*\n";
