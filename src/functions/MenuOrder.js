@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Emojis para as categorias de comandos
  * A ordem das chaves define a ordem de apresentação das categorias
  */
@@ -63,7 +63,9 @@ const COMMAND_ORDER = [
 	"figurinha",
 	"s",
 	"sticker",
+	"sqi",
 	"sbg, stickerbg",
+
 	"removebg",
 	"distort",
 	"neon",
