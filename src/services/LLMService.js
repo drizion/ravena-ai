@@ -72,7 +72,7 @@ class LLMService {
 		this.buildProviders();
 
 		this.lastQueueChangeTimestamp = 0;
-		this.resetQueueTimeout = 10 * 60 * 1000; // 10 minutos
+		this.resetQueueTimeout = 60 * 1000; // 60 segundos
 	}
 
 	/**
@@ -1145,7 +1145,7 @@ class LLMService {
 			now - this.lastQueueChangeTimestamp > this.resetQueueTimeout
 		) {
 			this.logger.info(
-				"[LLMService] Resetando a fila de provedores para a ordem padrão após 30 minutos."
+				`[LLMService] Resetando a fila de provedores para a ordem padrão após ${this.resetQueueTimeout / 1000} segundos.`
 			);
 			this.providerQueue = [...this.providerDefinitions];
 			this.lastQueueChangeTimestamp = 0;
