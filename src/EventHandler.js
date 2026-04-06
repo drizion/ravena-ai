@@ -45,6 +45,8 @@ class EventHandler extends EventEmitter {
 
 		this.recentlyLeft = [];
 		this.recentlyJoined = [];
+		this.PV_AI_DEBOUNCE_MS = 5000;
+		this.pvDebounce = {};
 
 		this.logger.info(`[EventHandler] CmdWhitelist:`, this.comandosWhitelist);
 		this.loadGroups();
@@ -428,11 +430,50 @@ class EventHandler extends EventEmitter {
 		}
 
 		if (!group && message.type === "text" && bot.pvAI) {
+			const userId = message.author || message.from;
+			if (!this.pvDebounce[userId]) {
+				this.pvDebounce[userId] = {
+					messages: [],
+					timer: null,
+					lastMessage: null
+				};
+			}
+
+			const debounce = this.pvDebounce[userId];
+			if (debounce.timer) {
+				clearTimeout(debounce.timer);
+			}
+
+			debounce.messages.push(message.content);
+			debounce.lastMessage = message;
+
 			this.logger.debug(
-				`[processNonCommandMessage] PV sem comando, chamando LLM com '${message.content}'`
+				`[processNonCommandMessage] PV sem comando, acumulando mensagem (${debounce.messages.length}) de ${userId}. Aguardando ${this.PV_AI_DEBOUNCE_MS / 1000}s...`
 			);
-			const msgsLLM = await aiCommand(bot, message, [], group);
-			bot.sendReturnMessages(msgsLLM, group);
+
+			debounce.timer = setTimeout(async () => {
+				try {
+					const combinedContent = debounce.messages.join("\n");
+					const msgToProcess = debounce.lastMessage;
+
+					// Atualiza o conteúdo da última mensagem para processar no LLM
+					msgToProcess.content = combinedContent;
+					msgToProcess.caption = combinedContent;
+
+					this.logger.debug(
+						`[processNonCommandMessage] Debounce finalizado para ${userId}, chamando LLM com ${debounce.messages.length} mensagens combinadas.`
+					);
+
+					// Limpa o cache antes de chamar para evitar processar duplicado se novas msgs chegarem durante o processamento (opcional, mas seguro)
+					delete this.pvDebounce[userId];
+
+					const msgsLLM = await aiCommand(bot, msgToProcess, [], group);
+					bot.sendReturnMessages(msgsLLM, group);
+				} catch (error) {
+					this.logger.error(`Erro ao processar debounce do LLM para ${userId}:`, error);
+					delete this.pvDebounce[userId];
+				}
+			}, this.PV_AI_DEBOUNCE_MS);
 		}
 
 		if (group) {
