@@ -45,7 +45,7 @@ class EventHandler extends EventEmitter {
 
 		this.recentlyLeft = [];
 		this.recentlyJoined = [];
-		this.PV_AI_DEBOUNCE_MS = 5000;
+		this.PV_AI_DEBOUNCE_MS = 8000;
 		this.pvDebounce = {};
 
 		this.logger.info(`[EventHandler] CmdWhitelist:`, this.comandosWhitelist);
@@ -430,7 +430,7 @@ class EventHandler extends EventEmitter {
 		}
 
 		if (!group && message.type === "text" && bot.pvAI) {
-			const userId = message.author || message.from;
+			const userId = `${bot.id}_${message.author || message.from}`;
 			if (!this.pvDebounce[userId]) {
 				this.pvDebounce[userId] = {
 					messages: [],
@@ -442,6 +442,7 @@ class EventHandler extends EventEmitter {
 			const debounce = this.pvDebounce[userId];
 			if (debounce.timer) {
 				clearTimeout(debounce.timer);
+				debounce.timer = null;
 			}
 
 			debounce.messages.push(message.content);
