@@ -1130,8 +1130,7 @@ class BotAPI {
 					if (!/^[a-zA-Z0-9]{1,20}$/.test(changes.name)) {
 						return res.status(400).json({
 							success: false,
-							message:
-								`O nome do grupo deve ser alfanumérico, sem espaços e ter entre 1 e 20 caracteres.`
+							message: `O nome do grupo deve ser alfanumérico, sem espaços e ter entre 1 e 20 caracteres.`
 						});
 					}
 				}
