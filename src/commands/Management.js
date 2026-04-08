@@ -479,7 +479,7 @@ class Management {
 		}
 
 		// Atualiza nome do grupo no banco de dados
-		group.name = newName.toLowerCase().replace(/\s+/g, "").substring(0, 16);
+		group.name = newName.toLowerCase().replace(/\s+/g, "").substring(0, 21);
 		await this.database.saveGroup(group);
 
 		return new ReturnMessage({

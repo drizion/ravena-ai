@@ -1125,13 +1125,13 @@ class BotAPI {
 					return res.status(404).json({ success: false, message: "Group not found" });
 				}
 
-				// Validate group name: alphanumeric, no whitespace, 1-15 chars
+				// Validate group name: alphanumeric, no whitespace, 1-20 chars
 				if (changes.name) {
-					if (!/^[a-zA-Z0-9]{1,15}$/.test(changes.name)) {
+					if (!/^[a-zA-Z0-9]{1,20}$/.test(changes.name)) {
 						return res.status(400).json({
 							success: false,
 							message:
-								"O nome do grupo deve ser alfanumérico, sem espaços e ter entre 1 e 15 caracteres."
+								`O nome do grupo deve ser alfanumérico, sem espaços e ter entre 1 e 20 caracteres.`
 						});
 					}
 				}
