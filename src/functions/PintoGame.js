@@ -39,14 +39,14 @@ database.getSQLiteDb(
 );
 
 // Constantes do jogo
-const MIN_FLACCID = 0.5;
-const MAX_FLACCID = 15.0;
-const MIN_ERECT = 0.5;
-const MAX_ERECT = 40.0;
-const MIN_GIRTH = 6.0;
-const MAX_GIRTH = 20.0;
+const MIN_FLACCID = 3.0;
+const MAX_FLACCID = 12.0;
+const MIN_ERECT = 5.0;
+const MAX_ERECT = 25.0;
+const MIN_GIRTH = 8.0;
+const MAX_GIRTH = 18.0;
 const MAX_SCORE = 1000;
-const COOLDOWN_DAYS = 7; // 7 dias de cooldown
+const COOLDOWN_DAYS = 3; // 3 dias de cooldown
 
 /**
  * Gera um valor aleatório entre min e max com 1 casa decimal
@@ -79,33 +79,104 @@ function calculateScore(flaccid, erect, girth) {
 	return Math.round(weightedAvg * MAX_SCORE);
 }
 
+const INTRO_A = [
+	"Olá {pessoa}, entre e fique à vontade no consultório do Dr. Raveno! 🩺",
+	"Seja bem-vindo(a), {pessoa}. Pode ir tirando a roupa para o exame... 🥼",
+	"Ah, {pessoa}! Estava te esperando. Sente-se na maca, por favor. 🛋️",
+	"Bom dia, {pessoa}. Pronto para sua avaliação trimestral? 📝",
+	"Ora ora, se não é o(a) {pessoa}. Veio finalmente tirar a prova? 🔍",
+	"Entre, {pessoa}. Não precisa ter vergonha, já vi de tudo por aqui. 🏥",
+	"Aproxime-se, {pessoa}. Vamos ver como andam as coisas... 🧐",
+	"Saudações, {pessoa}! O Dr. Raveno está pronto para atendê-lo(a). 🎩",
+	"Oi {pessoa}, veio fazer o check-up de rotina? 💉",
+	"{pessoa}, você de novo? Veio ver se mudou alguma coisa? 🔄",
+	"Bem-vindo(a) à clínica de estética do Dr. Raveno, {pessoa}! ✨",
+	"Olha só quem apareceu... Pode entrar, {pessoa}. 🚪",
+	"Sente-se, {pessoa}. O procedimento será rápido e indolor (espero). ⚡",
+	"Preparado(a) para o veredito, {pessoa}? A ciência não mente! 🔬",
+	"Finalmente você criou coragem, {pessoa}! Vamos ao que interessa. 🧪"
+];
+
+const INTRO_B = [
+	"Hmm, vejo que hoje o dia está... 'animado' por aqui. 🌡️",
+	"Nossa, parece que alguém veio bem preparado para a consulta! 😋",
+	"Interessante... O formato me parece bem peculiar. 📐",
+	"Pelos meus cálculos iniciais, temos algo digno de nota aqui. 📊",
+	"Rapaz, a genética é mesmo uma caixa de surpresas... 🎁",
+	"Opa! Quase precisei de uma régua maior para essa primeira olhada. 📏",
+	"Calma, deixe-me ajustar meus óculos... Agora sim. 👓",
+	"É... Digamos que eu esperava algo diferente, mas vamos prosseguir. 😶",
+	"Uau! Acho que o ar condicionado não está afetando em nada aqui. ❄️",
+	"Sinto uma energia... potente vindo desta direção. ⚡",
+	"O clima esquentou de repente ou é impressão minha? 🔥",
+	"De acordo com os manuais de anatomia, isso aqui é raro... 📚",
+	"Mantenha a calma. O Dr. Raveno é profissional. 🧤",
+	"Sempre fico surpreso com o que encontro nesta profissão... 😮",
+	"Tudo bem, respire fundo. O processo de medição vai começar. ⏱️"
+];
+
+const INTRO_C = [
+	"Vamos lá, posicione-se para a medição oficial. 📋",
+	"Iniciando o escaneamento biométrico em 3... 2... 1... 📡",
+	"Vou usar o paquímetro digital de precisão para não haver erros. 🛠️",
+	"Não se mova! Qualquer milímetro faz diferença no score final. 🎯",
+	"Pronto, agora relaxe enquanto o sistema processa os dados. 💾",
+	"Certo, já anotei os valores preliminares. Vamos ao cálculo! ✍️",
+	"O resultado vai te surpreender (ou não). 🎰",
+	"Lembrando que tamanho não é documento, mas o score é! 🏆",
+	"A ciência é absoluta. Veja o que descobrimos: 🧬",
+	"Terminei a inspeção visual. Agora, los números frios e calculistas: 🔢",
+	"Interessante... Muito interessante mesmo. Veja só: 🧐",
+	"Não precisa ficar vermelho(a)! Os dados são confidenciais. 🤫",
+	"Segura a emoção que lá vem o resultado! 🎢",
+	"Depois de cruzar os dados com o IBGE, chegamos a isto: 🌍",
+	"Prontinho! O laudo médico está saindo do forno: 🍞"
+];
+
 /**
- * Gera um comentário com base no score
+ * Gera um comentário com base no score com maior variedade
  * @param {number} score - Score calculado
  * @returns {string} - Comentário engraçado
  */
 function getComment(score) {
-	if (score >= 900) {
-		return "🔥 Impressionante! Você está no nível lendário!";
-	} else if (score >= 800) {
-		return "🏆 Excepcional! Um verdadeiro campeão!";
-	} else if (score >= 700) {
-		return "🌟 Incrível! Sem palavras para descrever!";
-	} else if (score >= 600) {
-		return "👏 Muito bem! Acima da média!";
-	} else if (score >= 500) {
-		return "👍 Bom resultado. Na média superior!";
-	} else if (score >= 400) {
-		return "😊 Resultado decente! Na média!";
-	} else if (score >= 300) {
-		return "🙂 Resultado aceitável. Um pouco abaixo da média.";
-	} else if (score >= 200) {
-		return "😐 Humm... Não é o melhor resultado, mas tudo bem.";
-	} else if (score >= 100) {
-		return "😬 Eita... Pelo menos você tem personalidade, certo?";
-	} else {
-		return "💀 F no chat... Mas tamanho não é documento!";
-	}
+	if (score >= 1000) return "🌌 *DEUS DO OLIMPO!* Isso não é um membro, é um monumento histórico!";
+	if (score >= 950)
+		return "🔥 *LENDÁRIO!* As lendas urbanas falavam de algo assim, mas eu não acreditava!";
+	if (score >= 900)
+		return "⚡ *IMPRESSIONANTE!* Você precisa de uma licença especial para carregar isso?";
+	if (score >= 850) return "🏆 *CAMPEÃO PESO-PESADO!* O Dr. Raveno ficou até sem fôlego!";
+	if (score >= 800) return "🌟 *EXCEPCIONAL!* Um verdadeiro espécime de elite, parabéns!";
+	if (score >= 750) return "💎 *JOIA RARA!* Acima de qualquer expectativa razoável!";
+	if (score >= 700) return "👏 *INCRÍVEL!* Um resultado que impõe respeito em qualquer lugar!";
+	if (score >= 650) return "✨ *BRILHANTE!* Você está muito bem servido, sem dúvidas!";
+	if (score >= 600) return "👍 *MUITO BOM!* Acima da média e com muito potencial!";
+	if (score >= 550) return "✅ *SÓLIDO!* Um resultado respeitável e equilibrado.";
+	if (score >= 500) return "😊 *NA MÉDIA!* O famoso 'padrão brasileiro' de qualidade.";
+	if (score >= 450) return "🙂 *ACEITÁVEL!* Não ganha medalha, mas também não passa vergonha.";
+	if (score >= 400) return "😐 *OK.* Cumpre o que promete, sem grandes firulas.";
+	if (score >= 350) return "📉 *UM POUCO ABAIXO.* Talvez seja o frio do consultório?";
+	if (score >= 300) return "😬 *EITA.* O importante é o que importa, certo?";
+	if (score >= 250) return "🔍 *ONDE ESTÁ?* Brincadeira! Mas uma lupinha ajudaria...";
+	if (score >= 200) return "🤏 *COMPACTO!* Ideal para viagens, ocupa pouco espaço.";
+	if (score >= 150) return "🧸 *FOFINHO!* Pelo menos é fácil de cuidar.";
+	if (score >= 100) return "💀 *F NO CHAT.* A natureza esqueceu de passar na sua casa?";
+	if (score >= 50) return "🐜 *FORMIGUINHA?* É... realmente... uma situação complicada.";
+	return "🔬 *MICROSCÓPICO!* A ciência agradece por poder estudar algo tão minúsculo!";
+}
+
+/**
+ * Gera as frases de introdução aleatórias
+ * @param {string} userName - Nome do usuário
+ * @returns {string} - Frase combinada
+ */
+function generateFlavorText(userName) {
+	const a = INTRO_A[Math.floor(Math.random() * INTRO_A.length)].replace(
+		"{pessoa}",
+		`*${userName}*`
+	);
+	const b = INTRO_B[Math.floor(Math.random() * INTRO_B.length)];
+	const c = INTRO_C[Math.floor(Math.random() * INTRO_C.length)];
+	return `${a}\n${b}\n${c}`;
 }
 
 /**
@@ -258,14 +329,15 @@ async function pintoCommand(bot, message, args, group) {
 		}
 
 		// Prepara a mensagem de resposta
+		const flavorText = generateFlavorText(userName);
 		const response =
-			`${userName}, fiz a análise completa de seu membro e cheguei nos seguintes resultados:\n\n` +
+			`${flavorText}\n\n` +
 			`• *Comprimento Flácido:* ${flaccid.toFixed(1)} cm\n` +
 			`• *Comprimento Ereto:* ${erect.toFixed(1)} cm\n` +
 			`• *Circunferência:* ${girth.toFixed(1)} cm\n` +
 			`• *Score:* _${score} pontos_\n\n` +
 			`${comment}\n\n` +
-			`> Você pode voltar daqui a 1 semana para refazermos sua avaliação.`;
+			`> Você pode voltar daqui a ${COOLDOWN_DAYS} dias para refazermos sua avaliação.`;
 
 		return new ReturnMessage({
 			chatId: groupId,
