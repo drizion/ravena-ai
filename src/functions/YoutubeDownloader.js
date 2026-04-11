@@ -454,11 +454,23 @@ async function ytCommand(bot, message, args, group) {
 	}
 
 	let videoId = null;
+	const url = extractURLFromString(input);
 
-	// Verifica se é um link do YouTube
-	videoId = extractYoutubeVideoId(input);
+	if (url) {
+		videoId = extractYoutubeVideoId(url);
+		if (!videoId) {
+			return new ReturnMessage({
+				chatId,
+				content: "Ops! 😅 Só é possível baixar vídeos do YouTube com este comando. 🎥",
+				options: {
+					quotedMessageId: message.origin.id._serialized,
+					evoReply: message.origin
+				}
+			});
+		}
+	}
 
-	// Se não for um link, busca pelo termo
+	// Se não for um link (videoId ainda é null), busca pelo termo
 	if (!videoId) {
 		logger.debug(`Buscando vídeo no YouTube: "${input}"`);
 
@@ -593,11 +605,23 @@ async function srCommand(bot, message, args, group) {
 	}
 
 	let videoId = null;
+	const url = extractURLFromString(input);
 
-	// Verifica se é um link do YouTube
-	videoId = extractYoutubeVideoId(input);
+	if (url) {
+		videoId = extractYoutubeVideoId(url);
+		if (!videoId) {
+			return new ReturnMessage({
+				chatId,
+				content: "Ops! 😅 Só é possível baixar músicas do YouTube com este comando. 🎵",
+				options: {
+					quotedMessageId: message.origin.id._serialized,
+					evoReply: message.origin
+				}
+			});
+		}
+	}
 
-	// Se não for um link, busca pelo termo
+	// Se não for um link (videoId ainda é null), busca pelo termo
 	if (!videoId) {
 		logger.debug(`Buscando vídeo no YouTube: "${input}"`);
 
