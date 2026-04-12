@@ -166,6 +166,19 @@ class EventHandler extends EventEmitter {
 	}
 
 	/**
+	 * Manipula evento de reação
+	 * @param {WhatsAppBot} bot - A instância do bot
+	 * @param {Object} reaction - A reação formatada
+	 */
+	onReaction(bot, reaction) {
+		this.emit("activity", { type: "reaction", botId: bot.id });
+		// Processa reação sem aguardar
+		this.rankingMessages.processReaction(reaction).catch((error) => {
+			this.logger.error("Erro em processReaction (ranking):", error);
+		});
+	}
+
+	/**
 	 * Processa uma mensagem recebida
 	 * @param {WhatsAppBot} bot - A instância do bot
 	 * @param {Object} message - A mensagem formatada

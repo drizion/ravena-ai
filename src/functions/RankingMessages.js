@@ -16,9 +16,17 @@ database.getSQLiteDb(
       user_id TEXT NOT NULL,
       user_name TEXT,
       message_count INTEGER DEFAULT 0,
+      reaction_count INTEGER DEFAULT 0,
       PRIMARY KEY (chat_id, user_id)
     )`
 );
+
+// Migração: Adiciona coluna reaction_count se não existir
+database
+	.dbRun(dbName, "ALTER TABLE ranking ADD COLUMN reaction_count INTEGER DEFAULT 0")
+	.catch(() => {
+		// Ignora erro se a coluna já existir
+	});
 
 /**
  * Atualiza o ranking de mensagens para um usuário
@@ -31,8 +39,8 @@ async function updateMessageCount(chatId, userId, userName) {
 		await database.dbRun(
 			dbName,
 			`
-      INSERT INTO ranking (chat_id, user_id, user_name, message_count)
-      VALUES (?, ?, ?, 1)
+      INSERT INTO ranking (chat_id, user_id, user_name, message_count, reaction_count)
+      VALUES (?, ?, ?, 1, 0)
       ON CONFLICT(chat_id, user_id) DO UPDATE SET
         message_count = message_count + 1,
         user_name = excluded.user_name
@@ -41,6 +49,30 @@ async function updateMessageCount(chatId, userId, userName) {
 		);
 	} catch (error) {
 		logger.error("Erro ao atualizar contagem de mensagens (SQLite):", error);
+	}
+}
+
+/**
+ * Atualiza o ranking de reações para um usuário
+ * @param {string} chatId - ID do chat
+ * @param {string} userId - ID do usuário
+ * @param {string} userName - Nome do usuário
+ */
+async function updateReactionCount(chatId, userId, userName) {
+	try {
+		await database.dbRun(
+			dbName,
+			`
+      INSERT INTO ranking (chat_id, user_id, user_name, message_count, reaction_count)
+      VALUES (?, ?, ?, 0, 1)
+      ON CONFLICT(chat_id, user_id) DO UPDATE SET
+        reaction_count = reaction_count + 1,
+        user_name = excluded.user_name
+    `,
+			[chatId, userId, userName]
+		);
+	} catch (error) {
+		logger.error("Erro ao atualizar contagem de reações (SQLite):", error);
 	}
 }
 
@@ -54,10 +86,10 @@ async function getMessageRanking(chatId) {
 		const rows = await database.dbAll(
 			dbName,
 			`
-      SELECT user_name as nome, user_id as numero, message_count as qtdMsgs
+      SELECT user_name as nome, user_id as numero, (message_count + reaction_count) as qtdMsgs
       FROM ranking
       WHERE chat_id = ?
-      ORDER BY message_count DESC
+      ORDER BY (message_count + reaction_count) DESC
     `,
 			[chatId]
 		);
@@ -119,6 +151,29 @@ async function processMessage(message) {
 		await updateMessageCount(chatId, userId, userName);
 	} catch (error) {
 		logger.error("Erro ao processar mensagem para ranking:", error);
+	}
+}
+
+/**
+ * Processa uma reação recebida para atualizar o ranking
+ * @param {Object} reactionData - Dados da reação
+ */
+async function processReaction(reactionData) {
+	try {
+		if (!reactionData) return;
+
+		const userId = reactionData.senderId;
+		const chatId = reactionData.chatId ?? userId;
+
+		if (!userId) return;
+
+		// Obtém nome do usuário
+		const userName = reactionData.userName ?? "Fulano";
+
+		// Atualiza contagem de reações
+		await updateReactionCount(chatId, userId, userName);
+	} catch (error) {
+		logger.error("Erro ao processar reação para ranking:", error);
 	}
 }
 
@@ -421,5 +476,6 @@ const commands = [
 
 module.exports = {
 	commands,
-	processMessage
+	processMessage,
+	processReaction
 };
