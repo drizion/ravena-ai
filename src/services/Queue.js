@@ -5,6 +5,7 @@ class Queue {
 		this.queue = [];
 		this.processing = {}; // { priority: count }
 		this.fulfilled = {}; // { priority: count }
+		this.failed = {}; // { priority: count }
 	}
 
 	add(fn, options = {}) {
@@ -76,15 +77,16 @@ class Queue {
 		Promise.resolve()
 			.then(() => item.fn())
 			.then((result) => {
+				this.fulfilled[p] = (this.fulfilled[p] || 0) + 1;
 				item.resolve(result);
 			})
 			.catch((err) => {
+				this.failed[p] = (this.failed[p] || 0) + 1;
 				item.reject(err);
 			})
 			.finally(() => {
 				this.pending--;
 				this.processing[p] = Math.max(0, this.processing[p] - 1);
-				this.fulfilled[p] = (this.fulfilled[p] || 0) + 1;
 				this._process();
 			});
 	}
@@ -103,7 +105,8 @@ class Queue {
 			stats[p] = {
 				pending: this.queue.filter((i) => i.priority.toString() === p).length,
 				processing: this.processing[p] || 0,
-				fulfilled: this.fulfilled[p] || 0
+				fulfilled: this.fulfilled[p] || 0,
+				failed: this.failed[p] || 0
 			};
 		});
 

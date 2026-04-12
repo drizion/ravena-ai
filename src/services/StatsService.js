@@ -24,45 +24,63 @@ class StatsService {
 
 			const stats = {
 				total_requests: 0,
+				total_failures: 0,
 				total_input_tokens: 0,
 				total_output_tokens: 0,
 				by_type: {
-					text: { requests: 0, input_tokens: 0, output_tokens: 0 },
-					image: { requests: 0, input_tokens: 0, output_tokens: 0 },
-					video: { requests: 0, input_tokens: 0, output_tokens: 0 }
+					text: { requests: 0, failures: 0, input_tokens: 0, output_tokens: 0 },
+					image: { requests: 0, failures: 0, input_tokens: 0, output_tokens: 0 },
+					video: { requests: 0, failures: 0, input_tokens: 0, output_tokens: 0 }
 				},
 				by_provider: {}
 			};
 
 			for (const row of rows) {
-				stats.total_requests++;
-				stats.total_input_tokens += row.input_tokens;
-				stats.total_output_tokens += row.output_tokens;
+				const isSuccess = row.is_success !== 0;
+
+				if (isSuccess) {
+					stats.total_requests++;
+					stats.total_input_tokens += row.input_tokens;
+					stats.total_output_tokens += row.output_tokens;
+				} else {
+					stats.total_failures++;
+				}
 
 				const type = row.request_type || "text";
 				if (!stats.by_type[type]) {
 					stats.by_type[type] = {
 						requests: 0,
+						failures: 0,
 						input_tokens: 0,
 						output_tokens: 0
 					};
 				}
 
-				stats.by_type[type].requests++;
-				stats.by_type[type].input_tokens += row.input_tokens;
-				stats.by_type[type].output_tokens += row.output_tokens;
+				if (isSuccess) {
+					stats.by_type[type].requests++;
+					stats.by_type[type].input_tokens += row.input_tokens;
+					stats.by_type[type].output_tokens += row.output_tokens;
+				} else {
+					stats.by_type[type].failures++;
+				}
 
-				const provider = row.provider;
+				const provider = row.provider || "Unknown";
 				if (!stats.by_provider[provider]) {
 					stats.by_provider[provider] = {
 						requests: 0,
+						failures: 0,
 						input_tokens: 0,
 						output_tokens: 0
 					};
 				}
-				stats.by_provider[provider].requests++;
-				stats.by_provider[provider].input_tokens += row.input_tokens;
-				stats.by_provider[provider].output_tokens += row.output_tokens;
+
+				if (isSuccess) {
+					stats.by_provider[provider].requests++;
+					stats.by_provider[provider].input_tokens += row.input_tokens;
+					stats.by_provider[provider].output_tokens += row.output_tokens;
+				} else {
+					stats.by_provider[provider].failures++;
+				}
 			}
 
 			return stats;

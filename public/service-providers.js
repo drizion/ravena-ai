@@ -278,6 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${q.pending || 0}</td>
                 <td>${q.processing || 0}</td>
                 <td>${q.fulfilled || 0}</td>
+                <td style="color: ${q.failed > 0 ? '#ff4444' : 'inherit'}">${q.failed || 0}</td>
             `;
             body.appendChild(tr);
         });
@@ -354,17 +355,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const elIn = document.getElementById('stat-total-in');
         const elOut = document.getElementById('stat-total-out');
+        const elFailed = document.getElementById('stat-total-failed');
         const elCost = document.getElementById('stat-total-cost');
         
         if (elIn) elIn.innerText = (data.total_input_tokens || 0).toLocaleString();
         if (elOut) elOut.innerText = (data.total_output_tokens || 0).toLocaleString();
+        
+        if (elFailed) {
+            const total = (data.total_requests || 0) + (data.total_failures || 0);
+            const percent = total > 0 ? ((data.total_failures || 0) / total * 100).toFixed(1) : 0;
+            elFailed.innerText = `${(data.total_failures || 0).toLocaleString()} (${percent}%)`;
+        }
 
         const body = document.getElementById('llm-stats-body');
         body.innerHTML = '';
 
         const providers = Object.keys(data.by_provider || {});
         if (providers.length === 0) {
-            body.innerHTML = '<tr><td colspan="6" class="text-center">Nenhuma requisição no período selecionado</td></tr>';
+            body.innerHTML = '<tr><td colspan="7" class="text-center">Nenhuma requisição no período selecionado</td></tr>';
             return;
         }
 
@@ -440,6 +448,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ${index === 0 ? `<td rowspan="${types.length}" style="vertical-align: middle; font-weight: bold;">${prov}</td>` : ''}
                     <td><span class="status-badge" style="background: #444;">${type.toUpperCase()}</span></td>
                     <td>${tData.requests}</td>
+                    <td style="color: ${tData.failures > 0 ? '#ff4444' : 'inherit'}">${tData.failures || 0}</td>
                     <td>${tData.input_tokens.toLocaleString()}</td>
                     <td>${tData.output_tokens.toLocaleString()}</td>
                     <td style="color: #2ecc71; font-weight: bold;">$ ${rowCost.toFixed(4)}</td>

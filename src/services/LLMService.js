@@ -61,12 +61,22 @@ class LLMService {
 				model TEXT,
 				request_type TEXT,
 				input_tokens INTEGER,
-				output_tokens INTEGER
+				output_tokens INTEGER,
+				is_success INTEGER DEFAULT 1
 			);
 			CREATE INDEX IF NOT EXISTS idx_timestamp ON usage_stats(timestamp);
 			`,
 			true
 		);
+
+		// Migration: Add is_success column if it doesn't exist
+		try {
+			this.database
+				.dbRun(this.DB_NAME, `ALTER TABLE usage_stats ADD COLUMN is_success INTEGER DEFAULT 1`)
+				.catch(() => {}); // Ignore error if column already exists
+		} catch (e) {
+			// Silent fail on migration error
+		}
 
 		this.serviceProviderService = ServiceProviderService.getInstance();
 		this.buildProviders();
@@ -171,9 +181,10 @@ class LLMService {
 	 * @param {Object} response - The API response object containing usage data.
 	 * @param {string} model - The model used.
 	 * @param {Object} options - Original request options (to determine request type).
+	 * @param {boolean} isSuccess - Whether the request was successful.
 	 * @private
 	 */
-	async _trackUsage(provider, response, model, options) {
+	async _trackUsage(provider, response, model, options, isSuccess = true) {
 		let promptTokens = 0;
 		let completionTokens = 0;
 
@@ -209,11 +220,30 @@ class LLMService {
 			try {
 				await this.database.dbRun(
 					this.DB_NAME,
-					`INSERT INTO usage_stats (timestamp, provider, model, request_type, input_tokens, output_tokens) VALUES (?, ?, ?, ?, ?, ?)`,
-					[Date.now(), provider, model, requestType, promptTokens, completionTokens]
+					`INSERT INTO usage_stats (timestamp, provider, model, request_type, input_tokens, output_tokens, is_success) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+					[
+						Date.now(),
+						provider,
+						model,
+						requestType,
+						promptTokens,
+						completionTokens,
+						isSuccess ? 1 : 0
+					]
 				);
 			} catch (e) {
 				this.logger.error("Error saving LLM stats:", e);
+			}
+		} else if (!isSuccess) {
+			// Track failure even with 0 tokens
+			try {
+				await this.database.dbRun(
+					this.DB_NAME,
+					`INSERT INTO usage_stats (timestamp, provider, model, request_type, input_tokens, output_tokens, is_success) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+					[Date.now(), provider, model, requestType, 0, 0, 0]
+				);
+			} catch (e) {
+				this.logger.error("Error saving LLM failure stats:", e);
 			}
 		}
 	}
@@ -234,7 +264,7 @@ class LLMService {
 		try {
 			// --- LLM Stats ---
 			let query =
-				"SELECT provider, request_type, COUNT(*) as requests, SUM(input_tokens) as input_tokens, SUM(output_tokens) as output_tokens, MIN(timestamp) as min_ts FROM usage_stats";
+				"SELECT provider, request_type, COUNT(*) as total, SUM(CASE WHEN is_success = 1 THEN 1 ELSE 0 END) as requests, SUM(CASE WHEN is_success = 0 THEN 1 ELSE 0 END) as failures, SUM(input_tokens) as input_tokens, SUM(output_tokens) as output_tokens, MIN(timestamp) as min_ts FROM usage_stats";
 			const params = [];
 			if (timeframeMs) {
 				query += " WHERE timestamp > ?";
@@ -246,15 +276,16 @@ class LLMService {
 
 			const stats = {
 				total_requests: 0,
+				total_failures: 0,
 				total_input_tokens: 0,
 				total_output_tokens: 0,
 				first_record_timestamp: null,
 				by_type: {
-					text: { requests: 0, input_tokens: 0, output_tokens: 0 },
-					image: { requests: 0, input_tokens: 0, output_tokens: 0 },
-					video: { requests: 0, input_tokens: 0, output_tokens: 0 },
-					stt: { requests: 0, input_tokens: 0, output_tokens: 0 },
-					tts: { requests: 0, input_tokens: 0, output_tokens: 0 }
+					text: { requests: 0, failures: 0, input_tokens: 0, output_tokens: 0 },
+					image: { requests: 0, failures: 0, input_tokens: 0, output_tokens: 0 },
+					video: { requests: 0, failures: 0, input_tokens: 0, output_tokens: 0 },
+					stt: { requests: 0, failures: 0, input_tokens: 0, output_tokens: 0 },
+					tts: { requests: 0, failures: 0, input_tokens: 0, output_tokens: 0 }
 				},
 				by_provider: {}
 			};
@@ -264,6 +295,7 @@ class LLMService {
 				const provider = row.provider || "Unknown";
 
 				stats.total_requests += row.requests;
+				stats.total_failures += row.failures;
 				stats.total_input_tokens += row.input_tokens;
 				stats.total_output_tokens += row.output_tokens;
 
@@ -275,25 +307,29 @@ class LLMService {
 				}
 
 				if (!stats.by_type[type]) {
-					stats.by_type[type] = { requests: 0, input_tokens: 0, output_tokens: 0 };
+					stats.by_type[type] = { requests: 0, failures: 0, input_tokens: 0, output_tokens: 0 };
 				}
 				stats.by_type[type].requests += row.requests;
+				stats.by_type[type].failures += row.failures;
 				stats.by_type[type].input_tokens += row.input_tokens;
 				stats.by_type[type].output_tokens += row.output_tokens;
 
 				if (!stats.by_provider[provider]) {
 					stats.by_provider[provider] = {
 						requests: 0,
+						failures: 0,
 						input_tokens: 0,
 						output_tokens: 0,
 						by_type: {}
 					};
 				}
 				stats.by_provider[provider].requests += row.requests;
+				stats.by_provider[provider].failures += row.failures;
 				stats.by_provider[provider].input_tokens += row.input_tokens;
 				stats.by_provider[provider].output_tokens += row.output_tokens;
 				stats.by_provider[provider].by_type[type] = {
 					requests: row.requests,
+					failures: row.failures,
 					input_tokens: row.input_tokens,
 					output_tokens: row.output_tokens
 				};
@@ -1041,6 +1077,7 @@ class LLMService {
 					!response.choices[0].message
 				) {
 					this.logger.error("Resposta inválida da API LM Studio:", response);
+					this._trackUsage("LMStudio", {}, options.model || "Unknown", options, false);
 					return "Erro: Não foi possível gerar uma resposta. Por favor, tente novamente mais tarde.";
 				}
 				return response.choices[0].message.content;
@@ -1054,6 +1091,7 @@ class LLMService {
 					!response.choices[0].message
 				) {
 					this.logger.error("Resposta inválida da API ollama:", response);
+					this._trackUsage("Ollama", {}, options.model || "Unknown", options, false);
 					return "Erro: Não foi possível gerar uma resposta. Por favor, tente novamente mais tarde.";
 				}
 				return response.choices[0].message.content;
@@ -1069,6 +1107,7 @@ class LLMService {
 					!response.candidates[0].content.parts[0]
 				) {
 					this.logger.error("Resposta inválida da API Gemini:", response);
+					this._trackUsage("Gemini", {}, options.model || "Unknown", options, false);
 					return "Erro: Não foi possível gerar uma resposta. Por favor, tente novamente mais tarde.";
 				}
 				return response.candidates[0].content.parts[0].text;
@@ -1082,6 +1121,7 @@ class LLMService {
 					!response.choices[0].message
 				) {
 					this.logger.error("Resposta inválida da API Deepseek R1:", response);
+					this._trackUsage("Deepseek-R1", {}, options.model || "Unknown", options, false);
 					return "Erro: Não foi possível gerar uma resposta. Por favor, tente novamente mais tarde.";
 				}
 				return response.choices[0].message.content;
@@ -1095,6 +1135,7 @@ class LLMService {
 					!response.choices[0].message
 				) {
 					this.logger.error("Resposta inválida da API Deepseek:", response);
+					this._trackUsage("Deepseek", {}, options.model || "Unknown", options, false);
 					return "Erro: Não foi possível gerar uma resposta. Por favor, tente novamente mais tarde.";
 				}
 				return response.choices[0].message.content;
@@ -1112,6 +1153,7 @@ class LLMService {
 					!response.choices[0].message
 				) {
 					this.logger.error("Resposta inválida da API Local:", response);
+					this._trackUsage("Local", {}, options.model || "Unknown", options, false);
 					return "Erro: Não foi possível gerar uma resposta. Por favor, tente novamente mais tarde.";
 				}
 				return response.choices[0].message.content;
@@ -1126,6 +1168,7 @@ class LLMService {
 					!response.choices[0].message
 				) {
 					this.logger.error("Resposta inválida da API OpenAI:", response);
+					this._trackUsage("OpenAI", {}, options.model || "Unknown", options, false);
 					return "Erro: Não foi possível gerar uma resposta. Por favor, tente novamente mais tarde.";
 				}
 				return response.choices[0].message.content;
@@ -1219,6 +1262,7 @@ class LLMService {
 					this.logger.warn(
 						`[LLMService] Rebaixando provedor ${provider.name} para o final da fila.`
 					);
+					this._trackUsage(provider.name, {}, "Unknown", options, false);
 					this.providerQueue.push(this.providerQueue.shift());
 					this.lastQueueChangeTimestamp = Date.now();
 				}

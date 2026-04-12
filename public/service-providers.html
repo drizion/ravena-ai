@@ -189,7 +189,8 @@
                                     <th>Prioridade</th>
                                     <th>Pendentes</th>
                                     <th>Processando</th>
-                                    <th>Concluídos (Sessão)</th>
+                                    <th>Atendidos (Sessão)</th>
+                                    <th>Não Atendidos</th>
                                 </tr>
                             </thead>
                             <tbody id="llm-queue-body">
@@ -214,6 +215,10 @@
                             <div class="stat-value" id="stat-total-out">0</div>
                         </div>
                         <div class="stat-card" style="background: rgba(220, 53, 69, 0.15); border: 1px solid rgba(220, 53, 69, 0.3);">
+                            <div class="stat-label" style="color: #ff9999;">Não Atendidos</div>
+                            <div class="stat-value" id="stat-total-failed" style="color: #ff4444;">0 (0%)</div>
+                        </div>
+                        <div class="stat-card" style="background: rgba(220, 53, 69, 0.15); border: 1px solid rgba(220, 53, 69, 0.3);">
                             <div class="stat-label" style="color: #ff9999;">Custo Estimado (USD)</div>
                             <div class="stat-value" id="stat-total-cost" style="color: #ff4444;">$ 0.00</div>
                         </div>
@@ -224,7 +229,8 @@
                                 <tr>
                                     <th>Provedor</th>
                                     <th>Tipo</th>
-                                    <th>Requisições</th>
+                                    <th>Atendidos</th>
+                                    <th>Não Atendidos</th>
                                     <th>InTokens / min</th>
                                     <th>OutTokens / min</th>
                                     <th>Custo Estimado</th>
