@@ -462,6 +462,16 @@ class WhatsAppBot {
 					}
 
 					await this.reactionHandler.processReaction(this, reaction);
+
+					if (this.eventHandler && typeof this.eventHandler.onReaction === "function") {
+						this.eventHandler.onReaction(this, {
+							reaction: reaction.reaction,
+							senderId: reaction.senderId,
+							userName: null, // wwebjs reaction object doesn't have pushname directly here
+							chatId: reaction.msgId.remote,
+							msgId: reaction.msgId
+						});
+					}
 				}
 			} catch (error) {
 				this.logger.error("Erro ao tratar reação de mensagem:", error);

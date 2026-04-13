@@ -1565,6 +1565,16 @@ class WhatsAppBotEvoGo {
 									userName: info.PushName,
 									msgId: { _serialized: reactionData.key.ID }
 								});
+
+								if (this.eventHandler && typeof this.eventHandler.onReaction === "function") {
+									this.eventHandler.onReaction(this, {
+										reaction: reactionData.text,
+										senderId: info.Sender ?? info.SenderAlt,
+										userName: info.PushName,
+										chatId: info.Chat,
+										msgId: { _serialized: reactionData.key.ID }
+									});
+								}
 							}
 						} else {
 							// Se não for reaction, é qualquer outro tipo de mensagem
