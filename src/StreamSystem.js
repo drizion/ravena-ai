@@ -1,4 +1,4 @@
-﻿const StreamMonitor = require("./services/StreamMonitor");
+const StreamMonitor = require("./services/StreamMonitor");
 const Logger = require("./utils/Logger");
 const LLMService = require("./services/LLMService");
 const ReturnMessage = require("./models/ReturnMessage");
@@ -761,6 +761,57 @@ class StreamSystem {
 	unsubscribe(channel, platform) {
 		if (!this.streamMonitor) return false;
 		return this.streamMonitor.unsubscribe(channel, platform);
+	}
+
+	/**
+	 * Reseta o status de bots para um grupo específico
+	 * @param {Object|string} groupOrId - Objeto de grupo ou ID do grupo
+	 */
+	async refreshGroup(groupOrId) {
+		const groupId = typeof groupOrId === "string" ? groupOrId : groupOrId.id;
+		const group = typeof groupOrId === "object" ? groupOrId : await this.database.getGroup(groupId);
+
+		if (!group) return;
+
+		// Limpa blacklist local do grupo
+		group.botNotInGroup = [];
+		await this.database.saveGroup(group);
+
+		// Remove de todos os bots registrados
+		for (const bot of this.bots) {
+			if (bot.removeSkipGroup) {
+				await bot.removeSkipGroup(groupId);
+			}
+		}
+	}
+
+	/**
+	 * Reseta o status de bots para TODOS os grupos cadastrados
+	 * Útil para manutenções globais ou migrações de bots
+	 */
+	async refreshAllGroups() {
+		try {
+			const groups = await this.database.getGroups();
+			this.logger.info(`Iniciando refresh global de streams para ${groups.length} grupos.`);
+
+			for (const group of groups) {
+				// Limpa blacklist local do grupo
+				group.botNotInGroup = [];
+				await this.database.saveGroup(group);
+
+				// Remove o ID deste grupo de todos os bots registrados
+				for (const bot of this.bots) {
+					if (bot.removeSkipGroup) {
+						await bot.removeSkipGroup(group.id);
+					}
+				}
+			}
+
+			this.logger.info("Refresh global de streams concluído com sucesso.");
+		} catch (error) {
+			this.logger.error("Erro no refresh global de grupos:", error);
+			throw error;
+		}
 	}
 
 	destroy() {

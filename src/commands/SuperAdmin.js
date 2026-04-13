@@ -81,7 +81,11 @@ class SuperAdmin {
 			},
 			reagir: { method: "reagir", description: "Reage com o emoji informado [debug apenas]" },
 			status: { method: "setStatus", description: "Define o status do bot" },
-			wol: { method: "wakeOnLan", description: "Envia pacote wake-on-lan na rede" }
+			wol: { method: "wakeOnLan", description: "Envia pacote wake-on-lan na rede" },
+			globalStreamRefresh: {
+				method: "globalStreamRefresh",
+				description: "Reseta a lista de bots ativos/ignorados para transmissões em TODOS os grupos"
+			}
 		};
 	}
 
@@ -2793,6 +2797,29 @@ Break down the cost by category and provide a total estimated cost.`;
 			return new ReturnMessage({
 				chatId: message.group ?? message.author,
 				content: `❌ Erro ao processar comando: ${error.message}`
+			});
+		}
+	}
+
+	async globalStreamRefresh(bot, message, args) {
+		try {
+			if (!this.isSuperAdmin(message.author)) return;
+
+			const StreamSystem = require("../StreamSystem");
+			const streamSystem = StreamSystem.getInstance();
+
+			await streamSystem.refreshAllGroups();
+
+			return new ReturnMessage({
+				chatId: message.group ?? message.author,
+				content: "✅ O status de bots para transmissões foi resetado em TODOS os grupos do sistema."
+			});
+		} catch (error) {
+			this.logger.error("Erro no comando globalStreamRefresh:", error);
+
+			return new ReturnMessage({
+				chatId: message.group ?? message.author,
+				content: "❌ Erro ao realizar o refresh global de streams."
 			});
 		}
 	}

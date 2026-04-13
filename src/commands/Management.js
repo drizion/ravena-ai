@@ -1,4 +1,4 @@
-﻿const fs = require("fs").promises;
+const fs = require("fs").promises;
 const path = require("path");
 const Logger = require("../utils/Logger");
 const Database = require("../utils/Database");
@@ -7,6 +7,7 @@ const NSFWPredict = require("../utils/NSFWPredict");
 const ReturnMessage = require("../models/ReturnMessage");
 const Command = require("../models/Command");
 const WebManagement = require("../utils/WebManagement");
+const StreamSystem = require("../StreamSystem");
 
 class Management {
 	constructor() {
@@ -334,6 +335,10 @@ class Management {
 			"limpar-advertencias": {
 				method: "clearWarnings",
 				description: "Remove as advertências dos membros mencionados"
+			},
+			streamRefresh: {
+				method: "streamRefresh",
+				description: "Reseta a lista de bots ativos/ignorados para as notificações de stream"
 			}
 		};
 
@@ -2653,6 +2658,9 @@ class Management {
 					channels.push(newChannel);
 					await this.database.saveGroup(group);
 
+					// Atualiza bots ignorados etc (cleanup)
+					await this._refreshStreamBots(group);
+
 					// Subscribe to the channel in StreamMonitor
 					bot.streamMonitor.subscribe(channelName, "twitch");
 
@@ -3202,6 +3210,9 @@ class Management {
 			channels.push(newChannel);
 			await this.database.saveGroup(group);
 
+			// Atualiza bots ignorados etc (cleanup)
+			await this._refreshStreamBots(group);
+
 			// Subscribe to the channel in StreamMonitor
 			if (bot.streamMonitor) {
 				bot.streamMonitor.subscribe(channelName, "kick");
@@ -3624,6 +3635,9 @@ class Management {
 
 			channels.push(newChannel);
 			await this.database.saveGroup(group);
+
+			// Atualiza bots ignorados etc (cleanup)
+			await this._refreshStreamBots(group);
 
 			// Subscribe to the channel in StreamMonitor
 			if (bot.streamMonitor) {
@@ -6311,6 +6325,29 @@ class Management {
 			options: {
 				mentions: removedMentions
 			}
+		});
+	}
+	/**
+	 * Remove o ID do grupo de todos os bots ignorados e limpa blacklist local
+	 * @param {Object} group - Dados do grupo
+	 */
+	async _refreshStreamBots(group) {
+		await StreamSystem.getInstance().refreshGroup(group);
+	}
+
+	async streamRefresh(bot, message, args, group) {
+		if (!group) {
+			return new ReturnMessage({
+				chatId: message.author,
+				content: "Este comando só pode ser usado em grupos."
+			});
+		}
+
+		await this._refreshStreamBots(group);
+
+		return new ReturnMessage({
+			chatId: group.id,
+			content: "✅ Lista de bots ativos e ignorados para este grupo foi resetada com sucesso."
 		});
 	}
 }

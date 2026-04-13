@@ -1,8 +1,9 @@
-﻿const path = require("path");
+const path = require("path");
 const Logger = require("../utils/Logger");
 const Database = require("../utils/Database");
 const Command = require("../models/Command");
 const ReturnMessage = require("../models/ReturnMessage");
+const StreamSystem = require("../StreamSystem");
 
 const logger = new Logger("stream-commands");
 const database = Database.getInstance();
@@ -148,6 +149,9 @@ async function showStreamStatus(bot, message, args, group) {
 				content: "Este comando só pode ser usado em grupos."
 			});
 		}
+
+		// Cleanup bot status for this group
+		await StreamSystem.getInstance().refreshGroup(group);
 
 		// Verifica se o StreamMonitor está inicializado
 		if (!bot.streamMonitor) {
@@ -370,6 +374,11 @@ async function showLiveInfo(bot, message, args, group) {
 	try {
 		const chatId = message.group ?? message.author;
 
+		// Cleanup bot status for this group (if in a group)
+		if (group) {
+			await StreamSystem.getInstance().refreshGroup(group);
+		}
+
 		// Verifica se o StreamMonitor está inicializado
 		if (!bot.streamMonitor) {
 			return avisoStreamSystem(bot, chatId);
@@ -500,6 +509,11 @@ async function showLiveInfo(bot, message, args, group) {
 async function showLiveKick(bot, message, args, group) {
 	try {
 		const chatId = message.group ?? message.author;
+
+		// Cleanup bot status for this group (if in a group)
+		if (group) {
+			await StreamSystem.getInstance().refreshGroup(group);
+		}
 
 		// Verifica se o StreamMonitor está inicializado
 		if (!bot.streamMonitor) {
