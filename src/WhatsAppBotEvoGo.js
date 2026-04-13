@@ -2357,16 +2357,33 @@ class WhatsAppBotEvoGo {
 					notInGroup: true,
 					participants: []
 				};
-			} else if (e.data?.error?.includes("not participating")) {
-				this.logger.info(`[getChatDetails] Error fetching ${chatId}, bot não está no grupo`);
-				return {
-					id: { _serialized: chatId },
-					name: chatId,
-					isGroup: true,
-					notInGroup: true,
-					participants: []
-				};
 			} else {
+				const errorDetails = [
+					e.message,
+					e.data?.error,
+					e.response?.data?.error,
+					typeof e === "string" ? e : null
+				]
+					.filter((s) => typeof s === "string")
+					.join(" ")
+					.toLowerCase();
+
+				if (
+					errorDetails.includes("not participating") ||
+					errorDetails.includes("not_participating") ||
+					errorDetails.includes("no longer a participant") ||
+					errorDetails.includes("not in group")
+				) {
+					this.logger.info(`[getChatDetails] Error fetching ${chatId}, bot não está no grupo`);
+					return {
+						id: { _serialized: chatId },
+						name: chatId,
+						isGroup: true,
+						notInGroup: true,
+						participants: []
+					};
+				}
+
 				this.logger.error(`[getChatDetails] Error fetching ${chatId}`, e);
 			}
 		}

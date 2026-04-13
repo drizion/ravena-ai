@@ -413,17 +413,28 @@ class StreamSystem {
 
 						for (const res of resultados) {
 							// Adaptação para verificar erro na resposta do bot
-							// Exemplo: { error: "failed to get group members: you're not participating in that group" }
+							// Exemplo: { status: 500, message: '...', data: { error: "failed to get group members: you're not participating in that group" } }
 							if (res && res.error) {
-								const errMsg =
-									typeof res.error === "string"
-										? res.error
-										: res.error.message || JSON.stringify(res.error);
+								const err = res.error;
+								// Coleta todas as possíveis strings de erro (mensagem, data.error, response.data.error)
+								const errorDetails = [
+									err.message,
+									err.data?.error,
+									err.response?.data?.error,
+									typeof err === "string" ? err : null
+								]
+									.filter((s) => typeof s === "string")
+									.join(" ")
+									.toLowerCase();
+
 								if (
-									errMsg.includes("not participating") ||
-									errMsg.includes("no longer a participant")
+									errorDetails.includes("not participating") ||
+									errorDetails.includes("not_participating") ||
+									errorDetails.includes("no longer a participant") ||
+									errorDetails.includes("not in group")
 								) {
 									botNotInGroupError = true;
+									break;
 								}
 							}
 						}
@@ -457,11 +468,21 @@ class StreamSystem {
 					}
 				} catch (err) {
 					this.logger.error(`Erro ao tentar enviar com bot ${bot.id} para grupo ${group.id}:`, err);
-					// Se for erro de permissão/grupo, adiciona skip
+					const errorDetails = [
+						err.message,
+						err.data?.error,
+						err.response?.data?.error,
+						typeof err === "string" ? err : null
+					]
+						.filter((s) => typeof s === "string")
+						.join(" ")
+						.toLowerCase();
+
 					if (
-						err.message &&
-						(err.message.includes("not participating") ||
-							err.message.includes("no longer a participant"))
+						errorDetails.includes("not participating") ||
+						errorDetails.includes("not_participating") ||
+						errorDetails.includes("no longer a participant") ||
+						errorDetails.includes("not in group")
 					) {
 						if (bot.addSkipGroup) await bot.addSkipGroup(group.id);
 						notInGroupErrors.push(bot.id);
