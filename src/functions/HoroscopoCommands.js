@@ -85,28 +85,34 @@ async function detectHoroscopo(msgBody, groupId) {
 		}
 
 		const horoscopoRegex =
-			/\*.*?\s(?:♈|♉|♊|♋|♌|♍|♎|♏|♐|♑|♒|♓)\s+(Áries|Touro|Gêmeos|Câncer|Leão|Virgem|Libra|Escorpião|Sagitário|Capricórnio|Aquário|Peixes):\*\s+([\s\S]*?)(?:\n\n|$)/i;
-		const match = msgBody?.match(horoscopoRegex);
+			/(?:♈|♉|♊|♋|♌|♍|♎|♏|♐|♑|♒|♓)\s+(Áries|Touro|Gêmeos|Câncer|Leão|Virgem|Libra|Escorpião|Sagitário|Capricórnio|Aquário|Peixes)[:\*]*\s+([\s\S]*?)(?:\n\n|$)/gi;
+		const matches = [...(msgBody?.matchAll(horoscopoRegex) || [])];
 
-		if (match) {
-			const signoNome = match[1];
-			const texto = match[2].trim();
-			const signoNormalizado = normalizeSigno(signoNome);
+		if (matches.length > 0) {
+			let savedCount = 0;
+			for (const match of matches) {
+				const signoNome = match[1];
+				const texto = match[2].trim();
+				const signoNormalizado = normalizeSigno(signoNome);
 
-			if (signoNormalizado) {
-				const today = new Date();
-				const year = today.getFullYear();
-				const month = String(today.getMonth() + 1).padStart(2, "0");
-				const day = String(today.getDate()).padStart(2, "0");
-				const date = `${year}-${month}-${day}`;
+				if (signoNormalizado) {
+					const today = new Date();
+					const year = today.getFullYear();
+					const month = String(today.getMonth() + 1).padStart(2, "0");
+					const day = String(today.getDate()).padStart(2, "0");
+					const date = `${year}-${month}-${day}`;
 
-				await database.dbRun(
-					DB_NAME,
-					"INSERT OR REPLACE INTO horoscopo (data, signo, texto) VALUES (?, ?, ?)",
-					[date, signoNormalizado, texto]
-				);
+					await database.dbRun(
+						DB_NAME,
+						"INSERT OR REPLACE INTO horoscopo (data, signo, texto) VALUES (?, ?, ?)",
+						[date, signoNormalizado, texto]
+					);
+					savedCount++;
+				}
+			}
 
-				logger.info(`Horóscopo de ${signoNormalizado} para ${date} salvo no banco.`);
+			if (savedCount > 0) {
+				logger.info(`${savedCount} horóscopos salvos no banco.`);
 				return true;
 			}
 		}
