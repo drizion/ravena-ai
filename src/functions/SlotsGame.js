@@ -333,7 +333,10 @@ async function slotsCommand(bot, message, args, group) {
 	return new ReturnMessage({
 		chatId,
 		content: resultMessage,
-		options: { quotedMessageId: message.origin?.id?._serialized }
+		options: {
+			quotedMessageId: message.origin?.id?._serialized,
+			evoReply: message.origin
+		}
 	});
 }
 
