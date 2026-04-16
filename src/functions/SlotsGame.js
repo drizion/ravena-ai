@@ -232,7 +232,8 @@ async function slotsCommand(bot, message, args, group) {
 		const waitTime = formatTimeString(nextRegen.secondsUntilNextCoin);
 		return new ReturnMessage({
 			chatId,
-			content: `❌ Você não tem moedinhas suficientes para jogar! \n\n🪙 Próxima moedinha em: *${waitTime}*`
+			content: `❌ Você não tem moedinhas suficientes para jogar! \n\n🪙 Próxima moedinha em: *${waitTime}*`,
+			options: { quotedMessageId: message.origin?.id?._serialized }
 		});
 	}
 
@@ -328,7 +329,8 @@ async function slotsCommand(bot, message, args, group) {
 
 	return new ReturnMessage({
 		chatId,
-		content: resultMessage
+		content: resultMessage,
+		options: { quotedMessageId: message.origin?.id?._serialized }
 	});
 }
 
