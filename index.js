@@ -16,11 +16,17 @@ const StabilityMonitor = require("./src/services/StabilityMonitor");
 const fs = require("fs");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const CurrencyConverter = require("./src/utils/CurrencyConverter");
+
 /**
  * Exemplo de criação de múltiplas instâncias de bot
  */
 async function main() {
 	logCleaner.start();
+
+	// Atualiza cotação do dólar na inicialização
+	await CurrencyConverter.updateRate();
+
 	const logger = new Logger("main");
 	const botInstances = [];
 	let botAPI;

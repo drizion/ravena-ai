@@ -2,5 +2,4 @@ _Veja melhor a lista em:_
 🔗 https://ravena.moothz.win/cmd
 
 🔥 *Novos*:
-- _!sqi_: Faz sticker quadrado usando IA pra detectar a melhor área de corte 
-- _!slots_: Caça coisas de sorte!
+- _!0800 ou !giveaways_: Lista de joguinhos e coisas grátis!
