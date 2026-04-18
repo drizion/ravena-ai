@@ -948,7 +948,7 @@ class LLMService {
 		const EventHandler = require("../EventHandler");
 		EventHandler.getInstance().emit("activity", { type: "llm" });
 		const priority = options.priority ?? 0;
-		const maxQueueRetries = 2; // Limit times we can send back to queue
+		const maxQueueRetries = 10; // Limit times we can send back to queue
 
 		const task = async () => {
 			try {
@@ -992,8 +992,8 @@ class LLMService {
 
 		const runWithInstantRetries = async () => {
 			let maxInstant = 0;
-			if (priority === 5) maxInstant = 2;
-			else if (priority === 4) maxInstant = 1;
+			if (priority === 5) maxInstant = 5;
+			else if (priority === 4) maxInstant = 3;
 
 			let lastErr;
 			for (let i = 0; i <= maxInstant; i++) {
