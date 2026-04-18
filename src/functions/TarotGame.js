@@ -229,13 +229,21 @@ async function tarotCommand(bot, message, args, group) {
 	response += `🎴 ${drawIntro}\n${cardNames}\n\n`;
 
 	// 3. IA Analysis
-	const prompt = `Faça uma análise mística, encorajadora e profunda de tarô para o usuário ${userName}.
+	let prompt = `Faça uma análise mística, encorajadora e profunda de tarô para o usuário ${userName}.
 As cartas tiradas foram:
-1. ${drawn[0].name} (Posição: Passado/Cerne)
-2. ${drawn[1].name} (Posição: Presente/Ação)
-3. ${drawn[2].name} (Posição: Futuro/Conselho)
+1. ${drawn[0].name} (Posição: Situação/Passado/Cerne)
+2. ${drawn[1].name} (Posição: Desafio/Presente/Ação)
+3. ${drawn[2].name} (Posição: Caminho/Futuro/Conselho)
 
- Entregue uma interpretação única, fluida e envolvente, conectando situação, desafio e caminho. Use um tom místico, direto e pessoal, como se estivesse captando a energia da pessoa. Não faça perguntas e entregue tudo em uma única mensagem. Ao final, dê uma dica sobre uma área da vida pessoal que o usuário deve cuidar como saúde, amor, profissão, relações, emoções, dinheiro e etc
+Exiba sempre "Situação, Desafio e Caminho"
+`;
+
+	const question = args.join(" ");
+	if (question.length > 0) {
+		prompt += `O usuário fez a seguinte pergunta ou busca orientação sobre: "${question}"\nLeve isso em conta na sua interpretação e como foco da tiragem.\n\n`;
+	}
+
+	prompt += `Entregue uma interpretação sucinta, resumida, única, fluida e envolvente, conectando situação, desafio e caminho. Use um tom místico, direto e pessoal, como se estivesse captando a energia da pessoa. Não faça perguntas e entregue tudo em uma única mensagem. Ao final, dê uma dica sobre uma área da vida pessoal que o usuário deve cuidar como saúde, amor, profissão, relações, emoções, dinheiro e etc
 Responda em PORTUGUÊS BRASIL.`;
 
 	let analysis = "";
@@ -243,7 +251,8 @@ Responda em PORTUGUÊS BRASIL.`;
 		logger.debug(`[Tarot] Requesting IA analysis for ${userName}`);
 		analysis = await llmService.getCompletion({
 			prompt,
-			systemContext: "Você é uma cartomante experiente, futurista e misteriosa chamada ravenabot.",
+			systemContext:
+				"Você é uma cartomante experiente, futurista e misteriosa chamada ravenabot. Suas respostas sempre são em 800 caracteres ou menos, sucintas mas poderosas.",
 			priority: 5
 		});
 	} catch (error) {
@@ -350,9 +359,8 @@ const commands = [
 		description: "Consulta a cartomante para uma tiragem",
 		category: "jogos",
 		reactions: {
-			trigger: "🔮",
 			before: "🕯️",
-			after: "🎩"
+			after: "🔮"
 		},
 		method: tarotCommand
 	})
