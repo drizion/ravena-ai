@@ -101,6 +101,7 @@ const COMMAND_ORDER = [
 	"pinto-reset",
 	"slots",
 	"slots-premios",
+	"tarot",
 	"anonimo",
 	"roll",
 	"d10",

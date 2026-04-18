@@ -4,3 +4,5 @@ _Veja melhor a lista em:_
 🔥 *Novos*:
 - _!ajuda_: Peça ajuda para Ravena, ela sabe tudo sobre ela mesma!
 - _!0800 ou !giveaways_: Lista de joguinhos e coisas grátis!
+- _!tarot_: Consulte a cartomante para uma tiragem mística! (aceita pergunta)
+
