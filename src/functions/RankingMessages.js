@@ -343,6 +343,19 @@ async function faladoresLimpezaCommand(bot, message, args, group) {
 			});
 		}
 
+		// Verifica se o usuário é admin
+		const isAdmin = await bot.isUserAdminInGroup(userId, chatId);
+		if (!isAdmin) {
+			return new ReturnMessage({
+				chatId,
+				content: "⛔ Apenas administradores podem realizar a limpeza do ranking.",
+				options: {
+					quotedMessageId: message.origin.id._serialized,
+					evoReply: message.origin
+				}
+			});
+		}
+
 		const participants =
 			message.origin?.groupData?.Participants ?? message.evoMessageData?.groupData?.Participants;
 
@@ -414,6 +427,19 @@ async function faladoresResetCommand(bot, message, args, group) {
 			});
 		}
 
+		// Verifica se o usuário é admin
+		const isAdmin = await bot.isUserAdminInGroup(userId, chatId);
+		if (!isAdmin) {
+			return new ReturnMessage({
+				chatId,
+				content: "⛔ Apenas administradores podem resetar o ranking.",
+				options: {
+					quotedMessageId: message.origin.id._serialized,
+					evoReply: message.origin
+				}
+			});
+		}
+
 		// 1. Get current full ranking
 		const rankingMsg = await faladoresCommand(bot, message, ["completo"], group);
 		const rankingContent = rankingMsg.content;
@@ -462,6 +488,7 @@ const commands = [
 		name: "faladores-limpeza",
 		description: "Remove do ranking membros que saíram do grupo",
 		category: "grupo",
+		adminOnly: true,
 		method: faladoresLimpezaCommand,
 		reactions: { after: "🧹", error: "❌" }
 	}),
@@ -469,6 +496,7 @@ const commands = [
 		name: "faladores-reset",
 		description: "Mostra o ranking final e reinicia a contagem",
 		category: "grupo",
+		adminOnly: true,
 		method: faladoresResetCommand,
 		reactions: { after: "♻️", error: "❌" }
 	})
