@@ -85,7 +85,7 @@ async function detectHoroscopo(msgBody, groupId) {
 		}
 
 		const horoscopoRegex =
-			/(?:♈|♉|♊|♋|♌|♍|♎|♏|♐|♑|♒|♓)\s+(Áries|Touro|Gêmeos|Câncer|Leão|Virgem|Libra|Escorpião|Sagitário|Capricórnio|Aquário|Peixes)[:\*]*\s+([\s\S]*?)(?:\n\n|$)/gi;
+			/(?:♈|♉|♊|♋|♌|♍|♎|♏|♐|♑|♒|♓)\s+(Áries|Touro|Gêmeos|Câncer|Leão|Virgem|Libra|Escorpião|Sagitário|Capricórnio|Aquário|Peixes)[:*]*\s+([\s\S]*?)(?:\n\n|$)/gi;
 		const matches = [...(msgBody?.matchAll(horoscopoRegex) || [])];
 
 		if (matches.length > 0) {
