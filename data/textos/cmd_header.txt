@@ -2,4 +2,5 @@ _Veja melhor a lista em:_
 🔗 https://ravena.moothz.win/cmd
 
 🔥 *Novos*:
+- _!ajuda_: Peça ajuda para Ravena, ela sabe tudo sobre ela mesma!
 - _!0800 ou !giveaways_: Lista de joguinhos e coisas grátis!

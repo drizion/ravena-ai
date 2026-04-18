@@ -736,6 +736,51 @@ class BotAPI {
 			res.sendFile(filePath);
 		});
 
+		// Serve help chat page
+		this.app.get("/ajuda", (req, res) => {
+			const filePath = path.join(__dirname, "../public/ajuda.html");
+			res.sendFile(filePath);
+		});
+
+		// Chat API for AnythingLLM help
+		this.ajudaRateLimit = new Map(); // ip -> { count, lastReset }
+
+		this.app.post("/api/ajuda/chat", async (req, res) => {
+			const { message, sessionId } = req.body;
+			const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+
+			// Rate Limit: 5 messages per minute
+			const now = Date.now();
+			const userLimit = this.ajudaRateLimit.get(ip) || { count: 0, lastReset: now };
+
+			if (now - userLimit.lastReset > 60000) {
+				userLimit.count = 0;
+				userLimit.lastReset = now;
+			}
+
+			if (userLimit.count >= 5) {
+				return res.status(429).json({
+					error: "Limite de mensagens atingido (5 por minuto). Aguarde um pouco."
+				});
+			}
+
+			userLimit.count++;
+			this.ajudaRateLimit.set(ip, userLimit);
+
+			if (!message || message.trim().length < 2) {
+				return res.status(400).json({ error: "Mensagem muito curta ou ausente." });
+			}
+
+			try {
+				const { askAnythingLLM } = require("./functions/AnythingLLMHelper");
+				const answer = await askAnythingLLM(message, sessionId);
+				res.json({ answer });
+			} catch (error) {
+				this.logger.error("Erro na API de ajuda chat:", error);
+				res.status(500).json({ error: error.message });
+			}
+		});
+
 		// Endpoint para Top Donates
 		this.app.get("/top-donates", async (req, res) => {
 			try {

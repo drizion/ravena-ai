@@ -32,6 +32,7 @@ const CATEGORY_EMOJIS = {
 const COMMAND_ORDER = [
 	"retrospectiva",
 	"cmd",
+	"ajuda",
 	"cmd-grupo",
 	"cmd-gerenciamento",
 	"cmd-g",
@@ -134,7 +135,6 @@ const COMMAND_ORDER = [
 	"p-criar",
 	"p-baixar",
 	"p-excluir",
-	"ajuda",
 	"manage",
 	"painel",
 	"info",

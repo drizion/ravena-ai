@@ -612,14 +612,6 @@ const commands = [
 	}),
 
 	new Command({
-		name: "ajuda",
-		category: "geral",
-		group: "menu",
-		hidden: true,
-		description: "Mostra todos os comandos disponíveis",
-		method: async (bot, message, args, group) => await sendCommandList(bot, message, args, group)
-	}),
-	new Command({
 		name: "info",
 		category: "geral",
 		group: "menu",
