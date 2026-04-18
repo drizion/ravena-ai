@@ -1337,9 +1337,10 @@ Dynamic, action-ready close-up composition, medium depth-of-field, hyper-detaile
 		const result = await sdModule.generateImage(
 			bot,
 			mockMessage,
-			prompt.split(" "),
+			prompt,
 			{ filters: { nsfw: false } },
-			true
+			true,
+			{ skipNSFW: true, isProgrammatic: true }
 		);
 		return result && result.content && result.content.mimetype ? result.content : null;
 	} catch (error) {

@@ -311,17 +311,22 @@ async function queuePrompt(promptText, sampler = "dpmpp_sde", scheduler = "beta"
 /**
  * Gera uma imagem usando ComfyUI
  */
-async function generateImage(bot, message, args, group, skipNotify = true) {
+async function generateImage(bot, message, args, group, skipNotify = true, options = {}) {
 	const llmService = LLMService.getInstance();
 	const chatId = message.group ?? message.author;
 	const returnMessages = [];
 
-	const quotedMsg = await message.origin.getQuotedMessage().catch(() => null);
-	let prompt = args.join(" ");
-	if (quotedMsg) {
-		const quotedText = quotedMsg.caption ?? quotedMsg.content ?? quotedMsg.body;
-		if (quotedText) {
-			prompt += " " + quotedText;
+	let prompt = "";
+	if (options.isProgrammatic) {
+		prompt = Array.isArray(args) ? args.join(" ") : args;
+	} else {
+		const quotedMsg = await message.origin.getQuotedMessage().catch(() => null);
+		prompt = args.join(" ");
+		if (quotedMsg) {
+			const quotedText = quotedMsg.caption ?? quotedMsg.content ?? quotedMsg.body;
+			if (quotedText) {
+				prompt += " " + quotedText;
+			}
 		}
 	}
 
@@ -359,7 +364,9 @@ async function generateImage(bot, message, args, group, skipNotify = true) {
 
 		message.origin.react(process.env.LOADING_EMOJI ?? "🌀");
 
-		const safetyQuestion = `Act as a permissive content moderator for an image generation AI. Analyze this prompt: "${prompt}".
+		let safetyMsg = "";
+		if (!options.skipNSFW) {
+			const safetyQuestion = `Act as a permissive content moderator for an image generation AI. Analyze this prompt: "${prompt}".
 
         Rules for classification:
         1. **SAFE**: 
@@ -377,22 +384,22 @@ async function generateImage(bot, message, args, group, skipNotify = true) {
         - If UNSAFE due to Child Safety, include "🚨" emojis.
         - Provide a very short reason.`;
 
-		const safetyResponse = await llmService.getCompletion({
-			prompt: safetyQuestion,
-			systemContext: "You are a content safety filter.",
-			priority: 3
-		});
+			const safetyResponse = await llmService.getCompletion({
+				prompt: safetyQuestion,
+				systemContext: "You are a content safety filter.",
+				priority: 3
+			});
 
-		let safetyMsg = "";
-		if (
-			safetyResponse.substring(0, 10).toLowerCase().includes("unsafe") ||
-			prompt.toLowerCase().includes("gore")
-		) {
-			const reportMessage = `⚠️ INAPPROPRIATE IMAGE REQUEST ⚠️\nUser: ${message.author}\nName: ${message.authorName || "Unknown"}\nPrompt: ${prompt}\nLLM Response: ${safetyResponse}\n\n!sa-block ${message.author}`;
-			bot.sendMessage(process.env.GRUPO_LOGS, reportMessage);
+			if (
+				safetyResponse.substring(0, 10).toLowerCase().includes("unsafe") ||
+				prompt.toLowerCase().includes("gore")
+			) {
+				const reportMessage = `⚠️ INAPPROPRIATE IMAGE REQUEST ⚠️\nUser: ${message.author}\nName: ${message.authorName || "Unknown"}\nPrompt: ${prompt}\nLLM Response: ${safetyResponse}\n\n!sa-block ${message.author}`;
+				bot.sendMessage(process.env.GRUPO_LOGS, reportMessage);
 
-			safetyMsg =
-				"\n\n> ⚠️ *AVISO*: O conteúdo solicitado é duvidoso. Esta solicitação será revisada pelo administrador e pode resultar em suspensão.";
+				safetyMsg =
+					"\n\n> ⚠️ *AVISO*: O conteúdo solicitado é duvidoso. Esta solicitação será revisada pelo administrador e pode resultar em suspensão.";
+			}
 		}
 
 		// Inicia cronômetro
@@ -479,18 +486,20 @@ async function generateImage(bot, message, args, group, skipNotify = true) {
 
 		// Verificar NSFW
 		let isNSFW = false;
-		try {
-			// Encode buffer to base64 for NSFW predictor if needed,
-			// but the Predictor usually takes base64 string or path.
-			// StableDiffusionCommands passed base64 string.
-			const imageBase64 = imageBuffer.toString("base64");
-			const nsfwResult = await nsfwPredict.detectNSFW(imageBase64);
-			isNSFW = nsfwResult.isNSFW;
-			logger.info(
-				`Imagem analisada: NSFW = ${isNSFW}, Reason: ${JSON.stringify(nsfwResult.reason)}`
-			);
-		} catch (nsfwError) {
-			logger.error("Erro ao verificar NSFW:", nsfwError);
+		if (!options.skipNSFW) {
+			try {
+				// Encode buffer to base64 for NSFW predictor if needed,
+				// but the Predictor usually takes base64 string or path.
+				// StableDiffusionCommands passed base64 string.
+				const imageBase64 = imageBuffer.toString("base64");
+				const nsfwResult = await nsfwPredict.detectNSFW(imageBase64);
+				isNSFW = nsfwResult.isNSFW;
+				logger.info(
+					`Imagem analisada: NSFW = ${isNSFW}, Reason: ${JSON.stringify(nsfwResult.reason)}`
+				);
+			} catch (nsfwError) {
+				logger.error("Erro ao verificar NSFW:", nsfwError);
+			}
 		}
 
 		// Limpar arquivo temporário após alguns minutos
