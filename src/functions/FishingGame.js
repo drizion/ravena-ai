@@ -814,7 +814,6 @@ async function getRandomFish(fishArray, isMultiCatch = false, userData = null) {
 
 	// Se for pescaria múltipla, não permite peixes raros
 	if (!isMultiCatch) {
-		const rng = Math.random();
 		let rareBuffValue = 0;
 
 		if (userData && userData.buffs) {
@@ -837,6 +836,7 @@ async function getRandomFish(fishArray, isMultiCatch = false, userData = null) {
 			// Aplica fator global
 			currentChance *= DEFAULT_GLOBAL_FACTORS.rareFishChance;
 
+			const rng = Math.random();
 			if (rng < currentChance) {
 				// Potential Catch - Check Limits
 				const caughtCount = await getMonthlyCatchCount(rareFish.name);
@@ -848,7 +848,7 @@ async function getRandomFish(fishArray, isMultiCatch = false, userData = null) {
 				}
 
 				logger.debug(
-					`[getRandomFish] RARO CAPTURADO: Chance base ${rareFish.chance} | Buff ${rareBuffValue} | RNG ${rng} < ${currentChance}`
+					`[getRandomFish] RARO CAPTURADO: ${rareFish.name} | Chance base ${rareFish.chance} | Buff ${rareBuffValue} | RNG ${rng} < ${currentChance}`
 				);
 
 				const baseWeight = parseFloat(
@@ -1545,7 +1545,7 @@ async function fishCommand(bot, message, args, group) {
 		for (let i = 0; i < catchCount; i++) {
 			// Step 1: Check for Rare Fish immediately (rare fish overrides items)
 			// We peek at the potential fish type first.
-			const rareCheckFish = await getRandomFish(fishArray, i > 0, userData);
+			const rareCheckFish = await getRandomFish(fishArray, false, userData);
 
 			let modifiedFish = null;
 			let isTrash = false;
