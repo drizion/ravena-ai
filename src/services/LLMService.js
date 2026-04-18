@@ -807,6 +807,27 @@ class LLMService {
 	}
 
 	/**
+	 * Limpa a resposta da LLM removendo tags de pensamento e outros artefatos.
+	 * @param {string} response - A resposta bruta da LLM.
+	 * @returns {string} - A resposta limpa.
+	 * @private
+	 */
+	_cleanResponse(response) {
+		if (typeof response !== "string") return response;
+
+		return response
+			.replace(/<think>.*?<\/think>/gs, "")
+			.replace(/<\|think\|>.*?<channel\|>/gs, "")
+			.replace(/<\|thought\|>.*?<\|thought_end\|>/gs, "")
+			.replace(/<\/start_of_turn>/g, "")
+			.replace(/<\/end_of_turn>/g, "")
+			.replace(/<\|channel\|>/g, "")
+			.replace(/<channel\|>/g, "")
+			.trim()
+			.replace(/^"|"$/g, "");
+	}
+
+	/**
 	 * Sends a completion request to the Ollama API.
 	 * This method handles text, system context, and image inputs.
 	 * @param {Object} options - Request options.
@@ -960,29 +981,15 @@ class LLMService {
 						temperature: options.temperature ?? 0.7
 					});
 
-					let response = await this.getCompletionFromSpecificProvider(options);
-					response = response
-						.replace(/<think>.*?<\/think>/gs, "")
-						.replace(/<\/start_of_turn>/g, "")
-						.replace(/<\/end_of_turn>/g, "")
-						.trim()
-						.replace(/^"|"$/g, ""); // Remove tags de think e frase entre aspas
-
-					return response;
+					const response = await this.getCompletionFromSpecificProvider(options);
+					return this._cleanResponse(response);
 				}
 				// Caso contrário, tente múltiplos provedores em sequência
 				else {
 					//this.logger.debug('[LLMService] Nenhum provedor específico solicitado, tentando múltiplos provedores em sequência');
 
-					let response = await this.getCompletionFromProviders(options, priority);
-					response = response
-						.replace(/<think>.*?<\/think>/gs, "")
-						.replace(/<\/start_of_turn>/g, "")
-						.replace(/<\/end_of_turn>/g, "")
-						.trim()
-						.replace(/^"|"$/g, ""); // Remove tags de think e frase entre aspas
-
-					return response;
+					const response = await this.getCompletionFromProviders(options, priority);
+					return this._cleanResponse(response);
 				}
 			} catch (error) {
 				this.logger.error("Erro ao obter completion:", error.message);
