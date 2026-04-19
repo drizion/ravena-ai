@@ -271,10 +271,14 @@ async function fetchRecentTopDonates() {
                 .map(d => `${d.nome}: ${currencyFormatter.format(d.valor)}`)
                 .join('  •  ');
             
-            recentDonatesTextElement.textContent = `🏆 TOP DONATES (3 MESES): Total ${progressText}  •  ${donorsText}  •  `.repeat(5);
+            recentDonatesTextElement.textContent = `🏆 TOP DONATES (3 MESES): Total ${progressText}  •  ${donorsText}  •`;
         } else {
             recentDonatesTextElement.textContent = `🏆 TOP DONATES (3 MESES): Total ${progressText}  •  Nenhuma doação recente registrada.`;
         }
+        
+        // Aplica feedback de urgência visual
+        updateDonationUrgency(percentage);
+
     } catch (error) {
         console.error('Erro ao carregar doações recentes:', error);
         const recentDonatesTextElement = document.getElementById('recentTopDonatesText');
@@ -303,7 +307,7 @@ async function fetchTopDonates() {
                 .join('  •  ');
             
             // Repete o texto para garantir o preenchimento do banner
-            donatesTextElement.textContent = `🏆 TOP DONATES (GERAL):  •  ${text}  •  `.repeat(5);
+            donatesTextElement.textContent = `🏆 TOP DONATES (GERAL):  •  ${text}  •`;
         } else {
             donatesTextElement.textContent = '🏆 TOP DONATES (GERAL): Nenhuma doação registrada ainda.';
         }
@@ -313,6 +317,83 @@ async function fetchTopDonates() {
         donatesTextElement.textContent = '🏆 TOP DONATES (GERAL): Erro ao carregar.';
     }
 }
+
+// Função para atualizar a urgência visual baseada na porcentagem de doações
+function updateDonationUrgency(percentage) {
+    const banner = document.querySelector('.recent-donates-banner');
+    if (!banner) return;
+
+    // Calcula cor de urgência (de vermelho para verde)
+    let r, g, b;
+    if (percentage < 50) {
+        // Crítico: Vermelho impactante para Laranja
+        // Inicia em vermelho puro (230, 0, 0)
+        r = 230;
+        g = Math.floor((percentage / 50) * 150);
+        b = 30;
+    } else {
+        // De Laranja para Verde (100% = verde brilhante)
+        r = Math.floor(230 - ((percentage - 50) / 50) * 200);
+        g = Math.floor(150 + ((percentage - 50) / 50) * 105);
+        b = 30 + Math.floor(((percentage - 50) / 50) * 100);
+    }
+    
+    const urgencyColor = `rgb(${r}, ${g}, ${b})`;
+    
+    // Obtém o roxo escuro das variáveis CSS
+    const darkPurple = getComputedStyle(document.documentElement).getPropertyValue('--dark-purple').trim() || '#23066d';
+
+    if (percentage >= 100) {
+        // Estilo especial para meta batida 100%: Gradiente vertical roxo levemente esverdeado
+        // Remove o efeito de barra de progresso horizontal
+        banner.style.background = `linear-gradient(180deg, ${darkPurple} 0%, #1b3d35 100%)`;
+    } else {
+        // Barra de progresso normal (4 stops)
+        // Reduzimos o gap para 3% para aumentar a precisão visual da barra
+        const gap = 3; 
+        const stop1 = Math.max(0, percentage - gap);
+        const stop2 = percentage;
+        
+        // Aplica o gradiente de 4 pontos no fundo da barra
+        banner.style.background = `linear-gradient(90deg, ${darkPurple} 0%, ${darkPurple} ${stop1}%, ${urgencyColor} ${stop2}%, ${urgencyColor} 100%)`;
+    }
+    
+    // Define a variável CSS caso precise ser usada em outros lugares (opcional)
+    document.documentElement.style.setProperty('--urgency-color', urgencyColor);
+    
+    // Classes de estado
+    banner.classList.toggle('urgency-critical', percentage < 50);
+    banner.classList.toggle('goal-reached', percentage >= 100);
+    
+    // Pisca especificamente o ícone de doação se estiver abaixo de 70%
+    const donateIcon = document.getElementById('donate-icon');
+    if (donateIcon) {
+        if (percentage < 70) {
+            donateIcon.classList.add('pulse');
+        } else {
+            donateIcon.classList.remove('pulse');
+        }
+    }
+}
+
+/**
+ * Função global para simular e testar o progresso das doações
+ * Pode ser chamada no console do navegador: testDonationProgress(50)
+ */
+window.testDonationProgress = function(percent) {
+    console.log(`%c [RavenaBot] Simulando progresso de doações: ${percent}%`, "color: #04a9f0; font-weight: bold;");
+    
+    const percentage = Math.max(0, Math.min(100, percent));
+    updateDonationUrgency(percentage);
+    
+    // Atualiza temporariamente o texto para facilitar a visualização no teste
+    const recentDonatesTextElement = document.getElementById('recentTopDonatesText');
+    if (recentDonatesTextElement) {
+        recentDonatesTextElement.textContent = `🏆 SIMULAÇÃO DE TESTE (${percentage}% batido)  •  Bora bater a meta!`;
+    }
+    
+    return `Teste aplicado: ${percentage}%`;
+};
 
 // Função para renderizar os bots
 function renderBots(data) {
