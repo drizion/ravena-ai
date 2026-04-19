@@ -185,11 +185,11 @@ async function setCooldown(userId) {
 	);
 }
 
-async function saveHistory(userId, userName, groupId, cards, reading) {
+async function saveHistory(userId, userName, chatId, cards, reading) {
 	await database.dbRun(
 		dbName,
 		"INSERT INTO tarot_history (user_id, user_name, group_id, cards, reading, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-		[userId, userName, groupId, cards.join(", "), reading, Date.now()]
+		[userId, userName, chatId, cards.join(", "), reading, Date.now()]
 	);
 }
 
@@ -199,14 +199,14 @@ async function tarotCommand(bot, message, args, group) {
 	const userId = message.author ?? message.authorAlt;
 	const userName =
 		message.name ?? message.pushName ?? message.pushname ?? message.authorName ?? "Busca-Destino";
-	const groupId = message.group ?? "private";
+	const chatId = message.group ?? message.author;
 
 	// 1. Check Cooldown
 	const cooldown = await checkCooldown(userId);
 	if (cooldown.inCooldown) {
 		const daysLeft = Math.ceil(cooldown.remaining / (24 * 60 * 60 * 1000));
 		return new ReturnMessage({
-			chatId: groupId,
+			chatId,
 			content: `⚖️ *Destino em Pausa* ⏳\n\n*${userName}*, você já consultou as cartas recentemente.\n\nAguarde o ciclo lunar se completar (${daysLeft} dias restantes) para uma nova tiragem profunda.`,
 			options: { quotedMessageId: message.origin.id._serialized, evoReply: message.origin }
 		});
@@ -265,7 +265,7 @@ Responda em PORTUGUÊS BRASIL.`;
 		await saveHistory(
 			userId,
 			userName,
-			groupId,
+			chatId,
 			drawn.map((c) => c.name),
 			analysis
 		);
@@ -294,7 +294,7 @@ Responda em PORTUGUÊS BRASIL.`;
 				// We have an image! Handle caption limit (1024 chars for WA, user asked for 1000)
 				if (fullContent.length < 1000) {
 					return new ReturnMessage({
-						chatId: groupId,
+						chatId,
 						content: media,
 						options: {
 							caption: fullContent,
@@ -306,7 +306,7 @@ Responda em PORTUGUÊS BRASIL.`;
 					// Split: Image first, then text
 					return [
 						new ReturnMessage({
-							chatId: groupId,
+							chatId,
 							content: media,
 							options: {
 								quotedMessageId: message.origin.id._serialized,
@@ -314,7 +314,7 @@ Responda em PORTUGUÊS BRASIL.`;
 							}
 						}),
 						new ReturnMessage({
-							chatId: groupId,
+							chatId,
 							content: fullContent,
 							delay: 500,
 							options: {
@@ -331,7 +331,7 @@ Responda em PORTUGUÊS BRASIL.`;
 
 		// Fallback to text-only if image failed or not returned
 		return new ReturnMessage({
-			chatId: groupId,
+			chatId,
 			content: fullContent,
 			options: { quotedMessageId: message.origin.id._serialized, evoReply: message.origin }
 		});
@@ -347,7 +347,7 @@ Responda em PORTUGUÊS BRASIL.`;
 	}
 
 	return new ReturnMessage({
-		chatId: groupId,
+		chatId,
 		content: response,
 		options: { quotedMessageId: message.origin.id._serialized, evoReply: message.origin }
 	});
