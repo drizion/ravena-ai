@@ -915,6 +915,7 @@ class CommandHandler {
 			if (group && group.mutedCommands && Array.isArray(group.mutedCommands)) {
 				if (command && group.mutedCommands.includes(command.name)) {
 					this.logger.debug(`Ignorando comando '${command.name}' pois está silenciado no grupo.`);
+					message.origin.react("⛔️");
 					return null;
 				}
 			}
@@ -935,7 +936,12 @@ class CommandHandler {
 				const chat = await message.origin.getChat();
 				const isUserAdmin = await this.adminUtils.isAdmin(message.author, group, chat, bot.client);
 				if (!isUserAdmin) {
-					this.logger.debug(`Comando ${command.name} requer administrador, mas o usuário não é`);
+					message.origin.react("📵");
+					this.logger.debug(`Comando ${command.name} requer administrador, mas o usuário não é`, {
+						author: message.author,
+						group,
+						chat
+					});
 					return null;
 				}
 			}
