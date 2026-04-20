@@ -142,18 +142,23 @@ async function generateDocs() {
 
 	// --- 4. Extra: Random Variables from JSON ---
 	try {
-		const customVarsData = JSON.parse(await fs.readFile(path.join(__dirname, "data", "custom-variables.json"), "utf-8"));
+		const customVarsData = JSON.parse(
+			await fs.readFile(path.join(__dirname, "data", "custom-variables.json"), "utf-8")
+		);
 		const randomKeys = Object.keys(customVarsData);
 		if (randomKeys.length > 0) {
 			finalMd += "### 🎭 Variáveis de Sorteio (Aleatórias)\n";
-			finalMd += "Estas variáveis escolhem um item aleatório de uma lista pré-definida. Sugira-as para comandos divertidos.\n\n";
+			finalMd +=
+				"Estas variáveis escolhem um item aleatório de uma lista pré-definida. Sugira-as para comandos divertidos.\n\n";
 			for (const key of randomKeys) {
 				finalMd += `- \`{${key}}\`\n`;
 			}
 			finalMd += "\n";
 		}
 	} catch (err) {
-		console.warn("⚠️ Não foi possível carregar custom-variables.json para a lista de variáveis aleatórias.");
+		console.warn(
+			"⚠️ Não foi possível carregar custom-variables.json para a lista de variáveis aleatórias."
+		);
 	}
 
 	await fs.writeFile(path.join(outputDir, "ravena-anythingllm.md"), finalMd);
