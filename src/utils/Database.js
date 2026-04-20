@@ -121,10 +121,15 @@ class Database {
 				`CREATE TABLE IF NOT EXISTS donations (name TEXT PRIMARY KEY, json_data TEXT)`,
 				`CREATE TABLE IF NOT EXISTS pending_joins (code TEXT PRIMARY KEY, json_data TEXT)`,
 				`CREATE TABLE IF NOT EXISTS soft_blocks (number TEXT PRIMARY KEY, json_data TEXT)`,
-				`CREATE TABLE IF NOT EXISTS load_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, bot_id TEXT, timestamp_end INTEGER, json_data TEXT)`
+				`CREATE TABLE IF NOT EXISTS load_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, bot_id TEXT, timestamp_end INTEGER, json_data TEXT)`,
+				`CREATE TABLE IF NOT EXISTS blocked_invites (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT, jid TEXT, json_data TEXT)`
 			];
 			this.schemas["core"] = tables.join("; ");
 			tables.forEach((sql) => this.coreDb.run(sql));
+			this.coreDb.run(
+				`CREATE INDEX IF NOT EXISTS idx_blocked_invites_code ON blocked_invites(code)`
+			);
+			this.coreDb.run(`CREATE INDEX IF NOT EXISTS idx_blocked_invites_jid ON blocked_invites(jid)`);
 		});
 	}
 
@@ -804,6 +809,53 @@ class Database {
 			return row ? JSON.parse(row.json_data).invites : false;
 		} catch (error) {
 			this.logger.error("Error checking user invite block:", error);
+			return false;
+		}
+	}
+
+	// --- Blocked Invites (By Code or JID) ---
+
+	async saveBlockedInvite(code, jid) {
+		this.triggerBackupStart();
+		try {
+			// Check if already exists to avoid duplication
+			const existing = await this.get(
+				"SELECT id FROM blocked_invites WHERE (code = ? AND code IS NOT NULL) OR (jid = ? AND jid IS NOT NULL)",
+				[code, jid]
+			);
+
+			if (existing) {
+				await this.run(
+					"UPDATE blocked_invites SET code = COALESCE(?, code), jid = COALESCE(?, jid) WHERE id = ?",
+					[code, jid, existing.id]
+				);
+			} else {
+				await this.run("INSERT INTO blocked_invites (code, jid, json_data) VALUES (?, ?, ?)", [
+					code,
+					jid,
+					JSON.stringify({ timestamp: Date.now() })
+				]);
+			}
+			return true;
+		} catch (error) {
+			this.logger.error("Error saving blocked invite:", error);
+			return false;
+		}
+	}
+
+	async isInviteBlocked(code, jid) {
+		try {
+			if (code) {
+				const row = await this.get("SELECT 1 FROM blocked_invites WHERE code = ?", [code]);
+				if (row) return true;
+			}
+			if (jid) {
+				const row = await this.get("SELECT 1 FROM blocked_invites WHERE jid = ?", [jid]);
+				if (row) return true;
+			}
+			return false;
+		} catch (error) {
+			this.logger.error("Error checking if invite is blocked:", error);
 			return false;
 		}
 	}

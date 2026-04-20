@@ -87,6 +87,9 @@ class SuperAdmin {
 				description: "Reseta a lista de bots ativos/ignorados para transmissões em TODOS os grupos"
 			}
 		};
+
+		// Cache temporário para forçar entrada em grupos bloqueados
+		this.forceJoinCache = new Map();
 	}
 
 	/**
@@ -525,6 +528,30 @@ Break down the cost by category and provide a total estimated cost.`;
 			// Obtém código de convite
 			const inviteCode = args[0];
 
+			// Verifica se está no cache de force join (tentativa repetida em menos de 1 min)
+			const forceJoinKey = `${message.author}:${inviteCode}`;
+			const isForced = this.forceJoinCache.has(forceJoinKey);
+
+			if (!isForced) {
+				// Verifica se o código está bloqueado no banco de dados
+				const isBlocked = await this.database.isInviteBlocked(inviteCode, null);
+				if (isBlocked) {
+					// Adiciona ao cache por 1 minuto
+					this.forceJoinCache.set(forceJoinKey, Date.now());
+					setTimeout(() => {
+						this.forceJoinCache.delete(forceJoinKey);
+					}, 60000);
+
+					return new ReturnMessage({
+						chatId,
+						content: `⚠️ Este código de convite está bloqueado. Use o comando novamente em menos de 1 minuto para forçar a entrada.`
+					});
+				}
+			} else {
+				// Limpa o cache após usar
+				this.forceJoinCache.delete(forceJoinKey);
+			}
+
 			// Obtém dados do autor, se fornecidos
 			let authorId = null;
 			let authorName = null;
@@ -926,19 +953,69 @@ Break down the cost by category and provide a total estimated cost.`;
 			return new ReturnMessage({
 				chatId,
 				content:
-					"Por favor, forneça um número de telefone para bloquear. Exemplo: !sa-block +5511999999999"
+					"Por favor, forneça um número de telefone para bloquear. Exemplo: !sa-blockInvites +5511999999999 [inviteCode]"
 			});
 		}
 
 		// Processa o número para formato padrão (apenas dígitos)
-		let phoneNumber = args.join(" ").replace(/\D/g, "");
+		let phoneNumber = args[0].replace(/\D/g, "");
 		phoneNumber = phoneNumber.split("@")[0];
 
-		await this.database.toggleUserInvites(phoneNumber, true);
+		const blockedList = new Set();
+		if (phoneNumber) blockedList.add(phoneNumber);
+
+		const inviteCode = args[1];
+		let inviteInfoData = null;
+
+		if (inviteCode) {
+			try {
+				const infoResponse = await bot.client.getInviteInfo(inviteCode);
+				if (infoResponse) {
+					inviteInfoData = infoResponse;
+
+					const addId = (id) => {
+						if (!id) return;
+						const cleanId = id.split("@")[0];
+						if (cleanId) blockedList.add(cleanId);
+					};
+
+					addId(inviteInfoData.JID);
+					addId(inviteInfoData.OwnerJID);
+					addId(inviteInfoData.OwnerPN);
+
+					if (Array.isArray(inviteInfoData.Participants)) {
+						for (const p of inviteInfoData.Participants) {
+							addId(p.JID);
+							addId(p.PhoneNumber);
+							addId(p.LID);
+						}
+					}
+				}
+			} catch (error) {
+				this.logger.error("Erro ao obter info do invite no blockInvites:", error);
+			}
+		}
+
+		const results = [];
+		for (const id of blockedList) {
+			await this.database.toggleUserInvites(id, true);
+			results.push(id);
+		}
+
+		// Adicionalmente bloqueia o invite code e o JID do grupo se disponíveis
+		if (inviteCode && inviteInfoData?.JID) {
+			await this.database.saveBlockedInvite(inviteCode, inviteInfoData.JID);
+		}
+
+		let response = `✅ Bloqueio de convites realizado para ${results.length} identificadores:\n- ${results.join("\n- ")}`;
+
+		if (inviteInfoData) {
+			response += `\n\n📦 *Invite Info:*\n\`\`\`json\n${JSON.stringify(inviteInfoData, null, 2)}\n\`\`\``;
+		}
 
 		return new ReturnMessage({
 			chatId,
-			content: `✅ Convites do número ${phoneNumber} bloqueados com sucesso.`
+			content: response
 		});
 	}
 

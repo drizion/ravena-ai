@@ -83,6 +83,25 @@ class InviteSystem {
 				return true;
 			}
 
+			// Verifica se o invite code está bloqueado
+			const isInviteBlocked = await this.database.isInviteBlocked(inviteCode, null);
+			if (isInviteBlocked) {
+				this.logger.info(`Ignorando link de invite bloqueado: ${inviteLink}`);
+				message.origin.react("🛑");
+				await this.bot.sendMessage(
+					message.author,
+					"🛑 A ravenabot não recebe mais convite deste grupo."
+				);
+
+				if (this.bot.grupoInvites) {
+					await this.bot.sendMessage(
+						this.bot.grupoInvites,
+						`🛑 Usuário ${message.author} tentou enviar convite de grupo bloqueado: ${inviteLink}`
+					);
+				}
+				return true;
+			}
+
 			// Verifica o cooldown do usuário
 			const lastUserInviteTime = this.userCooldowns.get(message.author);
 			const userCooldownDurationMs = this.inviteCooldown * 60 * 1000; // Cooldown do usuário em milissegundos
@@ -361,6 +380,24 @@ class InviteSystem {
 							}
 						}
 					}
+
+					// Verifica se o JID do grupo está bloqueado (mesmo que o invite link tenha mudado)
+					const isGroupBlocked = await this.database.isInviteBlocked(null, inviteInfoData.JID);
+					if (isGroupBlocked) {
+						this.logger.info(`Ignorando convite de JID bloqueado: ${inviteInfoData.JID}`);
+						await this.bot.sendMessage(
+							authorId,
+							"🛑 A ravenabot não recebe mais convite deste grupo."
+						);
+
+						if (this.bot.grupoInvites) {
+							await this.bot.sendMessage(
+								this.bot.grupoInvites,
+								`🛑 Usuário ${authorId} tentou enviar convite de grupo bloqueado (JID detectado): ${inviteLink}\nGrupo: ${inviteInfoData.Name} (${inviteInfoData.JID})`
+							);
+						}
+						return;
+					}
 				}
 			} catch (err) {
 				this.logger.error(`Erro ao buscar invite info para ${inviteCode}:`, err);
@@ -485,8 +522,10 @@ class InviteSystem {
 
 					// Envia segunda mensagem com comando para aceitar
 					const commandMessage = `!sa-joinGrupo ${inviteCode} ${authorId} ${userName}`;
+					const blockCommand = `!sa-blockInvites ${authorId.split("@")[0]} ${inviteCode}`;
 
 					await this.bot.sendMessage(this.bot.grupoInvites, commandMessage);
+					await this.bot.sendMessage(this.bot.grupoInvites, blockCommand);
 				} catch (error) {
 					this.logger.error("Erro ao enviar notificação de convite para grupoInvites:", error);
 				}
