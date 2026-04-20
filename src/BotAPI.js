@@ -798,8 +798,76 @@ class BotAPI {
 				} else {
 					// Para outros erros, como falha ao ler ou processar o JSON.
 					this.logger.error("Erro ao ler ou processar o arquivo de doações:", error);
-					res.status(500).json({ error: "Erro ao processar doações" });
+					res.status(500).json({ error: "Erro interno ao buscar doações" });
 				}
+			}
+		});
+
+		// Endpoint para Dossier dos Grupos (HTML)
+		this.app.get("/groups-dossier", authenticateBasic, (req, res) => {
+			const filePath = path.join(__dirname, "../public/groups-dossier.html");
+			res.sendFile(filePath);
+		});
+
+		// Endpoint para Dossier dos Grupos (API)
+		this.app.get("/api/groups-dossier", authenticateBasic, async (req, res) => {
+			try {
+				const DB_NAME = "summaries";
+				// Precisamos fazer um JOIN com a tabela de grupos do core.db para pegar os nomes
+				// Mas como são bancos diferentes, vamos pegar os nomes do core.db e dar merge no JS
+				// para manter a simplicidade ou usar ATTACH se necessário.
+				// Vamos fazer via código para ser mais robusto entre arquivos.
+
+				const dossiers = await this.database.dbAll(
+					DB_NAME,
+					"SELECT group_id, dossier_json, total_length_recorded, pending_text FROM group_dossiers"
+				);
+
+				const allGroupsData = await this.database.getGroups();
+				const groupNames = {};
+				const groupBots = {};
+				allGroupsData.forEach((g) => {
+					groupNames[g.id] = g.name;
+					groupBots[g.id] = g.botId || "-";
+				});
+
+				const result = dossiers.map((d) => {
+					let dossier = {
+						type: "-",
+						summary: "Nenhuma análise feita ainda.",
+						problematic_score: 0
+					};
+					if (d.dossier_json) {
+						try {
+							dossier = JSON.parse(d.dossier_json);
+						} catch (e) {
+							// Ignorar erro de parse
+						}
+					}
+
+					return {
+						id: d.group_id,
+						name: groupNames[d.group_id] || "Grupo Desconhecido",
+						bot_id: groupBots[d.group_id] || "-",
+						type: dossier.type,
+						summary: dossier.summary,
+						problematic_score: dossier.problematic_score,
+						total_chars: d.total_length_recorded,
+						pending_chars: d.pending_text ? d.pending_text.length : 0,
+						hasDossier: !!d.dossier_json
+					};
+				});
+
+				// Filtrar apenas grupos que já possuem dossiê
+				const filteredResult = result.filter((r) => r.hasDossier);
+
+				// Ordenar por problematic_score decrescente
+				filteredResult.sort((a, b) => b.problematic_score - a.problematic_score);
+
+				res.json(filteredResult);
+			} catch (error) {
+				this.logger.error("Erro ao buscar dossiês dos grupos:", error);
+				res.status(500).json({ status: "error", message: "Erro interno ao buscar dossiês" });
 			}
 		});
 

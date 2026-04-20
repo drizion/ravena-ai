@@ -17,6 +17,22 @@ const DB_NAME = "summaries";
 database.getSQLiteDb(
 	DB_NAME,
 	`
+  CREATE TABLE IF NOT EXISTS chat_conversations (
+    group_id TEXT,
+    author TEXT,
+    text TEXT,
+    timestamp INTEGER
+  );
+  CREATE INDEX IF NOT EXISTS idx_chat_conv_group ON chat_conversations(group_id);
+
+  CREATE TABLE IF NOT EXISTS group_dossiers (
+    group_id TEXT PRIMARY KEY,
+    dossier_json TEXT,
+    last_analysed_length INTEGER DEFAULT 0,
+    total_length_recorded INTEGER DEFAULT 0,
+    pending_text TEXT DEFAULT ''
+  );
+
   CREATE TABLE IF NOT EXISTS conversations (
     group_id TEXT PRIMARY KEY,
     json_data TEXT
@@ -319,15 +335,146 @@ ${formattedMessages}`;
 }
 
 /**
+ * Executa uma análise de dossiê do grupo usando IA
+ * @param {string} chatId - Id do grupo
+ * @param {string} pendingText - Texto pendente para análise
+ * @param {object} bot - Instância do bot para enviar logs
+ */
+async function runGroupAnalysis(chatId, pendingText, bot) {
+	try {
+		logger.info(`[${chatId}] Iniciando análise de dossiê (baixa prioridade)...`);
+
+		const systemPrompt = `Você é um analista de grupos de segurança e moderação. 
+Seu objetivo é categorizar grupos de WhatsApp de forma ultra-concisa.
+Você DEVE responder APENAS com um objeto JSON válido seguindo estritamente o esquema solicitado. 
+Não inclua explicações, introduções ou qualquer texto fora do JSON.`;
+
+		const dossierSchema = {
+			type: "json_schema",
+			json_schema: {
+				name: "group_dossier",
+				schema: {
+					type: "object",
+					properties: {
+						type: {
+							type: "string",
+							description:
+								"Tipo de conteúdo do grupo (apenas 1 palavra, ex: 'jogos', 'onibus', 'romance', 'politica')"
+						},
+						summary: {
+							type: "string",
+							description: "Frase de até 200 caracteres que resume o que é discutido no grupo"
+						},
+						problematic_score: {
+							type: "number",
+							description:
+								"Nota de 0 a 10 (10 representa grupos com conteúdo ilegal, racista, gore ou extremista; 7 representa conteúdo sexualmente explícito/pornô; 0 representa grupos inofensivos de amigos ou hobbies)"
+						}
+					},
+					required: ["type", "summary", "problematic_score"],
+					additionalProperties: false
+				}
+			}
+		};
+
+		const prompt = `Analise a conversa abaixo e preencha o dossiê:
+- use apenas 1 palavra para 'type'.
+- seja extremamente suscinto no 'summary' (máximo 200 caracteres).
+- 'problematic_score' de 0 a 10.
+
+Conversa:
+${pendingText}`;
+
+		const response = await llmService.getCompletion({
+			prompt,
+			systemContext: systemPrompt,
+			response_format: dossierSchema,
+			priority: 10, // Baixa prioridade
+			debugPrompt: false
+		});
+
+		if (response) {
+			let parsed;
+			try {
+				// Tenta limpar possíveis backticks de Markdown que a IA as vezes coloca mesmo mandando não colocar
+				const cleanResponse = response.replace(/```json|```/g, "").trim();
+				parsed = JSON.parse(cleanResponse);
+			} catch (e) {
+				logger.warn(`[${chatId}] Resposta da IA não é um JSON válido:`, response);
+				return;
+			}
+
+			// Só limpa se o JSON tiver os campos obrigatórios
+			if (parsed.type && parsed.summary && typeof parsed.problematic_score === "number") {
+				// Para evitar deletar mensagens que chegaram ENQUANTO a IA analisava,
+				// vamos apenas remover o trecho que foi enviado para a análise.
+
+				// Buscamos o estado atual
+				const currentDossier = await database.dbGet(
+					DB_NAME,
+					"SELECT pending_text FROM group_dossiers WHERE group_id = ?",
+					[chatId]
+				);
+
+				let newPendingText = "";
+				if (currentDossier && currentDossier.pending_text) {
+					// Removemos do início do texto atual o que enviamos para a IA
+					// (Isso assume que o pendingText passado por argumento é o prefixo do pending_text atual)
+					newPendingText = currentDossier.pending_text.replace(pendingText, "");
+				}
+
+				await database.dbRun(
+					DB_NAME,
+					`UPDATE group_dossiers SET 
+                        dossier_json = ?, 
+                        last_analysed_length = total_length_recorded,
+                        pending_text = ? 
+                     WHERE group_id = ?`,
+					[JSON.stringify(parsed), newPendingText, chatId]
+				);
+
+				logger.info(
+					`[${chatId}] Dossiê atualizado com sucesso. ${newPendingText.length} chars remanescentes.`
+				);
+
+				// Alerta SuperAdmin se a nota for alta (>= 7) e tiver bot disponível
+				if (bot && parsed.problematic_score >= 7 && (bot.grupoLogs || process.env.GRUPO_LOGS)) {
+					const targetGroup = bot.grupoLogs || process.env.GRUPO_LOGS;
+					const groupData = await bot.database.getGroup(chatId);
+					const msgAlert = `⚠️ *ALERTA DE GRUPO PROBLEMÁTICO* ⚠️
+					
+📌 *Grupo:* ${groupData ? groupData.name : "N/A"}
+🆔 *ID:* ${chatId}
+🤖 *Bot:* ${bot.id}
+
+📊 *Análise:*
+- *Tipo:* ${parsed.type}
+- *Nota:* ${parsed.problematic_score}/10
+- *Resumo:* ${parsed.summary}
+
+📅 _Dossiê gerado automaticamente via análise de texto._`;
+
+					bot
+						.sendMessage(targetGroup, msgAlert)
+						.catch((e) => logger.error("Erro ao enviar alerta de dossiê:", e));
+				}
+			} else {
+				logger.warn(`[${chatId}] JSON da IA incompleto:`, parsed);
+			}
+		}
+	} catch (error) {
+		logger.error(`[${chatId}] Erro ao processar análise de dossiê:`, error);
+	}
+}
+
+/**
  * Armazena uma mensagem no histórico de conversas do grupo
  * @param {Object} message - Os dados da mensagem
- * @param {Object} chatId - Id do grupo
+ * @param {string} chatId - Id do grupo
+ * @param {object} bot - Opcional, para disparar análise se necessário
  */
-async function storeMessage(message, chatId) {
+async function storeMessage(message, chatId, bot) {
 	try {
-		// Carrega mensagens existentes
-		let messages = await getRecentMessages(chatId);
-
 		// Adiciona nova mensagem
 		let textContent = message.type === "text" ? message.content : message.caption;
 
@@ -416,26 +563,56 @@ async function storeMessage(message, chatId) {
 					message.pushname ??
 					"Desconhecido");
 
-			//logger.info(`[storeMessage] ${authorName}: ${textContent}`);
-			messages.push({
-				author: authorName,
-				text: textContent,
-				timestamp: Date.now()
-			});
-
-			// Mantém apenas as últimas 30 mensagens
-			if (messages.length > 30) {
-				messages = messages.slice(messages.length - 30);
-			}
-
-			// Salva mensagens atualizadas
+			// 1. Salva na nova tabela chat_conversations
+			const timestamp = Date.now();
 			await database.dbRun(
 				DB_NAME,
-				"INSERT OR REPLACE INTO conversations (group_id, json_data) VALUES (?, ?)",
-				[chatId, JSON.stringify(messages, null, 2)]
+				"INSERT INTO chat_conversations (group_id, author, text, timestamp) VALUES (?, ?, ?, ?)",
+				[chatId, authorName, textContent, timestamp]
 			);
 
-			//logger.debug(`Mensagem armazenada no arquivo de conversa para ${chatId}`);
+			// 2. Limita a 200 mensagens para evitar bloat
+			await database.dbRun(
+				DB_NAME,
+				`DELETE FROM chat_conversations WHERE rowid IN (
+                    SELECT rowid FROM chat_conversations 
+                    WHERE group_id = ? 
+                    ORDER BY timestamp DESC 
+                    LIMIT -1 OFFSET 200
+                )`,
+				[chatId]
+			);
+
+			// 3. Atualiza Dossiê (Contagem de caracteres e texto pendente)
+			const msgString = `${authorName}: ${textContent}\n`;
+
+			// Upsert dossier status
+			await database.dbRun(
+				DB_NAME,
+				`INSERT INTO group_dossiers (group_id, total_length_recorded, pending_text) 
+                 VALUES (?, ?, ?) 
+                 ON CONFLICT(group_id) DO UPDATE SET 
+                    total_length_recorded = total_length_recorded + ?,
+                    pending_text = pending_text || ?`,
+				[chatId, msgString.length, msgString, msgString.length, msgString]
+			);
+
+			// 4. Verifica se atingiu 10.000 caracteres novos para análise
+			const dossierStatus = await database.dbGet(
+				DB_NAME,
+				"SELECT pending_text FROM group_dossiers WHERE group_id = ?",
+				[chatId]
+			);
+
+			if (dossierStatus && dossierStatus.pending_text.length >= 10000) {
+				// Dispara análise sem dar await para não travar a resposta
+				runGroupAnalysis(chatId, dossierStatus.pending_text, bot);
+			}
+
+			// Legado: Salva na tabela antiga como redundância por enquanto ou se necessário
+			// Mas o ideal é remover assim que tudo estiver estável.
+			// Por enquanto vamos manter para não quebrar nada se alguém depender de 'json_data'
+			// Mas vamos usar o getRecentMessages atualizado para as funções deste arquivo.
 		}
 	} catch (error) {
 		logger.error("Erro ao armazenar mensagem:", error);
@@ -449,12 +626,16 @@ async function storeMessage(message, chatId) {
  */
 async function getRecentMessages(chatId) {
 	try {
-		const row = await database.dbGet(
+		const rows = await database.dbAll(
 			DB_NAME,
-			"SELECT json_data FROM conversations WHERE group_id = ?",
+			"SELECT author, text, timestamp FROM chat_conversations WHERE group_id = ? ORDER BY timestamp ASC",
 			[chatId]
 		);
-		return row ? JSON.parse(row.json_data) : [];
+		return rows.map((r) => ({
+			author: r.author,
+			text: r.text,
+			timestamp: r.timestamp
+		}));
 	} catch (error) {
 		logger.error("Erro ao obter mensagens recentes:", error);
 		return [];
@@ -468,11 +649,7 @@ async function getRecentMessages(chatId) {
  */
 async function clearRecentMessages(chatId) {
 	try {
-		await database.dbRun(
-			DB_NAME,
-			"INSERT OR REPLACE INTO conversations (group_id, json_data) VALUES (?, ?)",
-			[chatId, "[]"]
-		);
+		await database.dbRun(DB_NAME, "DELETE FROM chat_conversations WHERE group_id = ?", [chatId]);
 		return true;
 	} catch (error) {
 		logger.error("Erro ao limpar mensagens recentes:", error);
@@ -521,6 +698,7 @@ const commands = [
 module.exports.storeMessage = storeMessage;
 module.exports.getRecentMessages = getRecentMessages;
 module.exports.clearRecentMessages = clearRecentMessages;
+module.exports.runGroupAnalysis = runGroupAnalysis;
 module.exports.formatMessagesForPrompt = formatMessagesForPrompt;
 
 // Exporta comandos

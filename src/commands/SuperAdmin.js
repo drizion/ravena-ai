@@ -85,7 +85,8 @@ class SuperAdmin {
 			globalStreamRefresh: {
 				method: "globalStreamRefresh",
 				description: "Reseta a lista de bots ativos/ignorados para transmissões em TODOS os grupos"
-			}
+			},
+			dossie: { method: "runDossieAnalysis", description: "Trigga análise de dossiê para um grupo" }
 		};
 
 		// Cache temporário para forçar entrada em grupos bloqueados
@@ -2897,6 +2898,55 @@ Break down the cost by category and provide a total estimated cost.`;
 			return new ReturnMessage({
 				chatId: message.group ?? message.author,
 				content: "❌ Erro ao realizar o refresh global de streams."
+			});
+		}
+	}
+
+	async runDossieAnalysis(bot, message, args) {
+		const chatId = message.group ?? message.author;
+		try {
+			if (!this.isSuperAdmin(message.author)) return;
+
+			const targetChatId =
+				args[0] || (message.quotedMsg ? message.quotedMsg.group || message.quotedMsg.author : null);
+
+			if (!targetChatId) {
+				return new ReturnMessage({
+					chatId,
+					content:
+						"❌ Por favor informado o ID do grupo ou responda a uma mensagem do grupo. Uso: !sa-dossie idGrupo"
+				});
+			}
+
+			const SummaryCommands = require("../functions/SummaryCommands");
+
+			// Busca o texto pendente no banco de dados
+			const dossierStatus = await this.database.dbGet(
+				"summaries",
+				"SELECT pending_text FROM group_dossiers WHERE group_id = ?",
+				[targetChatId]
+			);
+
+			if (!dossierStatus || !dossierStatus.pending_text) {
+				return new ReturnMessage({
+					chatId,
+					content: `⚠️ Não há texto pendente para análise no grupo ${targetChatId}.`
+				});
+			}
+
+			// Dispara a análise
+			await SummaryCommands.runGroupAnalysis(targetChatId, dossierStatus.pending_text, bot);
+
+			return new ReturnMessage({
+				chatId,
+				content: `✅ Análise de dossiê disparada com sucesso para o grupo ${targetChatId}. Aguarde alguns segundos para ver o resultado no dashboard.`
+			});
+		} catch (error) {
+			this.logger.error("Erro no comando runDossieAnalysis:", error);
+
+			return new ReturnMessage({
+				chatId,
+				content: `❌ Erro ao disparar análise: ${error.message}`
 			});
 		}
 	}

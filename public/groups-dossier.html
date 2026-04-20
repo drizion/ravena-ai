@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dossiê dos Grupos - RavenaBot</title>
+    <link rel="stylesheet" href="/management.css?v=15">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.css">
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+    <style>
+        .group-section {
+            margin-bottom: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            cursor: pointer;
+            transition: background 0.2s;
+            user-select: none;
+        }
+        .group-header:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .group-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex: 1;
+        }
+        .group-name {
+            font-weight: 500;
+            font-size: 1.1em;
+        }
+        .group-score {
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+        .score-low { background: #28a745; color: white; }
+        .score-medium { background: #ffc107; color: black; }
+        .score-high { background: #dc3545; color: white; }
+
+        .bot-badge {
+            background: #46249b;
+            color: white;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+
+        .group-content {
+            padding: 0 20px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, padding 0.3s ease;
+            background: rgba(0, 0, 0, 0.2);
+        }
+        .group-section.active .group-content {
+            max-height: 500px;
+            padding: 20px;
+        }
+        .group-section.active .group-header {
+            background: rgba(255, 255, 255, 0.1);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .toggle-icon {
+            transition: transform 0.3s;
+        }
+        .group-section.active .toggle-icon {
+            transform: rotate(180deg);
+        }
+
+        .dossier-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+        }
+        .dossier-item {
+            margin-bottom: 15px;
+        }
+        .dossier-label {
+            font-size: 0.8em;
+            color: #aaa;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        .dossier-value {
+            font-size: 1em;
+            line-height: 1.4;
+        }
+        .stats-badge {
+            font-size: 0.75em;
+            color: #888;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="/android-chrome-192x192.png" alt="RavenaBot Logo">
+                    <h1>RavenaBot</h1>
+                </div>
+                <div class="user-info">
+                    <div id="user-details">
+                        <p><strong>Dossiê dos Grupos</strong></p>
+                        <p>Análise Administrativa de IA</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div id="loading-container">
+                <div class="loading-spinner"></div>
+                <p>Carregando dossiês...</p>
+            </div>
+
+            <div id="error-container" class="hidden">
+                <div class="error-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                <h2>Erro ao carregar</h2>
+                <p id="error-message">Detalhes do erro aqui.</p>
+                <button id="retry-button" class="btn btn-primary">Tentar novamente</button>
+            </div>
+
+            <div id="dashboard-content" class="hidden">
+                <div class="alert alert-info" style="margin-bottom: 20px; background: rgba(0, 123, 255, 0.1); padding: 15px; border-radius: 8px; border-left: 5px solid #007bff;">
+                    <i class="fas fa-info-circle"></i> Os grupos estão ordenados por <strong>Nota de Problema</strong> (decrescente). A análise é atualizada automaticamente a cada 10.000 novos caracteres.
+                </div>
+
+                <div id="groups-container">
+                    <!-- Grupos serão inseridos aqui via JS -->
+                </div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>ravenabot - infraestrutura de análise</p>
+        </footer>
+    </div>
+
+    <script src="/groups-dossier.js"></script>
+</body>
+</html>

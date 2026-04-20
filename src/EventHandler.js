@@ -250,7 +250,7 @@ class EventHandler extends EventEmitter {
 
 			if (message.group) {
 				// Armazena mensagem para histórico de conversação
-				SummaryCommands.storeMessage(message, message.group);
+				SummaryCommands.storeMessage(message, message.group, bot);
 
 				const groupData = await this.getOrCreateGroup(
 					message.guildId ?? message.group,
@@ -335,7 +335,7 @@ class EventHandler extends EventEmitter {
 				}
 			} else {
 				// Armazena mensagem para histórico de conversação no pv
-				SummaryCommands.storeMessage(message, message.group);
+				SummaryCommands.storeMessage(message, message.group, bot);
 			}
 
 			// Se não houver conteúdo de texto, não pode ser um comando ou menção
@@ -413,7 +413,7 @@ class EventHandler extends EventEmitter {
 			message.caption = `Audio[${processed}]`;
 
 			// Armazena também áudios no histórico!
-			SummaryCommands.storeMessage(message, message.author);
+			SummaryCommands.storeMessage(message, message.author, bot);
 
 			if (bot.comandosAudioPV && bot.pvAI && processed.length > 0) {
 				// Desabilitado por enquanto
