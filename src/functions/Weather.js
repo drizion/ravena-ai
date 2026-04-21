@@ -1,4 +1,4 @@
-﻿const axios = require("axios");
+const axios = require("axios");
 const Logger = require("../utils/Logger");
 const Command = require("../models/Command");
 const ReturnMessage = require("../models/ReturnMessage");
@@ -443,4 +443,4 @@ const commands = [
 // Registra os comandos
 //logger.debug(`Exportando ${commands.length} comandos:`, commands.map(cmd => cmd.name));
 
-module.exports = { commands };
+// module.exports = { commands };
