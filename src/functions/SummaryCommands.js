@@ -397,7 +397,7 @@ Não inclua explicações, introduções ou qualquer texto fora do JSON.`;
 						problematic_score: {
 							type: "number",
 							description:
-								"Nota de 0 a 10 (10 representa grupos com conteúdo ilegal, racista, gore ou extremista; 7 representa conteúdo sexualmente explícito/pornô; 0 representa grupos inofensivos de amigos ou hobbies)"
+								"Nota de 0 a 10 (10: ilegal, racismo, gore, extremismo; 7: sexual/pornô; 5: encontros, grupos de troca de nudes/conteúdo, baladas, sexualidade, 3: anúncios, divulgações, troca de seguidores; 0: chat geral, amigos ou hobbies)"
 						}
 					},
 					required: ["type", "summary", "problematic_score"],
@@ -410,6 +410,7 @@ Não inclua explicações, introduções ou qualquer texto fora do JSON.`;
 - use apenas 1 palavra para 'type'.
 - seja extremamente suscinto no 'summary' (máximo 200 caracteres).
 - 'problematic_score' de 0 a 10.
+- Anúncios, ofertas de troca de seguidores, divulgações de canais e conteúdo de NÃO são consinderados problemáticos
 ${historicalContext}
 
 Conversa:
