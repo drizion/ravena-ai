@@ -50,7 +50,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const section = document.createElement('div');
             section.className = 'group-section';
 
-            const scoreClass = getScoreClass(group.problematic_score);
+            // Cálculos no lado do cliente
+            const scores = group.history.map(h => h.problematic_score);
+            const maxScore = Math.max(...scores);
+            const avgScore = (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
+            
+            const maxScoreClass = getScoreClass(maxScore);
+            const avgScoreClass = getScoreClass(parseFloat(avgScore));
 
             // Gerar HTML do histórico
             let historyHtml = '<div class="history-list">';
@@ -85,7 +91,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="group-info">
                         <span class="group-name">${group.name}</span>
                         <span class="bot-badge">${group.bot_id}</span>
-                        <span class="group-score ${scoreClass}">Nota: ${group.problematic_score}</span>
+                        <span class="group-score ${maxScoreClass}">Maior: ${maxScore}</span>
+                        <span class="group-score ${avgScoreClass}">Média: ${avgScore}</span>
                         <span class="stats-badge">${group.total_chars.toLocaleString()} chars totais | ${group.pending_chars.toLocaleString()} pnd</span>
                     </div>
                     <div class="toggle-icon"><i class="fas fa-chevron-down"></i></div>
