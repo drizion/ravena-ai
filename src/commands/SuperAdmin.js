@@ -2920,10 +2920,10 @@ Break down the cost by category and provide a total estimated cost.`;
 
 			const SummaryCommands = require("../functions/SummaryCommands");
 
-			// Busca o texto pendente no banco de dados
+			// Busca o texto pendente no banco de dados (tabela de status)
 			const dossierStatus = await this.database.dbGet(
 				"summaries",
-				"SELECT pending_text FROM group_dossiers WHERE group_id = ?",
+				"SELECT pending_text FROM group_dossier_status WHERE group_id = ?",
 				[targetChatId]
 			);
 

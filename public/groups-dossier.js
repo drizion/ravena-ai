@@ -52,6 +52,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const scoreClass = getScoreClass(group.problematic_score);
 
+            // Gerar HTML do histórico
+            let historyHtml = '<div class="history-list">';
+            group.history.forEach((dossier, index) => {
+                const dossierScoreClass = getScoreClass(dossier.problematic_score);
+                const isLatest = index === 0;
+                const dateHeader = isLatest ? 'ÚLTIMA ANÁLISE' : new Date(dossier.created_at).toLocaleString('pt-BR');
+
+                historyHtml += `
+                    <div class="history-item ${isLatest ? 'latest' : ''}">
+                        <div class="history-header">
+                            <span class="history-date">${dateHeader}</span>
+                            <span class="group-score ${dossierScoreClass}">Nota: ${dossier.problematic_score}</span>
+                        </div>
+                        <div class="dossier-grid">
+                            <div class="dossier-item">
+                                <div class="dossier-label">Tipo</div>
+                                <div class="dossier-value"><i class="fas fa-tag"></i> ${dossier.type}</div>
+                            </div>
+                            <div class="dossier-item">
+                                <div class="dossier-label">Resumo</div>
+                                <div class="dossier-value">${dossier.summary}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            historyHtml += '</div>';
+
             section.innerHTML = `
                 <div class="group-header">
                     <div class="group-info">
@@ -63,16 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="toggle-icon"><i class="fas fa-chevron-down"></i></div>
                 </div>
                 <div class="group-content">
-                    <div class="dossier-grid">
-                        <div class="dossier-item">
-                            <div class="dossier-label">Tipo de Conteúdo</div>
-                            <div class="dossier-value"><i class="fas fa-tag"></i> ${group.type}</div>
-                        </div>
-                        <div class="dossier-item">
-                            <div class="dossier-label">Resumo das Discussões</div>
-                            <div class="dossier-value">${group.summary}</div>
-                        </div>
-                    </div>
+                    ${historyHtml}
                     <div style="margin-top: 15px; font-size: 0.75em; color: #666;">
                         ID: ${group.id}
                     </div>

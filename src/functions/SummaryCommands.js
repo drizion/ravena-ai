@@ -25,13 +25,20 @@ database.getSQLiteDb(
   );
   CREATE INDEX IF NOT EXISTS idx_chat_conv_group ON chat_conversations(group_id);
 
-  CREATE TABLE IF NOT EXISTS group_dossiers (
+  CREATE TABLE IF NOT EXISTS group_dossier_status (
     group_id TEXT PRIMARY KEY,
-    dossier_json TEXT,
-    last_analysed_length INTEGER DEFAULT 0,
     total_length_recorded INTEGER DEFAULT 0,
     pending_text TEXT DEFAULT ''
   );
+
+  CREATE TABLE IF NOT EXISTS group_dossiers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id TEXT,
+    dossier_json TEXT,
+    analyzed_at_length INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_group_dossiers_gid ON group_dossiers(group_id);
 
   CREATE TABLE IF NOT EXISTS conversations (
     group_id TEXT PRIMARY KEY,
@@ -410,31 +417,46 @@ ${pendingText}`;
 				// vamos apenas remover o trecho que foi enviado para a análise.
 
 				// Buscamos o estado atual
-				const currentDossier = await database.dbGet(
+				const currentStatus = await database.dbGet(
 					DB_NAME,
-					"SELECT pending_text FROM group_dossiers WHERE group_id = ?",
+					"SELECT pending_text FROM group_dossier_status WHERE group_id = ?",
 					[chatId]
 				);
 
 				let newPendingText = "";
-				if (currentDossier && currentDossier.pending_text) {
+				if (currentStatus && currentStatus.pending_text) {
 					// Removemos do início do texto atual o que enviamos para a IA
-					// (Isso assume que o pendingText passado por argumento é o prefixo do pending_text atual)
-					newPendingText = currentDossier.pending_text.replace(pendingText, "");
+					newPendingText = currentStatus.pending_text.replace(pendingText, "");
 				}
 
+				// 1. INSere o novo dossiê no histórico
 				await database.dbRun(
 					DB_NAME,
-					`UPDATE group_dossiers SET 
-                        dossier_json = ?, 
-                        last_analysed_length = total_length_recorded,
-                        pending_text = ? 
-                     WHERE group_id = ?`,
-					[JSON.stringify(parsed), newPendingText, chatId]
+					`INSERT INTO group_dossiers (group_id, dossier_json, analyzed_at_length) VALUES (?, ?, ?)`,
+					[chatId, JSON.stringify(parsed), 0] // analyzed_at_length fixo em 0 por enquanto ou total_length
+				);
+
+				// 2. Limpa o texto analisado da tabela de status
+				await database.dbRun(
+					DB_NAME,
+					"UPDATE group_dossier_status SET pending_text = ? WHERE group_id = ?",
+					[newPendingText, chatId]
+				);
+
+				// 3. Mantém apenas os últimos 15 dossiês deste grupo
+				await database.dbRun(
+					DB_NAME,
+					`DELETE FROM group_dossiers WHERE id IN (
+						SELECT id FROM group_dossiers 
+						WHERE group_id = ? 
+						ORDER BY created_at DESC 
+						LIMIT -1 OFFSET 15
+					)`,
+					[chatId]
 				);
 
 				logger.info(
-					`[${chatId}] Dossiê atualizado com sucesso. ${newPendingText.length} chars remanescentes.`
+					`[${chatId}] Novo dossiê inserido. Histórico limitado a 15. ${newPendingText.length} chars remanescentes.`
 				);
 
 				// Alerta SuperAdmin se a nota for alta (>= 7) e tiver bot disponível
@@ -583,24 +605,24 @@ async function storeMessage(message, chatId, bot) {
 				[chatId]
 			);
 
-			// 3. Atualiza Dossiê (Contagem de caracteres e texto pendente)
+			// 3. Atualiza Dossiê (Contagem de caracteres e texto pendente na tabela STATUS)
 			const msgString = `${authorName}: ${textContent}\n`;
 
 			// Upsert dossier status
 			await database.dbRun(
 				DB_NAME,
-				`INSERT INTO group_dossiers (group_id, total_length_recorded, pending_text) 
-                 VALUES (?, ?, ?) 
+				`INSERT INTO group_dossier_status (group_id, total_length_recorded, pending_text) 
+                 VALUES (?, ?, ?)
                  ON CONFLICT(group_id) DO UPDATE SET 
-                    total_length_recorded = total_length_recorded + ?,
+                    total_length_recorded = total_length_recorded + LENGTH(?),
                     pending_text = pending_text || ?`,
-				[chatId, msgString.length, msgString, msgString.length, msgString]
+				[chatId, msgString.length, msgString, msgString, msgString]
 			);
 
-			// 4. Verifica se atingiu 10.000 caracteres novos para análise
+			// Busca o status para decidir se dispara análise
 			const dossierStatus = await database.dbGet(
 				DB_NAME,
-				"SELECT pending_text FROM group_dossiers WHERE group_id = ?",
+				"SELECT pending_text FROM group_dossier_status WHERE group_id = ?",
 				[chatId]
 			);
 

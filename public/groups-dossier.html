@@ -65,7 +65,7 @@
             background: rgba(0, 0, 0, 0.2);
         }
         .group-section.active .group-content {
-            max-height: 500px;
+            max-height: 2000px; /* Aumentado para suportar histórico */
             padding: 20px;
         }
         .group-section.active .group-header {
@@ -101,6 +101,41 @@
             font-size: 0.75em;
             color: #888;
             margin-left: 10px;
+        }
+
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .history-item {
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid transparent;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .history-item:nth-child(even) {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .history-item.latest {
+            border-left-color: #46249b;
+            background: rgba(70, 36, 155, 0.1);
+        }
+
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .history-date {
+            font-size: 0.8em;
+            color: #888;
+            font-weight: 500;
         }
     </style>
 </head>

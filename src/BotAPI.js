@@ -812,15 +812,16 @@ class BotAPI {
 		// Endpoint para Dossier dos Grupos (API)
 		this.app.get("/api/groups-dossier", authenticateBasic, async (req, res) => {
 			try {
-				const DB_NAME = "summaries";
-				// Precisamos fazer um JOIN com a tabela de grupos do core.db para pegar os nomes
-				// Mas como são bancos diferentes, vamos pegar os nomes do core.db e dar merge no JS
-				// para manter a simplicidade ou usar ATTACH se necessário.
-				// Vamos fazer via código para ser mais robusto entre arquivos.
+				// 1. Busca os status (contadores) de todos os grupos
+				const statusList = await this.database.dbAll(
+					"summaries",
+					"SELECT group_id, total_length_recorded, pending_text FROM group_dossier_status"
+				);
 
-				const dossiers = await this.database.dbAll(
-					DB_NAME,
-					"SELECT group_id, dossier_json, total_length_recorded, pending_text FROM group_dossiers"
+				// 2. Busca o histórico de dossiês (ordenados por criação)
+				const historyList = await this.database.dbAll(
+					"summaries",
+					"SELECT group_id, dossier_json, created_at FROM group_dossiers ORDER BY created_at DESC"
 				);
 
 				const allGroupsData = await this.database.getGroups();
@@ -831,37 +832,50 @@ class BotAPI {
 					groupBots[g.id] = g.botId || "-";
 				});
 
-				const result = dossiers.map((d) => {
-					let dossier = {
+				// Agrupa o histórico por group_id
+				const historyMap = {};
+				historyList.forEach((h) => {
+					if (!historyMap[h.group_id]) historyMap[h.group_id] = [];
+					let parsedDossier = null;
+					try {
+						parsedDossier = JSON.parse(h.dossier_json);
+					} catch (e) {
+						// Ignorar erro
+					}
+					if (parsedDossier) {
+						historyMap[h.group_id].push({
+							...parsedDossier,
+							created_at: h.created_at
+						});
+					}
+				});
+
+				const result = statusList.map((s) => {
+					const history = historyMap[s.group_id] || [];
+					const latestDossier = history[0] || {
 						type: "-",
 						summary: "Nenhuma análise feita ainda.",
 						problematic_score: 0
 					};
-					if (d.dossier_json) {
-						try {
-							dossier = JSON.parse(d.dossier_json);
-						} catch (e) {
-							// Ignorar erro de parse
-						}
-					}
 
 					return {
-						id: d.group_id,
-						name: groupNames[d.group_id] || "Grupo Desconhecido",
-						bot_id: groupBots[d.group_id] || "-",
-						type: dossier.type,
-						summary: dossier.summary,
-						problematic_score: dossier.problematic_score,
-						total_chars: d.total_length_recorded,
-						pending_chars: d.pending_text ? d.pending_text.length : 0,
-						hasDossier: !!d.dossier_json
+						id: s.group_id,
+						name: groupNames[s.group_id] || "Grupo Desconhecido",
+						bot_id: groupBots[s.group_id] || "-",
+						type: latestDossier.type,
+						summary: latestDossier.summary,
+						problematic_score: latestDossier.problematic_score,
+						total_chars: s.total_length_recorded,
+						pending_chars: s.pending_text ? s.pending_text.length : 0,
+						hasDossier: history.length > 0,
+						history
 					};
 				});
 
 				// Filtrar apenas grupos que já possuem dossiê
 				const filteredResult = result.filter((r) => r.hasDossier);
 
-				// Ordenar por problematic_score decrescente
+				// Ordenar por problematic_score do dossiê MAIS RECENTE
 				filteredResult.sort((a, b) => b.problematic_score - a.problematic_score);
 
 				res.json(filteredResult);
