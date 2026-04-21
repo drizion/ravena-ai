@@ -351,6 +351,28 @@ async function runGroupAnalysis(chatId, pendingText, bot) {
 	try {
 		logger.info(`[${chatId}] Iniciando análise de dossiê (baixa prioridade)...`);
 
+		// Busca dossiês anteriores para dar contexto (panorama geral)
+		const previousDossiers = await database.dbAll(
+			DB_NAME,
+			"SELECT dossier_json FROM group_dossiers WHERE group_id = ? ORDER BY created_at DESC LIMIT 5",
+			[chatId]
+		);
+
+		let historicalContext = "";
+		if (previousDossiers && previousDossiers.length > 0) {
+			historicalContext = "\n\nContexto Histórico (Resumos de análises anteriores):\n";
+			previousDossiers.forEach((d, i) => {
+				try {
+					const p = JSON.parse(d.dossier_json);
+					historicalContext += `- Análise ${i + 1}: [${p.type}] ${p.summary} (Nota: ${p.problematic_score}/10)\n`;
+				} catch (e) {
+					// Ignora
+				}
+			});
+			historicalContext +=
+				"\nConsidere este histórico para fornecer uma visão evolutiva ou consolidada do grupo no novo dossiê.";
+		}
+
 		const systemPrompt = `Você é um analista de grupos de segurança e moderação. 
 Seu objetivo é categorizar grupos de WhatsApp de forma ultra-concisa.
 Você DEVE responder APENAS com um objeto JSON válido seguindo estritamente o esquema solicitado. 
@@ -388,6 +410,7 @@ Não inclua explicações, introduções ou qualquer texto fora do JSON.`;
 - use apenas 1 palavra para 'type'.
 - seja extremamente suscinto no 'summary' (máximo 200 caracteres).
 - 'problematic_score' de 0 a 10.
+${historicalContext}
 
 Conversa:
 ${pendingText}`;

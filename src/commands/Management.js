@@ -339,6 +339,10 @@ class Management {
 			streamRefresh: {
 				method: "streamRefresh",
 				description: "Reseta a lista de bots ativos/ignorados para as notificações de stream"
+			},
+			dossie: {
+				method: "runDossieAnalysis",
+				description: "Exibe o histórico de dossiês deste grupo"
 			}
 		};
 
@@ -1739,9 +1743,43 @@ class Management {
 			infoMessage += `- *Palavras:* ${wordFilters}\n`;
 			infoMessage += `- *Links:* ${linkFiltering}\n`;
 			infoMessage += `- *Pessoas:* ${personFilters}\n`;
-			infoMessage += `- *NSFW:* ${nsfwFiltering}\n\n`;
+			infoMessage += `- *NSFW:* ${nsfwFiltering}\n`;
 
-			// Números e strings ignorados
+			// Buscar Dossiês
+			let dossierInfo = "";
+			try {
+				const dossiers = await this.database.dbAll(
+					"summaries",
+					"SELECT dossier_json FROM group_dossiers WHERE group_id = ? ORDER BY created_at DESC LIMIT 15",
+					[group.id]
+				);
+
+				if (dossiers && dossiers.length > 0) {
+					const latest = JSON.parse(dossiers[0].dossier_json);
+					const totalScore = dossiers.reduce((acc, d) => {
+						try {
+							return acc + JSON.parse(d.dossier_json).problematic_score;
+						} catch (e) {
+							return acc;
+						}
+					}, 0);
+					const avgScore = (totalScore / dossiers.length).toFixed(1);
+
+					dossierInfo += `\n*📋 Dossiê do Grupo:*\n`;
+					dossierInfo += `- *Último:* [${latest.type}] ${latest.summary}\n`;
+					dossierInfo += `- *Nota Média:* ${avgScore}/10 (baseado em ${dossiers.length} análises)\n`;
+				}
+			} catch (e) {
+				this.logger.error("Erro ao buscar dossiês para info:", e);
+			}
+
+			if (group.ignoredNumbers && group.ignoredNumbers.length > 0) {
+				infoMessage += `\n*Números Ignorados:* ${group.ignoredNumbers.join(", ")}\n`;
+			}
+
+			infoMessage += dossierInfo;
+
+			// Apelidos configurados
 			if (group.mutedCategories && group.mutedCategories.length > 0) {
 				infoMessage += `\n*Categorias Silenciadas:* ${group.mutedCategories.join(", ")}\n`;
 			}
@@ -6349,6 +6387,63 @@ class Management {
 			chatId: group.id,
 			content: "✅ Lista de bots ativos e ignorados para este grupo foi resetada com sucesso."
 		});
+	}
+
+	/**
+	 * Exibe o histórico de dossiês do grupo
+	 * @param {WhatsAppBot} bot - Instância do bot
+	 * @param {Object} message - Dados da mensagem
+	 * @param {Array} args - Argumentos do comando
+	 * @param {Object} group - Dados do grupo
+	 * @returns {Promise<ReturnMessage>} Mensagem de retorno
+	 */
+	async runDossieAnalysis(bot, message, args, group) {
+		if (!group) {
+			return new ReturnMessage({
+				chatId: message.author,
+				content: "Este comando só pode ser usado em grupos."
+			});
+		}
+
+		try {
+			const dossiers = await this.database.dbAll(
+				"summaries",
+				"SELECT dossier_json, created_at FROM group_dossiers WHERE group_id = ? ORDER BY created_at DESC LIMIT 15",
+				[group.id]
+			);
+
+			if (!dossiers || dossiers.length === 0) {
+				return new ReturnMessage({
+					chatId: group.id,
+					content: "Nenhum dossiê encontrado para este grupo."
+				});
+			}
+
+			let response = `*📋 Histórico de Dossiês - ${group.name}*\n> Histórico de análises automáticas realizadas pela IA sobre o comportamento do grupo - quanto maior a nota, mais preocupado é o conteúdo e maior a possibilidade da ravena ser removida em caso de conteúdo problemático/denúncias por membros. As análises são realizadas de forma automática, de tempos em tempos.\n\n`;
+
+			dossiers.forEach((d, i) => {
+				try {
+					const p = JSON.parse(d.dossier_json);
+					const date = new Date(d.created_at).toLocaleString("pt-BR");
+					response += `*${i + 1}. [${date}]* (Nota: ${p.problematic_score}/10)\n`;
+					response += `> *Tipo:* ${p.type}\n`;
+					response += `> *Resumo:* ${p.summary}\n\n`;
+				} catch (e) {
+					// Ignora
+				}
+			});
+
+			return new ReturnMessage({
+				chatId: group.id,
+				content: response
+			});
+		} catch (error) {
+			this.logger.error("Erro ao listar dossiês:", error);
+			return new ReturnMessage({
+				chatId: group.id,
+				content: "❌ Erro ao buscar histórico de dossiês."
+			});
+		}
 	}
 }
 

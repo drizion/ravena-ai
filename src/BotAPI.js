@@ -1158,6 +1158,51 @@ class BotAPI {
 			}
 		});
 
+		// Endpoint para histórico de dossiês de um grupo específico (para o dashboard)
+		this.app.get("/api/group-dossier-history", async (req, res) => {
+			const { groupId, token } = req.query;
+
+			if (!groupId || !token) {
+				return res.status(400).json({ message: "Missing required parameters" });
+			}
+
+			try {
+				const webManagementData = await this.readWebManagementToken(token);
+
+				if (!webManagementData || webManagementData.groupId !== groupId) {
+					return res.status(401).json({ message: "Unauthorized" });
+				}
+
+				if (new Date() > new Date(webManagementData.expiresAt)) {
+					return res.status(401).json({ message: "Token expired" });
+				}
+
+				const historyList = await this.database.dbAll(
+					"summaries",
+					"SELECT dossier_json, created_at FROM group_dossiers WHERE group_id = ? ORDER BY created_at DESC LIMIT 15",
+					[groupId]
+				);
+
+				const parsedHistory = historyList.map((h) => {
+					let dossier = {};
+					try {
+						dossier = JSON.parse(h.dossier_json);
+					} catch (e) {
+						// Ignora
+					}
+					return {
+						...dossier,
+						created_at: h.created_at
+					};
+				});
+
+				res.json(parsedHistory);
+			} catch (error) {
+				this.logger.error("Error fetching group dossier history:", error);
+				res.status(500).json({ message: "Internal server error" });
+			}
+		});
+
 		// Get group data endpoint
 		this.app.get("/api/group", async (req, res) => {
 			const { id, token } = req.query;

@@ -205,7 +205,8 @@ document.addEventListener('DOMContentLoaded', () => {
         dialogMessage: document.getElementById('dialog-message'),
         dialogInput: document.getElementById('dialog-input'),
         dialogBtnCancel: document.getElementById('dialog-btn-cancel'),
-        dialogBtnOk: document.getElementById('dialog-btn-ok')
+        dialogBtnOk: document.getElementById('dialog-btn-ok'),
+        dossiesHistoryList: document.getElementById('dossies-history-list')
     };
 
     // --- Custom Dialogs ---
@@ -345,6 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             populateFields();
             renderCommandsTable();
+            loadDossierHistory();
             setDirty(false);
 
         } catch (e) {
@@ -1479,7 +1481,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Member Modal Logic ---
 
-    let onMemberSelect = null; // Callback for when a member is selected
+    let onMemberSelect = null; 
 
     function renderMembers(filter = '') {
         const tbody = els.memberTableBody;
@@ -1656,6 +1658,49 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('cooldown-val').textContent = e.target.value;
             });
         }
+    }
+
+    async function loadDossierHistory() {
+        if (!els.dossiesHistoryList) return;
+        
+        try {
+            const res = await fetch(`${API_BASE}/group-dossier-history?groupId=${groupId}&token=${token}`);
+            if (!res.ok) throw new Error('Falha ao carregar histórico de dossiês');
+            
+            const history = await res.json();
+            renderDossierHistory(history);
+        } catch (e) {
+            console.error(e);
+            els.dossiesHistoryList.innerHTML = `<p class="text-danger">Erro ao carregar histórico: ${e.message}</p>`;
+        }
+    }
+
+    function renderDossierHistory(history) {
+        if (!history || history.length === 0) {
+            els.dossiesHistoryList.innerHTML = '<p class="text-muted text-center p-4">Nenhum dossiê gerado ainda para este grupo.</p>';
+            return;
+        }
+
+        els.dossiesHistoryList.innerHTML = '';
+        
+        history.forEach((item, index) => {
+            const div = document.createElement('div');
+            div.className = 'dossie-item';
+            if (index === 0) div.classList.add('latest');
+
+            const date = new Date(item.created_at).toLocaleString('pt-BR');
+            const scoreClass = item.problematic_score >= 7 ? 'score-high' : (item.problematic_score >= 4 ? 'score-medium' : 'score-low');
+
+            div.innerHTML = `
+                <div class="dossie-header">
+                    <span class="dossie-date">${date}</span>
+                    <span class="dossie-score ${scoreClass}">Nota: ${item.problematic_score}/10</span>
+                </div>
+                <div class="dossie-type">${item.type}</div>
+                <div class="dossie-summary">${item.summary}</div>
+            `;
+            els.dossiesHistoryList.appendChild(div);
+        });
     }
 
     init();
