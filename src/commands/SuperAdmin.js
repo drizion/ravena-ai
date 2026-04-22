@@ -86,7 +86,18 @@ class SuperAdmin {
 				method: "globalStreamRefresh",
 				description: "Reseta a lista de bots ativos/ignorados para transmissões em TODOS os grupos"
 			},
-			dossie: { method: "runDossieAnalysis", description: "Trigga análise de dossiê para um grupo" }
+			dossie: {
+				method: "runDossieAnalysis",
+				description: "Trigga análise de dossiê para um grupo"
+			},
+			addElogio: {
+				method: "addElogioSticker",
+				description: "Adiciona um sticker de elogio (use em resposta)"
+			},
+			addXingamento: {
+				method: "addXingamentoSticker",
+				description: "Adiciona um sticker de xingamento (use em resposta)"
+			}
 		};
 
 		// Cache temporário para forçar entrada em grupos bloqueados
@@ -2947,6 +2958,70 @@ Break down the cost by category and provide a total estimated cost.`;
 			return new ReturnMessage({
 				chatId,
 				content: `❌ Erro ao disparar análise: ${error.message}`
+			});
+		}
+	}
+
+	async addElogioSticker(bot, message, args) {
+		return await this.saveSillySticker(bot, message, "elogios", "botbom");
+	}
+
+	async addXingamentoSticker(bot, message, args) {
+		return await this.saveSillySticker(bot, message, "xingamentos", "botruim");
+	}
+
+	async saveSillySticker(bot, message, category, prefix) {
+		const chatId = message.group ?? message.author;
+		try {
+			if (!this.isSuperAdmin(message.author)) return;
+
+			const quotedMsg = await message.origin.getQuotedMessage();
+			if (!quotedMsg || quotedMsg.type !== "sticker") {
+				return new ReturnMessage({
+					chatId,
+					content: "❌ Por favor, use este comando em resposta a um sticker."
+				});
+			}
+
+			const media = await quotedMsg.downloadMedia();
+			if (!media) {
+				return new ReturnMessage({
+					chatId,
+					content: "❌ Não consegui baixar o sticker."
+				});
+			}
+
+			const folder = path.join(__dirname, "../../data/sillies", category);
+			await fs.mkdir(folder, { recursive: true });
+
+			// Find next index
+			const files = await fs.readdir(folder);
+			let nextIndex = 0;
+			const regex = new RegExp(`^${prefix}_(\\d+)\\.webp$`);
+
+			files.forEach((f) => {
+				const match = f.match(regex);
+				if (match) {
+					const idx = parseInt(match[1]);
+					if (idx >= nextIndex) nextIndex = idx + 1;
+				}
+			});
+
+			const fileName = `${prefix}_${nextIndex}.webp`;
+			const filePath = path.join(folder, fileName);
+
+			await fs.writeFile(filePath, Buffer.from(media.data, "base64"));
+			this.logger.info(`Sticker salvo: ${filePath}`);
+
+			return new ReturnMessage({
+				chatId,
+				content: `✅ Sticker adicionado em *${category}* como _${fileName}_`
+			});
+		} catch (error) {
+			this.logger.error(`Erro ao salvar sticker silly (${category}):`, error);
+			return new ReturnMessage({
+				chatId,
+				content: `❌ Erro: ${error.message}`
 			});
 		}
 	}

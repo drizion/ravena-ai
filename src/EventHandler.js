@@ -18,6 +18,7 @@ const Stickers = require("./functions/Stickers");
 const GeoGuesser = require("./functions/GeoguesserGame");
 const LembretesCommands = require("./functions/LembretesCommands");
 const ReturnMessage = require("./models/ReturnMessage");
+const SillyInteractionHandler = require("./SillyInteractionHandler");
 const EventEmitter = require("events");
 
 class EventHandler extends EventEmitter {
@@ -491,6 +492,10 @@ class EventHandler extends EventEmitter {
 		}
 
 		if (group) {
+			// SillyInteractionHandler entry point
+			const sillyHandled = await SillyInteractionHandler.handle(bot, message, group);
+			if (sillyHandled) return;
+
 			try {
 				// Se o grupo escolheu a opção 'customIgnoresPrefix', pode ser que um comando personalizado esteja sendo executado
 				// Gera um comando e manda pro handleCommand, mas com a flag de ser apenas custom

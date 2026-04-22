@@ -823,6 +823,8 @@ class LLMService {
 			.replace(/<\/end_of_turn>/g, "")
 			.replace(/<\|channel\|>/g, "")
 			.replace(/<channel\|>/g, "")
+			.replace(/<\|turn\|>/g, "")
+			.replace(/<turn\|>/g, "")
 			.trim()
 			.replace(/^"|"$/g, "");
 	}
