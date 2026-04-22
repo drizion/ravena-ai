@@ -352,11 +352,12 @@ async function runGroupAnalysis(chatId, pendingText, bot) {
 		logger.info(`[${chatId}] Iniciando análise de dossiê (baixa prioridade)...`);
 
 		// Busca dossiês anteriores para dar contexto (panorama geral)
-		const previousDossiers = await database.dbAll(
-			DB_NAME,
-			"SELECT dossier_json FROM group_dossiers WHERE group_id = ? ORDER BY created_at DESC LIMIT 5",
-			[chatId]
-		);
+		const previousDossiers = []; // desabilitado por enquanto
+		// await database.dbAll(
+		// 	DB_NAME,
+		// 	"SELECT dossier_json FROM group_dossiers WHERE group_id = ? ORDER BY created_at DESC LIMIT 5",
+		// 	[chatId]
+		// );
 
 		let historicalContext = "";
 		if (previousDossiers && previousDossiers.length > 0) {
@@ -374,7 +375,7 @@ async function runGroupAnalysis(chatId, pendingText, bot) {
 		}
 
 		const systemPrompt = `Você é um analista de grupos de segurança e moderação. 
-Seu objetivo é categorizar grupos de WhatsApp de forma ultra-concisa.
+Seu objetivo é categorizar grupos de WhatsApp de forma ultra-concisa, com o objetivo principal de detectar grupos que praticam coisas ilegais (racismo, pedofilia, aliciamento de menores, xenofobia, vendas ilegais, extremismo, gore, etc.)
 Você DEVE responder APENAS com um objeto JSON válido seguindo estritamente o esquema solicitado. 
 Não inclua explicações, introduções ou qualquer texto fora do JSON.`;
 
@@ -392,12 +393,12 @@ Não inclua explicações, introduções ou qualquer texto fora do JSON.`;
 						},
 						summary: {
 							type: "string",
-							description: "Frase de até 200 caracteres que resume o que é discutido no grupo"
+							description: "Frase de até 250 caracteres que resume o que é discutido no grupo"
 						},
 						problematic_score: {
 							type: "number",
 							description:
-								"Nota de 0 a 10 (10: ilegal, racismo, gore, extremismo; 7: sexual/pornô; 5: encontros, grupos de troca de nudes/conteúdo, baladas, sexualidade, 3: anúncios, divulgações, troca de seguidores; 0: chat geral, amigos ou hobbies)"
+								"Nota de 0 a 10 (10: ilegal, racismo, gore, extremismo; 6: pornografia, hentai em excesso; 4: encontros, rolês, fotos sensuais, aparência, flertes grupos de troca de nudes/conteúdo, baladas, sexualidade; 3: insultos, discussões, disputas, xingamentos; 3: anúncios, troca de seguidores,divulgações; troca de seguidores; 0: bots, uso de comandos (!), advertências, chat geral, jogos, tecnologia, amigos ou hobbies)"
 						}
 					},
 					required: ["type", "summary", "problematic_score"],
@@ -410,6 +411,7 @@ Não inclua explicações, introduções ou qualquer texto fora do JSON.`;
 - use apenas 1 palavra para 'type'.
 - seja extremamente suscinto no 'summary' (máximo 200 caracteres).
 - 'problematic_score' de 0 a 10.
+- Uso de bots é permitido e jamais deve ser flagrado como algo ruim
 - Anúncios, ofertas de troca de seguidores, divulgações de canais e conteúdo de NÃO são consinderados problemáticos
 ${historicalContext}
 
@@ -483,11 +485,11 @@ ${pendingText}`;
 					`[${chatId}] Novo dossiê inserido. Histórico limitado a 15. ${newPendingText.length} chars remanescentes.`
 				);
 
-				// Alerta SuperAdmin se a nota for alta (>= 7) e tiver bot disponível
-				if (bot && parsed.problematic_score >= 7 && (bot.grupoLogs || process.env.GRUPO_LOGS)) {
+				// Alerta SuperAdmin se a nota for alta (> 7) e tiver bot disponível
+				if (bot && parsed.problematic_score > 7 && (bot.grupoLogs || process.env.GRUPO_LOGS)) {
 					const targetGroup = bot.grupoLogs || process.env.GRUPO_LOGS;
 					const groupData = await bot.database.getGroup(chatId);
-					const msgAlert = `⚠️ *ALERTA DE GRUPO PROBLEMÁTICO* ⚠️
+					const msgAlert = `⚠️ *ALERTA DE GRUPO POSSIVELMENTE PROBLEMÁTICO* ⚠️
 					
 📌 *Grupo:* ${groupData ? groupData.name : "N/A"}
 🆔 *ID:* ${chatId}
@@ -496,9 +498,7 @@ ${pendingText}`;
 📊 *Análise:*
 - *Tipo:* ${parsed.type}
 - *Nota:* ${parsed.problematic_score}/10
-- *Resumo:* ${parsed.summary}
-
-📅 _Dossiê gerado automaticamente via análise de texto._`;
+- *Resumo:* ${parsed.summary}`;
 
 					bot
 						.sendMessage(targetGroup, msgAlert)
