@@ -61,7 +61,9 @@ class InviteSystem {
 
 			const isBlocked = await this.database.isUserInviteBlocked(message.author.split("@")[0]);
 			if (isBlocked) {
-				this.logger.info(`Ignorando convite de usuário bloqueado: ${message.author}`);
+				this.logger.info(
+					`Ignorando convite de usuário bloqueado: ${message.author} Link: ${inviteLink}`
+				);
 				message.origin.react("🛑");
 
 				const lastNotify = this.blockedUserNotifyCache.get(message.author) || 0;
@@ -69,14 +71,14 @@ class InviteSystem {
 				if (currentTime - lastNotify > 7 * 24 * 60 * 60 * 1000) {
 					await this.bot.sendMessage(
 						message.author,
-						"🛑 A ravenabot não está mais recebendo convites de seu número"
+						"🛑 A ravenabot não está mais recebendo convites de seu número, pois você foi bloqueado."
 					);
-					if (this.bot.grupoInvites) {
-						await this.bot.sendMessage(
-							this.bot.grupoInvites,
-							`🛑 Usuário bloqueado tentou enviar convite: ${message.author}\nLink: ${inviteLink}`
-						);
-					}
+					// if (this.bot.grupoInvites) {
+					// 	await this.bot.sendMessage(
+					// 		this.bot.grupoInvites,
+					// 		`🛑 Usuário bloqueado tentou enviar convite: ${message.author}\nLink: ${inviteLink}`
+					// 	);
+					// }
 					this.blockedUserNotifyCache.set(message.author, currentTime);
 				}
 
@@ -90,15 +92,15 @@ class InviteSystem {
 				message.origin.react("🛑");
 				await this.bot.sendMessage(
 					message.author,
-					"🛑 A ravenabot não recebe mais convite deste grupo."
+					"🛑 A ravenabot não recebe mais convite deste grupo, pois ele foi bloqueado."
 				);
 
-				if (this.bot.grupoInvites) {
-					await this.bot.sendMessage(
-						this.bot.grupoInvites,
-						`🛑 Usuário ${message.author} tentou enviar convite de grupo bloqueado: ${inviteLink}`
-					);
-				}
+				// if (this.bot.grupoInvites) {
+				// 	await this.bot.sendMessage(
+				// 		this.bot.grupoInvites,
+				// 		`🛑 Usuário ${message.author} tentou enviar convite de grupo bloqueado: ${inviteLink}`
+				// 	);
+				// }
 				return true;
 			}
 
@@ -284,12 +286,12 @@ class InviteSystem {
 						authorId,
 						"Você precisa informar um motivo, já vi que está com preguiça. _Convite Ignorado_"
 					);
-					if (this.bot.grupoInvites) {
-						await this.bot.sendMessage(
-							this.bot.grupoInvites,
-							`⚠️ Usuário ${authorId} tentou copiar o texto do bot como motivo. Convite ignorado.`
-						);
-					}
+					// if (this.bot.grupoInvites) {
+					// 	await this.bot.sendMessage(
+					// 		this.bot.grupoInvites,
+					// 		`⚠️ Usuário ${authorId} tentou copiar o texto do bot como motivo. Convite ignorado.`
+					// 	);
+					// }
 					// Penalidade
 					const punishDuration = 10 * this.inviteCooldown * 60 * 1000;
 					const normalDuration = this.inviteCooldown * 60 * 1000;
@@ -309,10 +311,10 @@ class InviteSystem {
 					`Usuário ${authorId} enviou o código de verificação como motivo (${verificationCode}). Ignorando convite.`
 				);
 
-				this.bot.sendMessage(
-					this.bot.grupoInvites,
-					`Usuário ${authorId} enviou o código de verificação como motivo (${verificationCode}). Ignorando convite.`
-				);
+				// this.bot.sendMessage(
+				// 	this.bot.grupoInvites,
+				// 	`Usuário ${authorId} enviou o código de verificação como motivo (${verificationCode}). Ignorando convite.`
+				// );
 
 				try {
 					const ignoredPath = path.join(
@@ -387,15 +389,15 @@ class InviteSystem {
 						this.logger.info(`Ignorando convite de JID bloqueado: ${inviteInfoData.JID}`);
 						await this.bot.sendMessage(
 							authorId,
-							"🛑 A ravenabot não recebe mais convite deste grupo."
+							"🛑 A ravenabot não recebe mais convite deste grupo, pois ele foi bloqueado."
 						);
 
-						if (this.bot.grupoInvites) {
-							await this.bot.sendMessage(
-								this.bot.grupoInvites,
-								`🛑 Usuário ${authorId} tentou enviar convite de grupo bloqueado (JID detectado): ${inviteLink}\nGrupo: ${inviteInfoData.Name} (${inviteInfoData.JID})`
-							);
-						}
+						// if (this.bot.grupoInvites) {
+						// 	await this.bot.sendMessage(
+						// 		this.bot.grupoInvites,
+						// 		`🛑 Usuário ${authorId} tentou enviar convite de grupo bloqueado (JID detectado): ${inviteLink}\nGrupo: ${inviteInfoData.Name} (${inviteInfoData.JID})`
+						// 	);
+						// }
 						return;
 					}
 				}
