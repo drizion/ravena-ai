@@ -436,12 +436,12 @@ class EventHandler extends EventEmitter {
 		}
 
 		// Trigger para jogos
-		if (group && message.type === "location") {
-			const respGeo = await GeoGuesser.processLocationMessage(bot, message);
-			if (respGeo) {
-				bot.sendReturnMessages(respGeo, group);
-			}
-		}
+		// if (group && message.type === "location") {
+		// 	const respGeo = await GeoGuesser.processLocationMessage(bot, message);
+		// 	if (respGeo) {
+		// 		bot.sendReturnMessages(respGeo, group);
+		// 	}
+		// }
 
 		if (!group && message.type === "text" && bot.pvAI) {
 			const userId = `${bot.id}_${message.author || message.from}`;
