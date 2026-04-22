@@ -156,6 +156,10 @@ async function apodCommand(bot, message, args, group) {
 		if (isVideo) {
 			caption += `\n🎥 *Vídeo original:* ${data.url}\n`;
 			caption += `_💡 Reaja com ⏬ para baixar se for do YouTube_`;
+		} else if (data.hdurl) {
+			caption += `\n🔗 *Alta Resolução:* ${data.hdurl}\n`;
+		} else {
+			caption += `\n🔗 *Link:* ${data.url}\n`;
 		}
 
 		return new ReturnMessage({
@@ -233,7 +237,11 @@ async function epicCommandHandler(variant, bot, message, args, group) {
 		if (imageObj.centroid_coordinates) {
 			caption += `📍 *Coordenadas:* Lat ${imageObj.centroid_coordinates.lat}, Lon ${imageObj.centroid_coordinates.lon}\n`;
 		}
-		caption += `✨ *Distância:* ~${Math.round(imageObj.dsCoov?.distance_to_earth || 1500000)} km`;
+		caption += `✨ *Distância:* ~${Math.round(imageObj.dsCoov?.distance_to_earth || 1500000)} km\n`;
+
+		// URL para a maior resolução possível (PNG)
+		const highResUrl = `${EPIC_ARCHIVE_BASE_URL}/${variant}/${year}/${month}/${day}/png/${imageObj.image}.png${apiKeyQuery}`;
+		caption += `🔗 *Alta Resolução (PNG):* ${highResUrl}`;
 
 		return new ReturnMessage({
 			chatId,
