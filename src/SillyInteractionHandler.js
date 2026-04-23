@@ -11,30 +11,117 @@ const logger = new Logger("silly-interaction-handler");
 const llmService = LLMService.getInstance();
 const database = Database.getInstance();
 
-const xingamentos = [
-	"bot lixo",
-	"bot podre",
-	"bot inutil",
-	"bot inútil",
-	"bot imprestável",
-	"bot imprestavel",
-	"bot ruim",
-	"bot burro",
-	"bot merda",
-	"boot lixo",
-	"boot podre",
-	"boot ruim",
-	"boot merda",
-	"boot burro",
-	"odiei o bot",
-	"ninguém gosta do bot",
-	"ninguem gosta do bot",
-	"cala boca bot",
-	"cala a boca bot",
-	"bot lento"
+const nomesBot = ["bot", "boot", "ravena"];
+
+const adjetivosFiltrar = [
+	"muito",
+	"super",
+	"tao",
+	"bem",
+	"bastante",
+	"extremamente",
+	"completamente",
+	"totalmente",
+	"realmente",
+	"meio",
+	"um pouco",
+	"pra caramba",
+	"pra krl",
+	"demais",
+	"e",
+	"um",
+	"uma"
 ];
 
-const elogios = ["bot lindo", "bot maravilhso", "bot bom", "bot gostoso", "amei o bot"];
+const xingamentosStarts = [
+	"lixo",
+	"podre",
+	"inutil",
+	"idiota",
+	"bocaberta",
+	"imprestavel",
+	"ruim",
+	"burro",
+	"burra",
+	"merda",
+	"lento",
+	"lerdo",
+	"lerda",
+	"chato",
+	"chata",
+	"horroroso",
+	"horrorosa",
+	"tosco",
+	"tosca",
+	"ridiculo",
+	"ridicula",
+	"pessimo",
+	"pessima",
+	"insuportavel"
+];
+
+const xingamentosEnds = [
+	"odiei o",
+	"odiei a",
+	"ninguem gosta do",
+	"ninguem gosta da",
+	"cala boca",
+	"cala a boca",
+	"vai se ferrar",
+	"vai se foder",
+	"odeio a",
+	"odeio o",
+	"que bosta de",
+	"que merda de",
+	"lixo de",
+	"burro esse",
+	"burra essa",
+	"chato esse",
+	"chata essa"
+];
+
+const elogiosStart = [
+	"lindo",
+	"linda",
+	"fofo",
+	"fofa",
+	"maravilhoso",
+	"maravilhosa",
+	"bom",
+	"boa",
+	"gostoso",
+	"gostosa",
+	"perfeito",
+	"perfeita",
+	"inteligente",
+	"util",
+	"melhor",
+	"incrivel",
+	"diva",
+	"deusa",
+	"monstro",
+	"brabo",
+	"braba"
+];
+const elogiosEnd = [
+	"amei o",
+	"amei a",
+	"adorei o",
+	"adorei a",
+	"amo a",
+	"amo o",
+	"sou fa da",
+	"sou fa do",
+	"gosto muito da",
+	"gosto muito do",
+	"que orgulho da",
+	"que orgulho do",
+	"obrigado",
+	"obrigada",
+	"parabens",
+	"te amo",
+	"te adoro"
+];
 
 class SillyInteractionHandler {
 	constructor() {
@@ -79,12 +166,42 @@ class SillyInteractionHandler {
 		const text = message.content || message.caption;
 		if (!text) return false;
 
-		const normalizedText = this.normalize(text);
+		let normalizedText = this.normalize(text).trim();
+
+		// Filtrar adjetivos de intensidade e conectivos
+		for (const adj of adjetivosFiltrar) {
+			const normAdj = this.normalize(adj);
+			// Regex para remover a palavra exata com espaços ao redor
+			const regex = new RegExp(`\\b${normAdj}\\b`, "gi");
+			normalizedText = normalizedText.replace(regex, "").replace(/\s+/g, " ").trim();
+		}
 
 		let category = null;
-		if (xingamentos.some((x) => normalizedText.includes(this.normalize(x)))) {
+		const normalizedNomes = nomesBot.map((n) => this.normalize(n));
+
+		const checkMatch = (botAtStartArr, botAtEndArr) => {
+			for (const nome of normalizedNomes) {
+				// Caso: Nome do bot no início, elemento no fim (ex: "ravena lixo")
+				for (const s of botAtStartArr) {
+					const normS = this.normalize(s);
+					if (normalizedText.startsWith(nome) && normalizedText.endsWith(normS)) {
+						return true;
+					}
+				}
+				// Caso: Elemento no início, nome do bot no fim (ex: "odiei o boot")
+				for (const e of botAtEndArr) {
+					const normE = this.normalize(e);
+					if (normalizedText.startsWith(normE) && normalizedText.endsWith(nome)) {
+						return true;
+					}
+				}
+			}
+			return false;
+		};
+
+		if (checkMatch(xingamentosStarts, xingamentosEnds)) {
 			category = "xingamentos";
-		} else if (elogios.some((e) => normalizedText.includes(this.normalize(e)))) {
+		} else if (checkMatch(elogiosStart, elogiosEnd)) {
 			category = "elogios";
 		}
 
@@ -117,7 +234,7 @@ class SillyInteractionHandler {
 
 		let prompt = "";
 		if (category === "xingamentos") {
-			prompt = `Usuário ${nomePessoa} te xingou falando '${msgRecebida}'. Responda xingando ele de volta, mandando ele respeitar e ficar quieto no canto dele`;
+			prompt = `Usuário ${nomePessoa} te xingou falando '${msgRecebida}'. Responda xingando ele de volta, mandando ele respeitar ou se colocar no lugar ele, ou ficar bem quieto, ou qualquer outra resposta witty, esperta, seja criativo e engraçado.`;
 		} else {
 			prompt = `Usuário ${nomePessoa} te elogiou falando '${msgRecebida}'. Responda de forma fofa, agradecendo e sendo gentil como a ravena.`;
 		}

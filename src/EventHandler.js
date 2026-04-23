@@ -17,6 +17,7 @@ const path = require("path");
 const Stickers = require("./functions/Stickers");
 const GeoGuesser = require("./functions/GeoguesserGame");
 const LembretesCommands = require("./functions/LembretesCommands");
+const CorreiosCommands = require("./functions/CorreiosCommands");
 const ReturnMessage = require("./models/ReturnMessage");
 const SillyInteractionHandler = require("./SillyInteractionHandler");
 const EventEmitter = require("events");
@@ -141,6 +142,11 @@ class EventHandler extends EventEmitter {
 		// Inicializa temporizadores de lembretes
 		LembretesCommands.inicializarLembretes(bot).catch((error) => {
 			this.logger.error("Erro ao inicializar lembretes:", error);
+		});
+
+		// Inicializa sistema de rastreio de encomendas
+		CorreiosCommands.inicializarRastreio(bot).catch((error) => {
+			this.logger.error("Erro ao inicializar rastreio correios:", error);
 		});
 	}
 
